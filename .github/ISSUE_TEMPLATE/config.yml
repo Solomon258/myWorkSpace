@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全漏洞报告
+    url: https://github.com/Solomon258/myWorkSpace/security/advisories/new
+    about: 发现安全漏洞请不要开公开 Issue，请通过私密渠道报告
+  - name: 查阅项目文档
+    url: https://github.com/Solomon258/myWorkSpace/tree/main/personal-workbench/docs
+    about: 产品规则、技术实现与设计取舍都记录在 docs/ 下，提问前建议先查阅

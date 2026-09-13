@@ -1,0 +1,34 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.dev
+    image: personal-workbench-dev:java8
+    restart: unless-stopped
+    working_dir: /workspace/server
+    command: ["mvn", "spring-boot:run", "-Dspring-boot.run.profiles=dev"]
+    environment:
+      TZ: Asia/Shanghai
+      WORKBENCH_DATA_DIR: /workspace/dev-data
+      WORKBENCH_HOME: /workspace
+      SERVER_PORT: 8080
+    ports:
+      - "127.0.0.1:18080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+    volumes:
+      - ./:/workspace
+      - workbench-maven-repo:/root/.m2
+      # Obsidian Vault 挂载：应用跑在 Linux 容器里，看不到 Windows 的 G:\ 路径，必须挂进来。
+      # 冒号前是宿主机 Windows 路径，冒号后是容器内路径（固定为 /workspace/vault）。
+      # 对应地，「设置 → Obsidian」里要填容器路径 /workspace/vault，而不是 G:\... 。
+      # 注意：Docker Desktop → Settings → Resources → File sharing 需要勾选 G 盘，否则挂载为空。
+      - G:/1_Flow/1_Obsidian/data:/workspace/vault
+
+volumes:
+  workbench-maven-repo:
+    name: workbench-maven-repo

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>时间线 UI 设计候选 · 四选一</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:#f7f7f5;color:#1a1a18;}
+.wrap{max-width:900px;margin:0 auto;padding:32px 24px 80px;}
+.intro{margin-bottom:36px;}
+.intro h1{font-size:20px;font-weight:600;}
+.intro p{color:#5f5e5a;font-size:13px;margin-top:4px;}
+.option{margin-bottom:56px;}
+.opt-head{display:flex;align-items:baseline;gap:12px;margin-bottom:6px;}
+.opt-head .tag{background:#185FA5;color:#fff;font-size:12px;padding:2px 10px;border-radius:99px;}
+.opt-head h2{font-size:17px;font-weight:600;}
+.opt-desc{font-size:13px;color:#5f5e5a;margin-bottom:16px;}
+.stage{border-radius:14px;overflow:hidden;border:1px solid rgba(0,0,0,.1);}
+
+/* ============ 方案 A：中轴交错轨迹 ============ */
+.a{background:#fbfbfd;padding:40px 24px;}
+.a-day{text-align:center;margin:8px 0 26px;}
+.a-day span{display:inline-block;background:#fff;border:1px solid #e3e1ee;color:#534AB7;font-size:12px;padding:3px 16px;border-radius:99px;letter-spacing:2px;}
+.a-rail{position:relative;max-width:640px;margin:0 auto;}
+.a-rail::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:2px;transform:translateX(-50%);background:linear-gradient(180deg,#AFA9EC,#85B7EB,#9FE1CB);}
+.a-item{position:relative;width:calc(50% - 28px);margin-bottom:22px;}
+.a-item.left{margin-right:auto;text-align:right;}
+.a-item.right{margin-left:auto;}
+.a-node{position:absolute;top:14px;width:13px;height:13px;border-radius:50%;border:3px solid #fbfbfd;box-shadow:0 0 0 2px currentColor,0 0 10px currentColor;}
+.a-item.left .a-node{right:-35px;}
+.a-item.right .a-node{left:-35px;}
+.a-card{display:inline-block;background:#fff;border:1px solid #eceaf4;border-radius:12px;padding:10px 14px;font-size:13px;text-align:left;box-shadow:0 2px 8px rgba(60,50,120,.06);transition:transform .2s;}
+.a-card:hover{transform:translateY(-2px);}
+.a-time{font-size:11px;color:#a3a1b5;font-variant-numeric:tabular-nums;display:block;margin-bottom:2px;}
+.a-praise .a-card{background:linear-gradient(120deg,#f3fbf0,#eef7ff);border-color:#C0DD97;}
+.a-praise .a-text{color:#3B6D11;font-weight:500;}
+
+/* ============ 方案 B：手账航海日志 ============ */
+.b{background:#faf6ec;padding:40px 32px;font-family:Georgia,"Songti SC","SimSun",serif;}
+.b-page{max-width:620px;margin:0 auto;}
+.b-date{display:flex;align-items:baseline;gap:10px;border-bottom:2px solid #3a3428;padding-bottom:6px;margin-bottom:18px;}
+.b-date .num{font-size:34px;font-weight:700;color:#3a3428;line-height:1;}
+.b-date .meta{font-size:12px;color:#8a7f63;letter-spacing:3px;}
+.b-item{display:flex;gap:14px;padding:9px 0;border-bottom:1px dashed #d8cfb8;font-size:14px;color:#453e2f;}
+.b-item:last-of-type{border-bottom:none;}
+.b-time{width:52px;flex-shrink:0;color:#a2936f;font-size:12px;padding-top:3px;font-variant-numeric:tabular-nums;}
+.b-mark{width:22px;flex-shrink:0;text-align:center;font-size:13px;}
+.b-stamp{display:inline-block;margin:14px 0 4px;padding:6px 18px;border:2px solid #3B6D11;color:#3B6D11;border-radius:6px;font-size:13px;font-weight:700;letter-spacing:2px;transform:rotate(-2.5deg);opacity:.85;}
+.b-footer{margin-top:22px;font-size:11px;color:#a2936f;text-align:right;letter-spacing:2px;}
+
+/* ============ 方案 C：开发者控制台 ============ */
+.c{background:#0d1117;padding:28px 24px;font-family:Consolas,"JetBrains Mono",monospace;}
+.c-bar{display:flex;gap:6px;margin-bottom:16px;}
+.c-bar i{width:10px;height:10px;border-radius:50%;}
+.c-line{font-size:13px;line-height:2.1;color:#9db2c4;white-space:pre-wrap;}
+.c-time{color:#5b6b7d;}
+.c-tg{font-weight:700;}
+.c-dayline{color:#e6b450;margin:10px 0 2px;}
+.c-praise{color:#7ee787;}
+.c-cursor{display:inline-block;width:8px;height:15px;background:#7ee787;vertical-align:-2px;animation:cb 1s steps(1) infinite;}
+@keyframes cb{50%{opacity:0}}
+
+/* ============ 方案 D：Bento 时光卡片 ============ */
+.d{background:#f2f3f7;padding:36px 24px;}
+.d-day{font-size:13px;font-weight:600;color:#5f5e5a;margin:0 0 12px 4px;letter-spacing:1px;}
+.d-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px;}
+@media(max-width:640px){.d-grid{grid-template-columns:1fr 1fr;}}
+.d-card{background:#fff;border-radius:14px;padding:14px 16px;border-top:3px solid #ccc;box-shadow:0 1px 4px rgba(30,30,60,.06);transition:transform .18s,box-shadow .18s;position:relative;}
+.d-card:hover{transform:translateY(-3px);box-shadow:0 6px 16px rgba(30,30,60,.1);}
+.d-ico{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;margin-bottom:8px;}
+.d-text{font-size:13px;line-height:1.5;}
+.d-time{position:absolute;top:13px;right:14px;font-size:11px;color:#b0ae9f;font-variant-numeric:tabular-nums;}
+.d-praise{grid-column:span 2;background:linear-gradient(120deg,#f0fae8,#e8f4ff);border-top-color:#639922;}
+.d-praise .d-text{color:#3B6D11;font-weight:500;font-size:14px;}
+.d-praise .d-ico{background:#639922;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="intro">
+    <h1>时间线 UI · 四个设计方向</h1>
+    <p>同一批流水数据，四种气质。看完告诉我选哪个（也可组合，比如 A 的骨架 + D 的卡片）。</p>
+  </div>
+
+  <!-- 方案 A -->
+  <div class="option">
+    <div class="opt-head"><span class="tag">方案 A</span><h2>中轴交错轨迹</h2></div>
+    <div class="opt-desc">中央渐变脊柱，事件左右交错排布，节点按类型发光。仪式感强，适合"回顾一天旅程"的叙事感。移动端会退化为单侧。</div>
+    <div class="stage a">
+      <div class="a-day"><span>今天 · 9月3日</span></div>
+      <div class="a-rail">
+        <div class="a-item left"><span class="a-node" style="color:#378ADD;background:#378ADD"></span><div class="a-card"><span class="a-time">09:12 · 收录</span>微信收录「记得问物业车位续费」</div></div>
+        <div class="a-item right"><span class="a-node" style="color:#0F6E56;background:#0F6E56"></span><div class="a-card"><span class="a-time">10:05 · 番茄</span>完成 1 个番茄，专注「限流方案定稿」25 分钟</div></div>
+        <div class="a-item left a-praise"><span class="a-node" style="color:#639922;background:#639922"></span><div class="a-card"><span class="a-time">11:40 · 完成</span><span class="a-text">完成任务「回复业务方配额疑问」 — 干得漂亮，又拿下一城！</span></div></div>
+        <div class="a-item right"><span class="a-node" style="color:#BA7517;background:#BA7517"></span><div class="a-card"><span class="a-time">14:22 · 备忘</span>保存备忘「公司班车时间表」（生活）</div></div>
+        <div class="a-item left"><span class="a-node" style="color:#534AB7;background:#534AB7"></span><div class="a-card"><span class="a-time">16:31 · 整理</span>AI 整理完成 5 条，等待确认</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案 B -->
+  <div class="option">
+    <div class="opt-head"><span class="tag">方案 B</span><h2>手账航海日志</h2></div>
+    <div class="opt-desc">纸感底色 + 衬线字体 + 大日期页眉，每天的流水像一页日志。完成任务盖一枚"印章"。文艺、有沉淀感，和 Obsidian 气质最搭。</div>
+    <div class="stage b">
+      <div class="b-page">
+        <div class="b-date"><span class="num">03</span><span class="meta">九月 · 星期四 · 航海日志</span></div>
+        <div class="b-item"><span class="b-time">09:12</span><span class="b-mark">✎</span>微信收录「记得问物业车位续费」</div>
+        <div class="b-item"><span class="b-time">10:05</span><span class="b-mark">◷</span>完成 1 个番茄，专注「限流方案定稿」25 分钟</div>
+        <div class="b-item"><span class="b-time">11:40</span><span class="b-mark">✓</span>完成任务「回复业务方配额疑问」</div>
+        <div><span class="b-stamp">干得漂亮 ✦ 又拿下一城</span></div>
+        <div class="b-item"><span class="b-time">14:22</span><span class="b-mark">✦</span>保存备忘「公司班车时间表」（生活）</div>
+        <div class="b-item"><span class="b-time">16:31</span><span class="b-mark">⚙</span>AI 整理完成 5 条，等待确认</div>
+        <div class="b-footer">— 本日 5 条记录 · 清空率 100% —</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案 C -->
+  <div class="option">
+    <div class="opt-head"><span class="tag">方案 C</span><h2>开发者控制台</h2></div>
+    <div class="opt-desc">终端美学：等宽字体、tag 前缀、光标闪烁。对你这种工程师是零学习成本，信息密度最高，扫一眼就知道今天干了什么。</div>
+    <div class="stage c">
+      <div class="c-bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+      <div class="c-dayline">── 2026-09-03 (Thu) ────────────────</div>
+      <div class="c-line"><span class="c-time">09:12</span> <span class="c-tg" style="color:#79c0ff">[INBOX]</span> 微信收录「记得问物业车位续费」</div>
+      <div class="c-line"><span class="c-time">10:05</span> <span class="c-tg" style="color:#56d4bc">[POMO ]</span> 完成 1 个番茄 · 专注「限流方案定稿」25min</div>
+      <div class="c-line"><span class="c-time">11:40</span> <span class="c-tg" style="color:#7ee787">[DONE ]</span> 任务「回复业务方配额疑问」已完成</div>
+      <div class="c-line c-praise"><span class="c-time">11:40</span> ★ 干得漂亮，又拿下一城！</div>
+      <div class="c-line"><span class="c-time">14:22</span> <span class="c-tg" style="color:#e6b450">[MEMO ]</span> 保存备忘「公司班车时间表」(life)</div>
+      <div class="c-line"><span class="c-time">16:31</span> <span class="c-tg" style="color:#d2a8ff">[AI   ]</span> 整理完成 5 条 · 待确认</div>
+      <div class="c-line"><span class="c-time">16:32</span> <span class="c-cursor"></span></div>
+    </div>
+  </div>
+
+  <!-- 方案 D -->
+  <div class="option">
+    <div class="opt-head"><span class="tag">方案 D</span><h2>Bento 时光卡片</h2></div>
+    <div class="opt-desc">每天一组便当格卡片，类型决定顶条颜色，完成鼓励自动放大成双格高亮卡。现代、扫读快，和驾驶舱的卡片语言统一。</div>
+    <div class="stage d">
+      <div class="d-day">今天 · 9月3日 星期四</div>
+      <div class="d-grid">
+        <div class="d-card" style="border-top-color:#378ADD"><span class="d-time">09:12</span><div class="d-ico" style="background:#378ADD">收</div><div class="d-text">微信收录「记得问物业车位续费」</div></div>
+        <div class="d-card" style="border-top-color:#0F6E56"><span class="d-time">10:05</span><div class="d-ico" style="background:#0F6E56">茄</div><div class="d-text">完成 1 个番茄 · 专注「限流方案定稿」25 分钟</div></div>
+        <div class="d-card" style="border-top-color:#534AB7"><span class="d-time">16:31</span><div class="d-ico" style="background:#534AB7">AI</div><div class="d-text">整理完成 5 条，等待确认</div></div>
+        <div class="d-card d-praise"><span class="d-time">11:40</span><div class="d-ico">✓</div><div class="d-text">完成任务「回复业务方配额疑问」<br>干得漂亮，又拿下一城！</div></div>
+        <div class="d-card" style="border-top-color:#BA7517"><span class="d-time">14:22</span><div class="d-ico" style="background:#BA7517">忘</div><div class="d-text">保存备忘「公司班车时间表」（生活）</div></div>
+      </div>
+      <div class="d-day">昨天 · 9月2日 星期三</div>
+      <div class="d-grid">
+        <div class="d-card" style="border-top-color:#378ADD"><span class="d-time">18:07</span><div class="d-ico" style="background:#378ADD">收</div><div class="d-text">收录「下周三下午过系统规划初稿」（语音）</div></div>
+        <div class="d-card d-praise"><span class="d-time">20:15</span><div class="d-ico">✓</div><div class="d-text">完成任务「梳理限流方案初稿」<br>漂亮，这事终于落地了</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,11 @@
+.git
+.idea
+.vscode
+server/target
+dist
+data
+dev-data
+logs
+*.db
+*.db-shm
+*.db-wal

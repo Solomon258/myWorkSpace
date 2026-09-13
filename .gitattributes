@@ -1,0 +1,28 @@
+# 默认按文本处理，仓库内统一使用 LF 换行
+* text=auto eol=lf
+
+# Windows 批处理与 PowerShell 脚本需要 CRLF，否则可能无法执行
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+
+# Maven Wrapper 必须是 LF 且带可执行位
+mvnw   text eol=lf
+mvnw.cmd text eol=crlf
+
+# 显式声明二进制文件，避免被当作文本处理
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.jar   binary
+*.zip   binary
+*.gz    binary
+*.db    binary
+*.exe   binary
+*.dll   binary
+
+# 语言统计时排除文档与前端产物目录
+docs/**    linguist-documentation
+demo/**    linguist-documentation

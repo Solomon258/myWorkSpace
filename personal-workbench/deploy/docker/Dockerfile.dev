@@ -1,0 +1,10 @@
+FROM maven:3.8.8-eclipse-temurin-8@sha256:daa5d635ffdeb1a3c31d12079b6829115214701828e43d61e4e7f6a61640e62c
+
+WORKDIR /workspace/server
+
+ENV MAVEN_CONFIG=/root/.m2
+ENV TZ=Asia/Shanghai
+
+EXPOSE 8080
+
+CMD ["mvn", "spring-boot:run", "-Dspring-boot.run.profiles=dev"]

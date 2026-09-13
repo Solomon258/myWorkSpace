@@ -1,0 +1,56 @@
+server:
+  port: ${SERVER_PORT:18080}
+  address: ${SERVER_ADDRESS:127.0.0.1}
+  servlet:
+    session:
+      timeout: 7d
+      cookie:
+        http-only: true
+        same-site: lax
+
+spring:
+  application:
+    name: personal-workbench
+  datasource:
+    driver-class-name: org.sqlite.JDBC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    clean-disabled: true
+    validate-on-migrate: true
+  jackson:
+    default-property-inclusion: always
+    time-zone: Asia/Shanghai
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    shutdown:
+      enabled: false
+    health:
+      show-details: never
+
+workbench:
+  data-dir: ${WORKBENCH_DATA_DIR:${workbench.data:./data}}
+  home-dir: ${WORKBENCH_HOME:${workbench.home:./}}
+  timezone: Asia/Shanghai
+
+logging:
+  file:
+    name: ${WORKBENCH_HOME:${workbench.home:./}}/logs/workbench.log
+  level:
+    root: INFO
+    com.icecode.workbench: DEBUG
+    org.flywaydb: INFO
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+server:
+  address: 0.0.0.0

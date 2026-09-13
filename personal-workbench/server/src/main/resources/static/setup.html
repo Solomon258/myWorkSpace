@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>个人工作台 · 首次配置</title>
+<style>
+:root{--bg:#f3f6fa;--surface:#fff;--border:#dbe5ef;--text:#263142;--muted:#63748a;--blue:#4f79a9;--blue-dark:#315f94;--danger:#a32d2d;--r:13px}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f3f6fa;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}.panel{width:min(92vw,480px);background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:30px;box-shadow:0 14px 40px rgba(49,95,148,.08)}h1{font-size:23px;margin:0 0 8px;color:#2e4d70}.intro{font-size:14px;color:var(--muted);line-height:1.7;margin:0 0 24px}.field{margin:14px 0}.field label{display:block;font-size:13px;margin-bottom:6px;color:#475b72}.field input,.field select{width:100%;min-height:44px;border:1px solid #cbd8e6;border-radius:10px;padding:10px 12px;font-size:16px;color:var(--text);background:#fff}.field input:focus,.field select:focus{outline:2px solid #a9c3df;border-color:transparent}.check{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--muted);margin:18px 0}.check input{margin-top:3px}.btn{width:100%;min-height:46px;border:0;border-radius:10px;background:var(--blue);color:#fff;font-size:15px;cursor:pointer}.btn:hover{background:var(--blue-dark)}.btn:disabled{opacity:.55;cursor:wait}.msg{min-height:22px;margin-top:12px;color:var(--danger);font-size:13px}.hint{margin-top:18px;padding:12px;background:#edf3f9;border-radius:10px;color:var(--muted);font-size:12px;line-height:1.65}.hidden{display:none}@media(max-width:520px){.panel{border:0;border-radius:0;min-height:100vh;padding:24px 18px;box-shadow:none}}
+</style>
+</head>
+<body>
+<main class="panel">
+  <section id="initSection" class="hidden">
+    <h1>开始使用个人工作台</h1>
+    <p class="intro">只需完成两个基础设置。数据保存在本机，不依赖外部服务。</p>
+    <form id="initForm">
+      <div class="field"><label for="initUsername">管理员用户名</label><input id="initUsername" maxlength="32" autocomplete="username" required value="admin"></div>
+      <div class="field"><label for="initPassword">管理员密码（至少 8 位）</label><input id="initPassword" type="password" minlength="8" maxlength="72" autocomplete="new-password" required></div>
+      <label class="check"><input id="seedDemo" type="checkbox" checked><span>加入少量示例数据，方便第一次了解工作台；之后可以一键清除。</span></label>
+      <button id="initButton" class="btn" type="submit">完成配置</button>
+      <div id="initMessage" class="msg" role="alert"></div>
+    </form>
+  </section>
+
+  <section id="loginSection" class="hidden">
+    <h1>登录个人工作台</h1>
+    <p class="intro">这是本机工作台的访问口令，用于防止他人误操作。</p>
+    <form id="loginForm">
+      <div class="field"><label for="loginUsername">用户名</label><input id="loginUsername" maxlength="32" autocomplete="username" required></div>
+      <div class="field"><label for="loginPassword">密码</label><input id="loginPassword" type="password" maxlength="72" autocomplete="current-password" required></div>
+      <button id="loginButton" class="btn" type="submit">登录</button>
+      <div id="loginMessage" class="msg" role="alert"></div>
+    </form>
+  </section>
+
+  <div class="hint">没有配置 AI 或 Obsidian 也不影响核心功能。后续可以在工作台设置中补充。</div>
+</main>
+<script>
+async function request(path, options){
+  let response;
+  try{response=await fetch(path,Object.assign({headers:{"Content-Type":"application/json"}},options||{}))}
+  catch(error){throw new Error("暂时无法连接工作台，请确认程序正在运行")}
+  let body;
+  try{body=await response.json()}catch(error){throw new Error("工作台返回了无法识别的响应，请稍后重试")}
+  if(!response.ok||body.code!==0)throw new Error(body.message||"操作失败，请稍后重试");
+  return body.data;
+}
+function showMode(status){
+  const init=document.getElementById("initSection"),login=document.getElementById("loginSection");
+  if(status.loggedIn){location.replace("/");return}
+  if(status.initialized){login.classList.remove("hidden");document.getElementById("loginUsername").value=status.username||"";document.getElementById("loginPassword").focus()}
+  else{init.classList.remove("hidden");document.getElementById("initUsername").focus()}
+}
+async function submit(formId,buttonId,messageId,path,payload){
+  const button=document.getElementById(buttonId),message=document.getElementById(messageId);
+  button.disabled=true;message.textContent="";
+  try{await request(path,{method:"POST",body:JSON.stringify(payload())});location.replace("/")}
+  catch(error){message.textContent=error.message;button.disabled=false}
+}
+document.getElementById("initForm").addEventListener("submit",function(event){
+  event.preventDefault();submit("initForm","initButton","initMessage","/api/v1/auth/init",function(){return{username:document.getElementById("initUsername").value.trim(),password:document.getElementById("initPassword").value,seedDemo:document.getElementById("seedDemo").checked}})
+});
+document.getElementById("loginForm").addEventListener("submit",function(event){
+  event.preventDefault();submit("loginForm","loginButton","loginMessage","/api/v1/auth/login",function(){return{username:document.getElementById("loginUsername").value.trim(),password:document.getElementById("loginPassword").value}})
+});
+request("/api/v1/auth/status").then(showMode).catch(function(error){document.getElementById("initSection").classList.remove("hidden");document.getElementById("initMessage").textContent=error.message});
+</script>
+</body>
+</html>

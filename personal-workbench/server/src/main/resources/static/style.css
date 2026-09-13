@@ -1,0 +1,551 @@
+:root{--bg:#f3f6fa;--surface:#fff;--surface2:#edf3f9;--border:#dfe7ef;--text:#263142;--muted:#63748a;--blue:#4f79a9;--blue-dark:#315f94;--red:#a32d2d;--amber:#a96c1d;--green:#39745b;--purple:#534AB7;--r:13px}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Microsoft YaHei",sans-serif}.app{max-width:1120px;margin:auto;padding:18px}.top,.tabs,.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r)}.top{display:flex;justify-content:space-between;align-items:center;padding:14px 18px}.top h1{font-size:18px;margin:0;color:#2e4d70}.user,.row{display:flex;align-items:center;gap:10px}.user{color:var(--muted);font-size:13px}.btn{min-height:44px;border:1px solid #cbd8e6;border-radius:9px;background:#fff;color:#52657b;padding:8px 14px;cursor:pointer}.btn:hover{background:var(--surface2)}.btn.primary{background:var(--blue-dark);border-color:var(--blue-dark);color:#fff}.btn.danger{color:var(--red)}.btn.sm{min-height:34px;padding:5px 10px;font-size:12px}.btn.ghost{border-color:transparent;background:transparent;color:#8a94a6;min-height:30px;padding:4px 9px}.btn.ghost:hover{background:#f0f3f7;color:#42505f}.btn.ghost.danger:hover{background:#faeaea;color:var(--red)}.gear-btn{min-width:44px;min-height:44px;width:44px;height:44px;border:1px solid transparent;border-radius:50%;background:transparent;font-size:19px;line-height:1;color:#63748a;cursor:pointer;display:grid;place-items:center;padding:0;transition:background .18s,color .18s,transform .3s}.gear-btn:hover{background:#eef3f9;color:var(--blue-dark);transform:rotate(40deg)}.gear-btn.active{background:#e9f1fa;color:var(--blue-dark);border-color:#c9d9eb}.tabs{display:flex;gap:3px;margin:10px 0 20px;padding:5px;overflow:auto}.tabs button{min-height:44px;white-space:nowrap;border:0;background:transparent;color:var(--muted);border-radius:9px;padding:8px 14px;cursor:pointer}.tabs button.active{background:#e9f1fa;color:var(--blue-dark)}.view{display:none}.view.active{display:block}.hero{background:#e9f1fa;border:1px solid #c9d9eb;border-radius:16px;padding:20px;margin-bottom:14px}.hero h2{font-size:18px;margin:0 0 5px}.hero p{margin:0;color:var(--muted);font-size:13px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}.card{padding:16px;margin-bottom:14px}.card h3{font-size:15px;margin:0 0 12px}.metric strong{display:block;font-size:26px;color:var(--blue-dark);margin-top:8px}.metric span,.muted{font-size:12px;color:var(--muted)}.form-grid{display:grid;grid-template-columns:2fr .8fr 1fr auto;gap:9px}input,select,textarea{width:100%;min-height:44px;border:1px solid #ccd8e5;border-radius:9px;background:#fff;color:var(--text);padding:9px 11px;font:inherit;font-size:16px}textarea{min-height:72px;resize:vertical}.checks{display:flex;gap:16px;margin-top:10px}.checks input{width:auto;min-height:auto}.list-item{display:flex;align-items:flex-start;gap:10px;padding:13px 0;border-bottom:1px solid #edf1f5}.list-item:last-child{border-bottom:0}.grow{flex:1;min-width:0}.task-title{font-weight:600;line-height:1.5}.task-meta{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.6}.actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px}.pill{display:inline-block;border-radius:99px;padding:3px 8px;font-size:11px;background:#edf1f5;color:#66768a;margin-left:5px}.pill.red{background:#f8e7e7;color:var(--red)}.pill.amber{background:#f8eedc;color:var(--amber)}.pill.blue{background:#e7f0fa;color:var(--blue-dark)}.pill.green{background:#e6f2ec;color:var(--green)}.pill.coral{background:#fbede6;color:#b0562f}.status-button{width:32px;height:32px;flex:0 0 auto;border:1px solid #bfcddd;border-radius:50%;background:#fff;color:var(--blue-dark);cursor:pointer}.status-button.doing{background:#e7f0fa}.status-button.done{background:#e6f2ec;color:var(--green)}.strike{text-decoration:line-through;color:#8996a7}.overdue-text{color:var(--red)}.edit-panel{display:none;margin-top:10px;padding:12px;background:#f7f9fc;border-radius:10px}.edit-panel.open{display:block}.empty{padding:25px;text-align:center;color:var(--muted);font-size:13px}.brief{padding:14px 16px;border-left:4px solid var(--blue);background:#fff;border-radius:0 10px 10px 0;margin:14px 0;color:#52657b;font-size:13px}.top-card{position:relative;padding-left:42px}.top-index{position:absolute;left:0;top:13px;width:28px;height:28px;display:grid;place-items:center;background:#e9f1fa;color:var(--blue-dark);border-radius:9px;font-weight:700}.reason{font-size:12px;color:var(--blue-dark);margin-top:5px}.badge{display:inline-block;min-width:20px;padding:1px 6px;border-radius:99px;background:#f8e7e7;color:var(--red);font-size:11px;text-align:center}.inbox-compose{display:grid;grid-template-columns:1fr auto;gap:9px}.classify-form{display:grid;grid-template-columns:1fr 1.5fr 1fr .8fr .9fr auto;gap:8px;margin-top:10px}.event-compose{display:grid;grid-template-columns:1.6fr .8fr .7fr .7fr .9fr auto;gap:8px}/* 备忘录入区（2026-09-11 加标题输入框）：原来是一行四列（正文/标签/分组/保存），
+   正文只有单行。现在标题与正文各占一行，标签 + 分组 + 保存收到第三行。
+   正文改成 textarea 后回车是换行，保存改用 Ctrl/Cmd + Enter —— 页面下方有一行说明，
+   否则用户按回车没反应会以为坏了（本项目最忌讳的「静默无反应」）。 */
+.memo-compose{display:grid;gap:8px}
+.memo-compose .mc-foot{display:grid;grid-template-columns:1.5fr 1fr auto;gap:8px;align-items:center}
+.memo-compose .mc-hint{margin:0;font-size:11.5px;color:#96a3b4;line-height:1.5}
+.memo-compose #memoContent{line-height:1.7}.memo-switch-wrap{margin-bottom:14px}.memo-switch-title{font-weight:600;font-size:14px}.memo-switch-sub{font-size:12px;color:var(--muted);margin:3px 0 10px}.memo-switch{display:grid;grid-template-columns:1fr 1fr;gap:12px}.memo-choice.all{grid-column:1/-1}.memo-choice{display:flex;align-items:center;gap:11px;width:100%;min-height:56px;border:1px solid var(--border);border-radius:16px;background:#fff;padding:14px 16px;text-align:left;cursor:pointer;transition:transform .18s,border-color .18s,box-shadow .18s}
+.memo-choice:hover{transform:translateY(-2px);box-shadow:0 7px 18px rgba(49,95,148,.08)}
+.memo-choice.all{background:#f4f8fc;border-color:#cfdeed}
+.memo-choice.work{background:#f1f8f4;border-color:#c8dfd2}
+.memo-choice.life{background:#fff8f4;border-color:#efd5c9}
+.memo-choice.all.active{background:#e3edf8;border-color:#6f96c2;box-shadow:0 7px 20px rgba(79,121,169,.16)}
+.memo-choice.work.active{background:#dfece4;border-color:#6c9d81;box-shadow:0 7px 20px rgba(79,132,106,.16)}
+.memo-choice.life.active{background:#f5e2d9;border-color:#d98267;box-shadow:0 7px 20px rgba(196,119,96,.16)}.memo-choice small{display:block;color:var(--muted);font-size:11px;margin-top:2px}.memo-ico{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;font-weight:700;flex:0 0 auto}.memo-choice.all .memo-ico{background:#e9f1fa;color:var(--blue-dark)}.memo-choice.work .memo-ico{background:#eaf3ed;color:var(--green)}.memo-choice.life .memo-ico{background:#fbede6;color:#b0562f}/* active 状态见 .memo-choice.all/.work/.life.active 类型化规则 */.memo-theme-all{background:transparent}/* .memo-theme-work / .memo-theme-life 自身没有规则，选中态由 .memo-choice.work.active / .memo-choice.life.active 类型化规则负责。这里**绝不能**再留悬空的选择器片段：CSS 里注释等同空白，两个残留片段会把后面那条规则拼进同一个选择器（实际变成 .memo-theme-work .memo-theme-life .memo-card），那条规则就永远匹配不到元素，padding / margin / border-radius 会静默全部失效——2026-09-11 的「文字挨着边框、卡片无间隙、左边框是直线」就是这个原因 *//* 工作/生活固定同一行：基础网格即 1fr 1fr，全部按钮跨整行 */.memo-card{position:relative;background:#fff;border:1px solid #e8edf3;border-radius:14px;padding:16px 18px 10px;margin-bottom:14px;box-shadow:0 1px 2px rgba(38,49,66,.04);transition:box-shadow .2s,transform .2s,border-color .2s}.memo-card:hover{box-shadow:0 8px 24px rgba(38,49,66,.09);transform:translateY(-1px)}.memo-card.pinned{border-color:#c3d4e8;box-shadow:0 3px 14px rgba(49,95,148,.10)}.memo-card.archived{opacity:.58}.memo-card.cat-work{border-left:3px solid #6C9D81;background:linear-gradient(90deg,#f5faf7,#fff 32%)}.memo-card.cat-life{border-left:3px solid #D98267;background:linear-gradient(90deg,#fdf8f4,#fff 32%)}/* 备忘卡片内部层次（2026-09-11 重做）：原来标题、分组 pill、时间、四个操作按钮全挤在
+   一行里 —— 备忘正文常常只有十来个字，那一行就显得又散又空。现在拆成四层：
+   「分组·时间（弱化小字）→ 标题（唯一强调行）→ 正文 → 标签+操作（卡片底部）」。
+   操作按钮按用户要求**保持悬停才出现**，但占位常驻（min-height），悬停时卡片不跳高；
+   触屏由 @media(hover:none) 与窄屏规则兜住（真正没有 hover 的设备上按钮必须能点到）。 */
+.memo-kicker{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);letter-spacing:.2px}
+.memo-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:#9fb0c2}
+.memo-card.cat-work .memo-dot{background:#6C9D81}
+.memo-card.cat-life .memo-dot{background:#D98267}
+.memo-kicker .memo-sep{color:#c6d1dd}
+.memo-arch{background:#eef1f5;color:#7d8899;border-radius:99px;padding:1px 7px;font-size:11px}
+.memo-title{font-size:15px;font-weight:600;line-height:1.5;color:var(--text);margin-top:5px;word-break:break-word}
+.memo-pin{display:inline-block;vertical-align:1px;background:#e7f0fa;color:var(--blue-dark);border-radius:99px;padding:1px 7px;font-size:11px;font-weight:600;margin-right:6px}
+.memo-foot{display:flex;align-items:center;gap:10px;margin-top:9px;min-height:28px}
+.memo-acts{flex:0 0 auto;display:flex;flex-wrap:wrap;gap:2px;justify-content:flex-end;opacity:0;transition:opacity .18s}.memo-card:hover .memo-acts,.memo-acts:focus-within{opacity:1}
+@media(hover:none){.memo-acts{opacity:1}}
+/* 备忘列表排布：卡片不再拉成整行。之前列表是块级单列，卡片占满内容区（实测约 1040px），
+   而标题/正文/标签加起来只有左侧 250px 左右 —— 右侧三分之二全是空白，就是「全部怼在前面」的
+   真正来源（卡片内部怎么调都救不回来）。
+   `auto-fill + minmax(340px,1fr)`：宽屏 2~3 列、窄屏自动回到单列，不用写断点。
+   `align-items:start` 让每张卡片按自身内容高度收束 —— 默认的 stretch 会把同行卡片拉到一样高，
+   短卡片底部立刻多出一段空白，正是要治的毛病。 */
+.memo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;align-items:start}
+/* 网格靠 gap 排版，卡片自带的 margin-bottom 会和 gap 叠成 24px，必须归零。 */
+.memo-grid .memo-card{margin-bottom:0}.memo-body{font-size:13.5px;line-height:1.8;margin-top:8px;color:#39424f;white-space:pre-wrap}.memo-link{margin-top:8px}.memo-link a{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--blue-dark);background:#f0f5fb;border-radius:8px;padding:4px 10px;text-decoration:none}.memo-link a:hover{background:#e3edf8}.memo-tags{flex:1;min-width:0}.memo-tags .pill{background:#f2f4f7;color:#7a8494;margin-left:0;margin-right:5px}/* 卡片内联编辑表单（2026-09-11 重做）：原来是把几个裸的 input/textarea 直接堆在一起，
+   没有字段名、没有分组，保存按钮孤零零挤在控件中间，还靠内联 style="margin-top:8px" 撑版式。
+   现在三个视图（任务 #edit- / 日程 #event-edit- / 备忘 #memo-edit-）统一成同一套结构：
+   字段标签 + 成对的字段并排一行 + 底部「取消 / 保存」操作条 + 可见的聚焦态。
+   三处模板都必须带 me-form / me-field / me-label / me-actions，少一个样式就不生效。 */
+.edit-panel{margin-top:10px;padding:14px 15px;background:#f7f9fc;border:1px solid #e6edf5;border-radius:12px}
+.edit-panel .me-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.4px;margin-bottom:11px}
+.edit-panel .me-hint{font-weight:400;font-size:11px;letter-spacing:0;color:#9aa8b8}
+.edit-panel .me-field{display:block;margin-bottom:10px}
+.edit-panel .me-label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:5px}
+.edit-panel .me-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
+/* 备忘的「标签 + 空间」：空间只需要固定宽度，把余量全给标签 */
+.edit-panel .me-row.me-narrow{grid-template-columns:minmax(0,1fr) 118px}
+.edit-panel .me-row .me-field{margin-bottom:10px}
+.edit-panel .me-note{margin:0 0 10px;font-size:11.5px;color:var(--muted);line-height:1.6}
+.edit-panel .me-checks{margin-top:0}
+.edit-panel .me-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:2px;padding-top:11px;border-top:1px solid #e6edf5}
+.edit-panel input:focus,.edit-panel textarea:focus,.edit-panel select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(79,121,169,.13)}
+@media(max-width:640px){.memo-compose .mc-foot{grid-template-columns:1fr}.edit-panel .me-row,.edit-panel .me-row.me-narrow{grid-template-columns:1fr}}.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#263142;color:#fff;padding:11px 18px;border-radius:9px;box-shadow:0 8px 28px #26314233;opacity:0;pointer-events:none;transition:.2s}.toast.show{opacity:1}.hidden{display:none!important}.placeholder{padding:34px;text-align:center;color:var(--muted)}@media(max-width:768px){.app{padding:10px}.top{align-items:flex-start;gap:12px}.grid,.two-col,.form-grid,.inbox-compose,.classify-form,.event-compose,.memo-compose{grid-template-columns:1fr}.user{flex-direction:column;align-items:flex-end}.actions{justify-content:flex-start}.list-item{flex-wrap:wrap}.checks{flex-wrap:wrap}.memo-acts{opacity:1}}
+.theme-card{margin-bottom:14px}.theme-compose{display:grid;grid-template-columns:1fr auto;gap:9px}/* 时间线的日期头是可点击的折叠开关（2026-09-12：「点击日期可以折叠这一天的内容」）。
+   原来 .tl-day 只是个居中的静态标签，现在整行都是热区（按钮铺满宽度），
+   日期胶囊右侧常显「N 条」——折叠后如果只剩一个光秃秃的日期，用户会以为这天的记录丢了。
+   折叠箭头用 .tl-caret 的 transform 旋转表达，而不是换字符（▾ / ▸）：换字符会改变字宽，
+   长列表里整行文字会跟着轻微横跳。 */
+.tl-day{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;margin:8px 0 22px;padding:0;background:transparent;border:0;font:inherit;cursor:pointer}
+.tl-day .tl-label{display:inline-block;background:#fff;border:1px solid #e3e1ee;color:var(--purple);font-size:12px;padding:3px 16px;border-radius:99px;letter-spacing:2px;transition:border-color .18s,box-shadow .18s}
+.tl-day .tl-count{font-size:12px;color:#a3a1b5;font-variant-numeric:tabular-nums}
+.tl-day .tl-caret{display:inline-block;font-size:11px;color:#a3a1b5;transition:transform .18s}
+.tl-day:hover .tl-label{border-color:#cfc8ea;box-shadow:0 2px 8px rgba(83,74,183,.12)}
+.tl-day:focus-visible{outline:2px solid var(--purple);outline-offset:4px;border-radius:99px}
+.tl-day[aria-expanded="false"] .tl-caret{transform:rotate(-90deg)}
+.tl-group.collapsed .tl-rail{display:none}
+/* 折叠后这一天只剩日期行，把底部间距收紧一点，否则相邻两天之间会空出一大段。 */
+.tl-group.collapsed .tl-day{margin-bottom:12px}
+.tl-rail{position:relative;max-width:640px;margin:0 auto 10px}
+.tl-rail::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:2px;transform:translateX(-50%);background:linear-gradient(180deg,#AFA9EC,#85B7EB,#9FE1CB)}
+.tl-item{position:relative;width:calc(50% - 28px);margin-bottom:20px}
+.tl-item.left{margin-right:auto;text-align:right}
+.tl-item.right{margin-left:auto}
+.tl-node{position:absolute;top:14px;width:13px;height:13px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 2px currentColor,0 0 10px currentColor}
+.tl-item.left .tl-node{right:-35px}
+.tl-item.right .tl-node{left:-35px}
+.tl-card{position:relative;display:inline-block;background:#fff;border:1px solid #eceaf4;border-radius:12px;padding:10px 32px 10px 14px;font-size:13px;text-align:left;box-shadow:0 2px 8px rgba(60,50,120,.06);max-width:100%;transition:transform .2s}
+.tl-card:hover{transform:translateY(-2px)}
+.tl-del{position:absolute;top:5px;right:5px;width:22px;height:22px;display:grid;place-items:center;padding:0;border:0;border-radius:6px;background:transparent;color:#b9b6c7;cursor:pointer;opacity:0;transition:opacity .16s,background .16s,color .16s}
+.tl-card:hover .tl-del,.tl-del:focus-visible{opacity:1}
+.tl-del:hover{background:#fbecec;color:var(--red)}
+.tl-del svg{display:block}
+/* 触屏没有 hover，删除图标必须常显。但 22px 的命中区在手机上太容易误触，
+   而这是全应用唯一不可逆的删除（其余删除都会二次确认）。放大到 36px，
+   同时把 .tl-card 的右侧留白从 32px 加到 44px，避免图标压住文字。
+   桌面端保持 22px：有 hover 提示、指针精度高，不必占位。 */
+@media(hover:none){.tl-del{opacity:1;top:3px;right:3px;width:36px;height:36px}.tl-card{padding-right:44px}}
+.tl-time{font-size:11px;color:#a3a1b5;font-variant-numeric:tabular-nums;display:block;margin-bottom:2px}
+.tl-item.praise .tl-card{background:linear-gradient(120deg,#f3fbf0,#eef7ff);border-color:#C0DD97}
+.tl-item.praise .tl-text{color:var(--green);font-weight:500}
+@media(max-width:640px){.tl-rail::before{left:8px}.tl-item{width:calc(100% - 34px);margin-left:34px!important;text-align:left}.tl-item .tl-node{left:-32px!important;right:auto!important}}
+.pomo-chip{display:flex;align-items:center;gap:8px;background:#0b1220;color:#7ef0ff;border:1px solid #1e3a5f;border-radius:99px;padding:5px 14px;cursor:pointer;font-size:12px;box-shadow:0 0 12px rgba(34,211,238,.25);user-select:none}
+.pomo-chip .dot{width:7px;height:7px;border-radius:50%;background:#22d3ee;box-shadow:0 0 6px #22d3ee}
+.pomo-chip.running .dot{animation:blink 1s infinite}
+.pomo-chip .t{font-variant-numeric:tabular-nums;font-weight:600;letter-spacing:1px}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.pomo-mask{position:fixed;inset:0;background:rgba(5,10,20,.55);z-index:60;display:none;align-items:center;justify-content:center}
+.pomo-mask.show{display:flex}
+.pomo-panel{width:340px;background:linear-gradient(160deg,#0b1220 0%,#0e1a2e 100%);border:1px solid #1e3a5f;border-radius:16px;padding:26px 24px;color:#cfe9ff;box-shadow:0 0 40px rgba(34,211,238,.18)}
+.pomo-panel h4{font-size:13px;font-weight:500;color:#7ef0ff;letter-spacing:3px;text-align:center;margin:0 0 14px}
+.ring-wrap{position:relative;width:150px;margin:0 auto 14px}
+.ring-wrap svg{display:block;width:150px;height:150px;transform:rotate(-90deg)}
+.ring-bg{fill:none;stroke:#16304a;stroke-width:6}
+.ring-fg{fill:none;stroke:#22d3ee;stroke-width:6;stroke-linecap:round;filter:drop-shadow(0 0 5px rgba(34,211,238,.7));transition:stroke-dashoffset .5s}
+.ring-time{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring-time .tt{font-size:32px;font-weight:600;color:#eaf7ff;font-variant-numeric:tabular-nums;text-shadow:0 0 12px rgba(34,211,238,.6)}
+.ring-time .mm{font-size:11px;color:#5f8db3;letter-spacing:3px;margin-top:3px}
+.pomo-panel .modes{display:flex;gap:8px;margin-bottom:12px}
+.pomo-panel .modes button{flex:1;background:#0e1a2e;border:1px solid #1e3a5f;color:#7ea9cc;border-radius:8px;font-size:12px;padding:6px 0;cursor:pointer;font-family:inherit}
+.pomo-panel .modes button.active{border-color:#22d3ee;color:#7ef0ff;box-shadow:0 0 8px rgba(34,211,238,.35)}
+.pomo-panel select{width:100%;background:#0e1a2e;border:1px solid #1e3a5f;color:#cfe9ff;margin-bottom:12px;border-radius:8px;padding:8px;font-size:13px;font-family:inherit}
+.pomo-panel .acts{display:flex;gap:8px}
+.pomo-panel .acts .go{flex:1;background:#22d3ee;border:none;color:#04222b;font-weight:600;border-radius:8px;padding:9px 0;cursor:pointer;font-size:13px;font-family:inherit;box-shadow:0 0 14px rgba(34,211,238,.4)}
+.pomo-panel .acts .rst{background:transparent;border:1px solid #1e3a5f;color:#7ea9cc;border-radius:8px;padding:9px 14px;cursor:pointer;font-size:13px;font-family:inherit}
+.pomo-panel .stat{text-align:center;font-size:11px;color:#5f8db3;margin-top:12px;letter-spacing:1px}
+.pomo-panel .set-toggle{text-align:center;font-size:11px;color:#5f8db3;margin-top:8px;cursor:pointer;letter-spacing:1px}
+.pomo-panel .set-toggle:hover{color:#7ef0ff}
+.pomo-set{margin-top:10px;border-top:1px solid #1e3a5f;padding-top:12px}
+.pomo-set .set-row{display:flex;gap:8px;margin-bottom:10px}
+.pomo-set .set-row label{flex:1;font-size:11px;color:#7ea9cc}
+.pomo-set input[type=number]{width:100%;background:#0e1a2e;border:1px solid #1e3a5f;color:#eaf7ff;border-radius:7px;padding:5px 8px;font-size:13px;margin-top:3px;font-family:inherit}
+.pomo-set .set-auto{display:block;font-size:11px;color:#7ea9cc;margin-bottom:10px;cursor:pointer}
+.pomo-set .set-auto input{vertical-align:-2px}
+.pomo-set .rst{width:100%;background:transparent;border:1px solid #1e3a5f;color:#7ea9cc;border-radius:8px;padding:8px 0;cursor:pointer;font-size:12px;font-family:inherit}
+@media (max-width:768px){.theme-compose{grid-template-columns:1fr}.pomo-panel{width:min(92vw,340px)}}
+.archived-toggle{display:inline-flex;align-items:center;gap:6px;min-height:44px;cursor:pointer;flex-shrink:0;white-space:nowrap;color:var(--muted);font-size:13px;user-select:none}
+.archived-toggle input{width:16px;height:16px;accent-color:var(--blue);margin:0;cursor:pointer}
+@media (max-width:640px){.memo-choice small{display:none}.memo-choice{min-height:48px;padding:9px 12px}}
+/* ===== 设置页（SaaS 风格分区卡片） ===== */
+.settings-wrap{max-width:780px;margin:0 auto}
+.set-head{margin:4px 0 18px}
+.set-head h2{font-size:22px;margin:0 0 5px;letter-spacing:.5px}
+.set-head p{margin:0;font-size:13px;color:var(--muted)}
+.set-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:16px;box-shadow:0 1px 3px rgba(38,49,66,.05)}
+.set-card-head{display:flex;gap:12px;align-items:center;padding-bottom:13px;border-bottom:1px solid #eef2f7;margin-bottom:16px}
+.set-card-head h3{margin:0 0 3px;font-size:15px}
+.set-card-head p{margin:0;font-size:12px;color:var(--muted)}
+.set-ico{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-weight:700;font-size:13px;flex:0 0 auto}
+.set-field{margin-bottom:14px}
+.set-field:last-child{margin-bottom:0}
+.set-field>label{display:block;font-size:12px;font-weight:600;color:#44556b;margin-bottom:6px}
+.set-fields3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.set-row2{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+.set-row3{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:center}
+.set-note{font-size:12px;color:var(--muted);margin-top:8px}
+.set-card.danger-card{border-color:#e9c7c7;background:#fffbfb}
+.set-card.danger-card .set-card-head{border-bottom-color:#f0dede}
+@media (max-width:640px){.set-card{padding:16px}.set-fields3,.set-row3,.set-row2{grid-template-columns:1fr}}
+/* ===== 知识库问答 ===== */
+.kb-chat-card{display:flex;flex-direction:column;height:560px}
+.chat-box{flex:1;overflow-y:auto;padding:6px 0;margin-bottom:10px}
+.msg{margin-bottom:12px;display:flex}
+.msg.user{justify-content:flex-end}
+.msg .bubble{max-width:78%;padding:9px 13px;border-radius:12px;font-size:13px;line-height:1.7}
+.msg.user .bubble{background:var(--blue);color:#fff;border-bottom-right-radius:4px}
+.msg.ai .bubble{background:var(--surface2);border-bottom-left-radius:4px}
+.msg.ai .bubble a{color:var(--blue-dark)}
+.cite{display:block;margin-top:8px;padding:7px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px}
+.cite .src{color:var(--purple);font-weight:500}
+.kb-chat-row{display:flex;gap:8px}
+.kb-chat-row input{flex:1}
+.kb-chat-row .btn{flex-shrink:0}
+.kb-mode{margin-top:6px}
+@media(max-width:640px){.kb-chat-card{height:70vh}.msg .bubble{max-width:88%}}
+
+/* 整理卡片的字段显隐（分类联动）会按分类算列数并写成行内 grid-template-columns，
+   行内样式的优先级高于普通媒体查询，所以窄屏必须用 !important 压回单列，否则会横向挤爆。 */
+@media(max-width:768px){.classify-form{grid-template-columns:1fr!important}}
+
+/* 卡片头部：标题在左、右侧操作在右，窄屏自动回落到两行。
+   .card h3 自带 margin，这里必须显式归零，否则标题会把右侧那一排压下去。
+   （原日程页的 .day-nav「前一天 / 后一天 / 日期选择器 / 回到今天」已随按日视图整体移除，
+   换成了周视图的 .week-block，见文件末尾。） */
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.card-head h3{margin:0}
+/* 禁用态：没有可批量确认的条目时按钮要一眼看出点不动，否则用户会反复点。 */
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:disabled:hover{background:#fff}
+
+/* 三个页签（任务 / 日程 / 备忘）共用的「新建 + 搜索」一行（2026-09-12 改版）。
+   收起态 = 「＋新建X」吃掉整行（约 96%）+ 一个 44×44 的放大镜方按钮；
+   展开态 = 新建压窄 + 输入框接管 + 「显示已归档」（仅备忘）+ 收起按钮。
+   放大镜与「×」是**同一个按钮**，只按 aria-expanded 换图标 —— 用户不用在两个位置找同一个功能。
+   为什么收起**不清空**关键词：靠按钮上的 .sb-dot 小圆点 + 页面上那条 .filter-note 说明
+   「列表还是筛过的」。静默过滤（列表被筛过却看不出为什么）是这个项目反复踩过的一类失效，
+   不能靠「用户应该记得自己搜过」。 */
+.search-row{align-items:flex-start}
+/* align-items:flex-start 不可省：新建表单展开时这一行会变高，居中会把放大镜拽到半空中。 */
+.search-row .composer{flex:1;min-width:0;margin-bottom:0}
+.search-row .composer-toggle{min-height:44px}
+/* 压窄档只在搜索展开时生效。最先让位的是副标题（「回车快速创建」/「Ctrl + Enter 保存」）：
+   它本来就是提示、不是功能，留着会把「＋新建任务」挤到换行。 */
+.search-row.searching .composer{flex:0 0 auto}
+.search-row.searching .composer-toggle{padding:8px 11px;gap:6px}
+.search-row.searching .composer-toggle .c-sub{display:none}
+.search-input{flex:1;min-width:0}
+/* 放大镜方按钮：44×44 与 .btn 同高，放进任何一行都不会把行搞歪。 */
+.search-btn{position:relative;width:44px;height:44px;min-height:44px;flex:0 0 auto;display:grid;place-items:center;border:1px solid #cbd8e6;border-radius:9px;background:#fff;color:#52657b;cursor:pointer;padding:0;transition:background .18s,color .18s,border-color .18s}
+.search-btn:hover{background:#eef3f9;color:var(--blue-dark);border-color:#a9c1da}
+.search-btn[aria-expanded="true"]{background:#e9f1fa;border-color:#c9d9eb;color:var(--blue-dark)}
+.search-btn .sb-close{display:none}
+.search-btn[aria-expanded="true"] .sb-glass{display:none}
+.search-btn[aria-expanded="true"] .sb-close{display:block}
+/* 「已收起但关键词还在」的小圆点。展开时不用它 —— 输入框里的字本身就是提示。 */
+.search-btn .sb-dot{display:none;position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;background:var(--blue);border:1.5px solid #fff}
+.search-btn[aria-expanded="false"].busy{border-color:#c9d9eb;background:#e9f1fa;color:var(--blue-dark)}
+.search-btn[aria-expanded="false"].busy .sb-dot{display:block}
+/* 「含归档」：备忘页的「显示已归档」收起后没有入口（它管的是常驻列表，不只是搜索），
+   勾选生效时用它兜住，点一下就关。默认态根本不渲染，所以不占宽度。 */
+.archived-chip{flex:0 0 auto;white-space:nowrap;min-height:44px;padding:8px 12px;border:1px solid #c9d9eb;border-radius:9px;background:#e9f1fa;color:var(--blue-dark);font:inherit;font-size:12.5px;cursor:pointer}
+.archived-chip:hover{background:#dbe8f6}
+/* 窄屏（≤640px，与下面 .c-sub 那档断点对齐）：搜索行折行，输入框独占一行。
+   不折的话「新建 + 输入框 + 显示已归档 + 放大镜」挤在 360px 里，输入框只剩二十几个像素，
+   看起来就是「搜索框不见了」—— 而它明明还在。 */
+@media(max-width:640px){.search-row{flex-wrap:wrap}.search-input{flex:1 1 100%}}
+/* ===== 任务页三泳道看板（2026-09-12）=====
+   用户要求：竖着的三个泳道，从左往右 待办 / 进行中 / 已完成；每条记录是一张卡片，可以左右拖动。
+   做法：.task-board 是三列网格，每个 .lane = 「同色标题条 + 卡片容器」，卡片 .task-card 是竖排的三层
+   （状态圆点+标题 → 操作按钮 → 内联编辑表单）。
+   颜色沿用原来那两块分区的一套变量语义（蓝 = 待办、琥珀 = 进行中、绿 = 已完成），
+   仍然只靠 --accent / --accent-soft / --accent-strong / --accent-line 切换 ——
+   给三条泳道各抄一份配色，一旦漂了只会有一条悄悄变回灰底，不报错也难发现。
+   浅色主题：底色都是白到极浅色的渐变，文字保持深色，不要用深色面板。
+   ⚠️ .lane / .lane-body **绝不能**用 overflow（hidden / auto 都一样）：卡片里的「移至」菜单是
+   绝对定位浮层，overflow 会把它裁掉一半（点开只看到一条边），而且控制台一个字都不报。
+   所以泳道不做内部滚动，长列表交给页面本身滚动。 */
+.task-board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+/* 窄屏（<960px）三条泳道并排会挤到 260px 以下，卡片里的操作按钮会被压成两行。
+   这里直接改成上下堆叠 —— 不用横向滚动条：横向滚动必然要 overflow，
+   而 overflow 会把「移至」浮层裁掉（见上）。 */
+@media(max-width:960px){.task-board{grid-template-columns:1fr}}
+.lane{--accent:#4f79a9;--accent-soft:#e9f1fa;--accent-strong:#2f5a86;--accent-line:#dbe8f5;
+  display:flex;flex-direction:column;background:#fff;border:1px solid var(--border);border-radius:14px;
+  box-shadow:0 1px 3px rgba(38,49,66,.05);transition:border-color .18s,box-shadow .18s}
+.lane-todo{--accent:#4f79a9;--accent-soft:#e9f1fa;--accent-strong:#2f5a86;--accent-line:#dbe8f5}
+.lane-doing{--accent:#d99025;--accent-soft:#fbf1e0;--accent-strong:#8a5a11;--accent-line:#f1e2c6}
+.lane-done{--accent:#4f8f6d;--accent-soft:#eaf4ee;--accent-strong:#2f6149;--accent-line:#d9e9e0}
+.lane-head{display:flex;align-items:center;gap:9px;padding:12px 15px 11px;border-bottom:1px solid var(--accent-line);
+  background:linear-gradient(180deg,var(--accent-soft),rgba(255,255,255,0) 92%);border-radius:13px 13px 0 0}
+.lane-dot{width:10px;height:10px;border-radius:3px;background:var(--accent);flex:0 0 auto}
+.lane-head h3{display:flex;align-items:baseline;gap:6px;flex:1;min-width:0;margin:0;font-size:14.5px;
+  font-weight:600;color:var(--accent-strong);letter-spacing:.3px}
+/* 「含已取消」是对泳道名的补充说明，不能和泳道名一样重，否则标题读起来像个长句 */
+.lane-sub{font-size:11px;font-weight:400;color:var(--accent-strong);opacity:.62;letter-spacing:0}
+.lane-count{flex:0 0 auto;font-size:11.5px;font-weight:500;color:var(--accent-strong);background:var(--accent-soft);
+  border:1px solid var(--accent-line);border-radius:99px;padding:1px 9px}
+/* 0 条时角标是空字符串，别在标题后面留一个空胶囊 */
+.lane-count:empty{display:none}
+.lane-body{flex:1;display:flex;flex-direction:column;gap:10px;padding:12px;min-height:120px;border-radius:0 0 13px 13px}
+/* 拖到哪条泳道就点亮哪条：整条泳道描边 + 底色。只高亮一条细边框时，用户很难在移动中看清落点。 */
+.lane.drag-over{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.lane.drag-over .lane-body{background:var(--accent-soft)}
+/* 卡片：竖排三层。左边 3px 细边用泳道色，卡片和它的泳道挂上钩（不用整块填色，避免看板变成色块墙）。 */
+.task-card{display:flex;flex-direction:column;gap:9px;padding:12px 13px 11px;background:#fff;
+  border:1px solid #e8edf3;border-left:3px solid var(--accent-line);border-radius:11px;
+  box-shadow:0 1px 2px rgba(38,49,66,.05);cursor:grab;transition:box-shadow .18s,transform .18s,border-color .18s}
+.task-card:hover{box-shadow:0 6px 18px rgba(38,49,66,.10);transform:translateY(-1px)}
+.task-card:active{cursor:grabbing}
+/* 正在被拖走的那张要「留在原地但明显被拿起」：opacity 比直接移除更不容易让人以为卡片丢了 */
+.task-card.dragging{opacity:.42;box-shadow:none;transform:none}
+.task-card.is-canceled{border-left-color:#dfe4ea;background:linear-gradient(180deg,#fafbfc,#fff 60%)}
+.task-card.is-canceled .task-title{color:#8996a7}
+.tc-top{display:flex;align-items:flex-start;gap:10px}
+/* 优先级钉在卡片右上角：不参与标题的换行，也就不会出现「P2」孤零零占一行的情况。
+   margin-left 必须归零 —— .pill 自带 5px 左边距，那是给「跟在标题后面」的标签用的。 */
+.task-prio{flex:0 0 auto;margin-left:0;font-weight:600;letter-spacing:.3px}
+/* 卡片只有约 300~350px 宽，操作按钮 5 个一排**本来就卡在临界点上**：保持右对齐与全站 .actions
+   一致，而「移至」浮层本来就是向左弹的，从右边缘弹开时正好落在卡片内部，不会被泳道裁掉。
+   gap 用 3px 而不是全站的 5px，是因为量过：1040px 视口时卡片内容宽约 271px，5 个按钮约 214px +
+   4 个 5px 缝 = 234px 就贴边了；三列布局最窄出现在 961px 视口（再窄就塌成单列），
+   那一档卡片内容宽约 246px。原来 4px 缝时，「移至」只要比邻居宽 2px（ghost 的左右内边距是 9px、
+   .btn.sm 是 10px）就会把「删除」顶到第二行单独站着 —— 2026-09-12 统一「移至」样式时真踩到了。
+   3px 缝把 5 个按钮的总宽压到 242px，整个三列区间都不折行。**这一行别再往上加 gap 或内边距。** */
+.task-card .tc-acts{gap:3px}
+/* 窄卡片里的内联编辑表单：.me-row 默认两列等宽（各约 150px），日期框在这个宽度里会被压得
+   只剩半截。任务卡片里一律改单列 —— 表单变高一点，但每个字段都完整、可读。 */
+.task-card .edit-panel{margin-top:0}
+.task-card .edit-panel .me-row,.task-card .edit-panel .me-row.me-narrow{grid-template-columns:1fr}
+/* 看板下方的操作说明。它是**在用说明**不是装饰：触屏上拖不动时用户得知道还有圆点那条路。 */
+.lane-hint{margin:14px 2px 0;font-size:12px;line-height:1.7;color:var(--muted)}
+/* 空泳道的占位文案：居中 + 留足高度，让空泳道看起来是「还空着」，而不是渲染坏了。 */
+.lane .empty{padding:22px 14px;line-height:1.7}
+
+/* ===== 驾驶舱下钻（2026-09-12）=====
+   指标卡改成了 <button>，所以先把它复位成卡片外观：button 自带字体、居中对齐、最小尺寸等默认样式，
+   不复位就会长得和旁边的卡片不一样。点击反馈用「上浮 + 描边」而不是变色 ——
+   卡片本身就是白底，浅色主题下变色几乎看不出来。 */
+button.card{font:inherit;text-align:left;color:inherit;cursor:pointer}
+.metric{position:relative;transition:transform .16s,box-shadow .16s,border-color .16s}
+.metric:hover{transform:translateY(-2px);border-color:#c9d9eb;box-shadow:0 8px 20px rgba(49,95,148,.10)}
+.metric:active{transform:translateY(0)}
+/* 右上角的 ↗ 常显：只在悬停时才出现的提示等于没有提示（触屏上永远看不到）。 */
+.drill::after{content:"↗";position:absolute;top:8px;right:11px;font-size:12px;color:#c2cedd;transition:color .16s,transform .16s}
+.drill:hover::after{color:var(--blue-dark);transform:translate(1px,-1px)}
+/* 整行可点的列表条目（Top3 / 今天截止 / 今日日程）。用背景色而不是下划线：
+   条目里已经有多层文字，再加下划线会和标题的强调线打架。 */
+.drill-row{cursor:pointer;border-radius:10px;transition:background .16s}
+.drill-row:hover{background:#f4f8fc}
+.drill-row:hover .task-title{color:var(--blue-dark)}
+/* 下钻定位后的高亮：只播一次动画，不写进 state（用户接着操作时不该还亮着）。 */
+@keyframes hlPulse{0%{background:#fdf3d7}100%{background:transparent}}
+.hl{animation:hlPulse 2.4s ease-out;border-radius:10px}
+/* 任务页的筛选说明条：从驾驶舱下钻过来会带着筛选，必须写出来并且能一键取消 ——
+   静默过滤会让用户以为任务凭空少了一半。 */
+.filter-note{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:#fff8e8;border:1px solid #f0e0bd;color:#8a5a11;border-radius:11px;padding:9px 14px;margin-bottom:14px;font-size:13px}
+
+/* ===== 「移至」（任务 / 日程 / 备忘互转）=====
+   菜单是从卡片操作区展开的浮层：z-index 要压过相邻卡片；min-width 定死，
+   否则「移到「日程」」这类不同字数的选项会让菜单宽度跳变。
+   **向左弹（right:100%）而不是向下弹**：任务列表里相邻两行紧挨着、共用同一套
+   右侧操作区，向下弹时菜单（约 72px 高，比一行还高）会严丝合缝盖住下一行的
+   「编辑 / 移至」，用户看到的是「下一行凭空少了两个按钮」—— 2026-09-12 用无头
+   截图核对时发现。向左弹只压在**当前行自己**的文字上（此刻注意力就在这一行），
+   不会让别的行看起来缺按钮；垂直方向只需略高于按钮，不必再算行高。 */
+.move-wrap{position:relative;display:inline-block}
+.move-menu{display:none;position:absolute;right:calc(100% + 6px);top:-8px;z-index:30;min-width:112px;padding:4px;background:#fff;border:1px solid var(--border);border-radius:11px;box-shadow:0 12px 28px rgba(38,49,66,.16)}
+.move-menu.open{display:block}
+.move-opt{display:block;width:100%;text-align:left;border:0;background:transparent;font:inherit;font-size:12.5px;color:#42505f;padding:7px 11px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.move-opt:hover,.move-opt:focus{background:#eef3f9;color:var(--blue-dark);outline:none}
+/* 备忘卡片的操作区是「悬停才出现」的，菜单开在里面容易被一起淡出 ——
+   焦点还在操作区时保持可见（点开菜单后焦点就在那个按钮上）。 */
+.memo-card:focus-within{z-index:6}
+@media(max-width:640px){.move-menu{min-width:104px}}
+
+/* ===== 折叠式「新增」输入区（2026-09-12，参照 Notion / Linear 的「＋ 新建」入口条） =====
+   用户反馈「新建任务 / 加入日程 / 新建备忘」三个新增板块太大、占页面太多位置。
+   做法：三块收成一条纤细的入口条，默认收起，点开才展开表单 —— 收起时每个板块只占约 40px 一条线，
+   不再是一整张带标题的卡片。展开后的表单控件也从全局默认（min-height:44px、16px）压到 38px / 13.5px，
+   观感更接近桌面 SaaS。 */
+.composer{margin-bottom:14px}
+.composer-toggle{display:flex;align-items:center;gap:8px;width:100%;min-height:40px;padding:8px 14px;
+  border:1px dashed #c7d3e2;border-radius:11px;background:var(--surface);color:#5d6f86;
+  font:inherit;font-size:13.5px;cursor:pointer;text-align:left;
+  transition:border-color .18s,background .18s,color .18s,box-shadow .18s}
+.composer-toggle:hover{border-color:var(--blue);border-style:solid;color:var(--blue-dark);background:#f6fafd;box-shadow:0 2px 8px rgba(49,95,148,.06)}
+.composer-toggle .c-plus{font-size:17px;font-weight:500;line-height:1;color:#9aa8b8;transition:color .18s}
+.composer-toggle:hover .c-plus{color:var(--blue-dark)}
+.composer-toggle .c-sub{margin-left:auto;font-size:11.5px;color:#a9b4c2}
+.composer-toggle .c-caret{font-size:11px;color:#a9b4c2;transition:transform .18s}
+.composer-toggle.open{border-style:solid;border-color:#dbe6f2;background:#f7f9fc;color:var(--blue-dark)}
+.composer-toggle.open .c-caret{transform:rotate(180deg)}
+.composer-body{display:none;margin-top:10px;padding:14px 15px;background:#f7f9fc;border:1px solid #e6edf5;border-radius:12px}
+.composer-body.open{display:grid;gap:9px;animation:cFadeIn .16s ease}
+@keyframes cFadeIn{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+.composer-body input,.composer-body textarea,.composer-body select{min-height:38px;padding:7px 10px;font-size:13.5px}
+.composer-body .c-title{font-size:14px}
+.composer-body input:focus,.composer-body textarea:focus,.composer-body select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(79,121,169,.13)}
+.composer-body .c-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.composer-body .c-row input:not([type=checkbox]),.composer-body .c-row select{width:auto}
+.composer-body .c-row .grow{flex:1;min-width:160px;width:auto}
+.composer-body .c-row .btn{flex-shrink:0}
+.composer-body .c-check{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.composer-body .c-check input{width:auto;min-height:auto;margin:0}
+.composer-body .c-hint,.composer-body .mc-hint{margin:0;font-size:11.5px;color:#96a3b4;line-height:1.5}
+@media(max-width:640px){.composer-body .c-row .grow{min-width:100%}.composer-toggle .c-sub{display:none}}
+
+/* 备忘空间选择：三张占位大卡片（各 56px 高、整块带图标）压成一行分段控件。
+   覆盖写在 .memo-switch 作用域内、且放在文件靠后处：原 .memo-choice 的 min-height:56px /
+   padding:14px 16px / 按 all·work·life 配的底色 都要被压掉，必须用更高特异性 + 更靠后的位置兜住。 */
+.memo-switch-wrap{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.memo-switch-title{font-size:12.5px;font-weight:600;color:var(--muted);flex:0 0 auto}
+.memo-switch{display:inline-flex;gap:2px;padding:3px;background:#eef2f7;border:1px solid #e3e9f1;border-radius:10px}
+.memo-switch .memo-choice{display:inline-flex;align-items:center;justify-content:center;width:auto;min-width:0;min-height:30px;
+  padding:5px 18px;border:0;border-radius:7px;background:transparent;color:#63748a;text-align:center;
+  font:inherit;font-size:12.5px;cursor:pointer;transition:background .16s,color .16s,box-shadow .16s}
+.memo-switch .memo-choice:hover{transform:none;box-shadow:none;color:var(--blue-dark);background:rgba(255,255,255,.55)}
+.memo-switch .memo-choice.all,.memo-switch .memo-choice.work,.memo-switch .memo-choice.life{background:transparent;border:0}
+.memo-switch .memo-choice.all.active,.memo-switch .memo-choice.work.active,.memo-switch .memo-choice.life.active{
+  background:#fff;color:var(--blue-dark);box-shadow:0 1px 3px rgba(38,49,66,.14);font-weight:600}
+.memo-switch .memo-choice small{display:none}
+/* ===== 全局搜索（2026-09-12，docs/全文搜索功能设计.md）=====
+   顶栏常驻输入框 + 覆盖式结果面板（左列表 / 右预览）。
+   层级：toast(70) > 番茄钟遮罩(60) > 本面板(40) > 「移至」菜单(30) > 卡片(6)。
+   面板必须低于番茄钟遮罩、高于「移至」菜单：反过来要么遮罩盖不住面板，
+   要么一张卡片的菜单穿透到面板上面。 */
+.app{position:relative}
+.top{gap:12px;flex-wrap:wrap}
+.toast{z-index:70}
+.gs-entry{flex:1 1 200px;min-width:0;max-width:330px;display:flex;align-items:center;gap:7px;border:1px solid #ccd8e5;border-radius:9px;background:#fff;padding:0 10px;min-height:38px;color:#8a94a6;transition:border-color .18s,box-shadow .18s,color .18s}
+.gs-entry:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px rgba(79,121,169,.13);color:var(--blue-dark)}
+.gs-entry-ico{width:15px;height:15px;flex:0 0 auto}
+/* 全局 input 有 min-height:44px / 边框 / font-size:16px，这里必须显式收回，
+   否则顶栏里会出现一根 44px 高、带边框的胖输入框，把顶栏撑变形。 */
+.gs-entry .gs-input{flex:1;min-width:0;width:auto;min-height:auto;border:0;background:transparent;padding:0;font-size:13.5px}
+.gs-entry .gs-input:focus{outline:none;box-shadow:none;border:0}
+.gs-kbd{display:flex;gap:3px;flex:0 0 auto}
+.gs-kbd kbd{font:inherit;font-size:10.5px;color:#96a3b4;border:1px solid var(--border);border-radius:4px;padding:0 4px;line-height:16px}
+.gs-panel{position:absolute;left:18px;right:18px;z-index:40;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 44px rgba(38,49,66,.16);overflow:hidden}
+.gs-panel button{font:inherit}
+.gs-summary{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 15px;border-bottom:1px solid #eef2f7;background:#fafcfe;font-size:12px;color:var(--muted)}
+.gs-count{font-weight:600;color:var(--blue-dark)}
+.gs-muted{color:var(--muted)}
+.gs-error{color:var(--red)}
+.gs-warn{background:#f8eedc;color:var(--amber);border-radius:99px;padding:2px 8px;font-size:11px}
+.gs-chips{display:flex;gap:6px;flex-wrap:wrap;padding:9px 15px;border-bottom:1px solid #eef2f7}
+.gs-chip{border:1px solid var(--border);background:#fff;color:#5b6b80;border-radius:99px;padding:4px 11px;font-size:12px;cursor:pointer;min-height:auto}
+.gs-chip:hover{background:#f2f6fb}
+.gs-chip.active{background:var(--blue-dark);border-color:var(--blue-dark);color:#fff}
+.gs-body{display:flex;min-height:0}
+.gs-list{flex:1;min-width:0;max-height:min(52vh,420px);overflow:auto;padding:6px 0}
+.gs-preview{flex:0 0 45%;max-width:430px;border-left:1px solid #eef2f7;padding:14px 16px;max-height:min(52vh,420px);overflow:auto}
+/* Tab 收起预览：整块移出布局而不是只藏内容 —— 留一条空栏会让人以为「预览坏了」。 */
+.gs-panel.preview-off .gs-preview{display:none}
+.gs-group-head{padding:8px 16px 4px;font-size:11px;color:#96a3b4;letter-spacing:.3px}
+.gs-row{display:flex;align-items:flex-start;gap:9px;padding:8px 16px;border-left:3px solid transparent;cursor:pointer}
+.gs-row:hover{background:#f6f9fc}
+.gs-row.active{background:#e9f1fa;border-left-color:var(--blue)}
+.gs-row.is-deleted .gs-row-title{color:#7d8899}
+.gs-ico{width:24px;height:24px;flex:0 0 auto;border-radius:7px;font-size:11.5px;font-weight:600;display:grid;place-items:center;background:#edf1f5;color:#66768a}
+.gs-ico-task{background:#e7f0fa;color:#315f94}
+.gs-ico-event{background:#e6f2ec;color:#39745b}
+.gs-ico-memo{background:#fbede6;color:#b0562f}
+.gs-ico-inbox{background:#efeafa;color:#534AB7}
+.gs-ico-timeline{background:#edf1f5;color:#66768a}
+.gs-row-main{flex:1;min-width:0}
+.gs-row-title{display:block;font-size:13px;line-height:1.45;color:var(--text);word-break:break-word}
+.gs-row-meta{display:block;font-size:11px;color:#7a8899;margin-top:2px}
+.gs-pill{font-size:11px;padding:2px 7px;border-radius:99px;background:#edf1f5;color:#66768a;flex:0 0 auto}
+.gs-pill-task{background:#e7f0fa;color:#315f94}
+.gs-pill-event{background:#e6f2ec;color:#39745b}
+.gs-pill-memo{background:#fbede6;color:#b0562f}
+.gs-pill-inbox{background:#efeafa;color:#534AB7}
+.gs-pill-timeline{background:#edf1f5;color:#66768a}
+.gs-pill-trash{background:#f8e7e7;color:var(--red)}
+.gs-mark{background:#faeeda;color:#854f0b;border-radius:3px}
+.gs-more{padding:6px 16px 10px;font-size:11px;color:#96a3b4}
+.gs-empty{padding:26px 20px;text-align:center;color:var(--muted);font-size:12.5px;line-height:1.9}
+.gs-pv-head{display:flex;gap:6px;flex-wrap:wrap}
+.gs-pv-title{font-size:14.5px;font-weight:600;line-height:1.45;margin-top:9px;color:var(--text);word-break:break-word}
+.gs-pv-match{font-size:11.5px;color:#854f0b;background:#faeeda;border-radius:6px;padding:4px 9px;margin-top:9px}
+.gs-pv-snippet{font-size:12.5px;color:#39424f;line-height:1.75;margin-top:10px;white-space:pre-wrap;word-break:break-word}
+.gs-pv-meta{margin-top:12px;border-top:1px solid #eef2f7;padding-top:9px}
+.gs-pv-row{display:flex;justify-content:space-between;gap:12px;font-size:11.5px;padding:3px 0;color:#7a8899}
+.gs-pv-row span:last-child{color:var(--text);text-align:right;min-width:0;word-break:break-word}
+.gs-pv-acts{display:flex;gap:8px;margin-top:13px}
+.gs-pv-acts .btn{flex:1}
+.gs-foot{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 15px;border-top:1px solid #eef2f7;background:#fafcfe;font-size:11.5px;color:#8a97a8}
+.gs-foot kbd{font:inherit;font-size:11px;color:#5b6b80;border:1px solid var(--border);border-radius:4px;padding:1px 5px;margin-right:2px}
+.gs-foot-hint{margin-left:auto;color:#b3bec9}
+/* 窄屏：搜索框独占一行（顶栏排不下第三个元素），预览整块收起来。
+   注意是「收起来」而不是「变窄」—— 两百来像素宽的预览栏只能显示半句话。 */
+@media(max-width:960px){.gs-preview{flex-basis:48%;max-width:none}}
+@media(max-width:768px){.gs-entry{flex-basis:100%;max-width:none;order:3}.gs-kbd{display:none}.gs-panel{left:10px;right:10px}.gs-preview{display:none}}
+
+/* ===== 日程页周视图（2026-09-13，见 docs/日程周视图设计.md）=====
+   形态由用户定死：纵向固定三条，顺序是「下一周（默认折叠） / 本周（默认展开） / 上一周（默认折叠）」
+   —— 上方是未来、下方是过去，本周永远居中。一个周条 = 可点折叠的周头 + 严格七行（周一→周日），
+   行内卡片按开始时间从左往右排，等宽、自带时间徽标。
+
+   ⚠️ 为什么不做「按时间比例定位」（Google Calendar / Notion Calendar 那种）：
+      七行布局下每行可用宽度只有约 570px（1040px 内容区减去日期列与内边距），
+      按 08:00–22:00 折算下来 1 小时 ≈ 40px、30 分钟 ≈ 20px —— 站会这种 30 分钟的日程
+      会退化成一条没有文字的色条，用户得逐条点开才知道是什么，比不显示更糟。
+      而且比例视图里重叠卡片必然互相遮挡，而「时间重叠」在本项目是**允许保存的真实数据**
+      （只提醒、不阻止）。遮挡属于「控制台不报、只能靠截图发现」的失效，不能引进来。
+      取舍的完整测算见设计文档 §2。 */
+.week-block{background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(38,49,66,.05)}
+/* 折叠靠 CSS 隐藏 body，DOM 一个字都不动：这样 toggle-week 只切一个 class 就能完成折叠，
+   不必重绘，也就不会把滚动位置弹回顶部（时间线折叠踩过同一个坑）。 */
+.week-block.collapsed .week-body{display:none}
+.week-head{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid #eef2f7;background:#f7fafd;border-radius:13px 13px 0 0}
+.week-block.collapsed .week-head{border-bottom:0;border-radius:13px}
+/* 折叠触发区吃掉整行剩余宽度：整行都是热区，用户不必瞄准那个小三角。 */
+.wh-toggle{flex:1;min-width:0;display:flex;align-items:center;gap:9px;min-height:30px;padding:2px 4px;border:0;background:transparent;font:inherit;text-align:left;cursor:pointer;border-radius:8px}
+.wh-toggle:hover{background:#eef3f9}
+.wh-toggle:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.wh-caret{font-size:11px;color:#a3a1b5;transition:transform .18s}
+/* 折叠箭头用 transform 旋转表达，而不是换字符（▾ / ▸）：换字符会改变字宽，整行文字会跟着横跳。 */
+.week-block.collapsed .wh-caret{transform:rotate(-90deg)}
+.wh-range{font-size:12.5px;font-weight:600;color:#315f94;white-space:nowrap}
+.week-block:not(.is-current) .wh-range{color:#5f5e5a;font-weight:500}
+.wh-tag{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.week-block.is-current .wh-tag{color:#315f94;background:#e9f1fa;border:1px solid #c9d9eb;border-radius:99px;padding:1px 8px}
+.wh-meta{margin-left:auto;font-size:11.5px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+/* 折叠态才出现的提示。只留一个光秃秃的日期区间，用户会以为那一周是空的——
+   「看不出来」在这个项目里等同于「功能坏了」。 */
+.wh-hint{display:none;margin-left:auto;font-size:11.5px;color:#a9b4c2;white-space:nowrap}
+.week-block.collapsed .wh-hint{display:inline}
+.week-block.collapsed .wh-meta{display:none}
+/* 「回到本周 / ↑ / ↓」只挂在本周这一条上（用户定的位置），没有独立顶栏。
+   注意**不做禁用态**：它的作用包含「滚回本周」，任何时候点都有意义；
+   置灰会让「只是想滚回去」的用户以为按钮坏了。 */
+.wh-actions{flex:0 0 auto;display:flex;align-items:center;gap:6px}
+.wh-actions .wh-current{white-space:nowrap}
+.wh-nav{width:30px;height:30px;min-height:30px;flex:0 0 auto;display:grid;place-items:center;padding:0;border:1px solid #c9d9eb;border-radius:8px;background:#fff;color:#315f94;font:inherit;font-size:13px;line-height:1;cursor:pointer;transition:background .16s,border-color .16s}
+.wh-nav:hover{background:#e9f1fa;border-color:#a9c1da}
+.wh-nav:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.week-row{display:flex;align-items:stretch;border-bottom:1px solid #eef2f7}
+/* 最后一行（或它下方的编辑面板）不再画下边框，免得和容器圆角打架。 */
+.week-body>:last-child{border-bottom:0}
+/* 今天那一行整行淡蓝 + 日期格高亮：周视图里「今天是哪一天」必须一眼看到。 */
+.week-row.is-today{background:#fafcfe}
+.wr-day{flex:0 0 84px;display:flex;flex-direction:column;justify-content:center;gap:2px;padding:8px 12px;border-right:1px solid #eef2f7}
+.week-row.is-today .wr-day{background:#e9f1fa;border-right-color:#c9d9eb}
+.wr-weekday{font-size:12.5px;font-weight:500;color:var(--text)}
+.wr-date{font-size:11px;color:#96a3b4;font-variant-numeric:tabular-nums}
+.week-row.is-today .wr-weekday,.week-row.is-today .wr-date{color:#315f94}
+/* 卡片区：一行 = 一天，**绝不换行**（换行就不是「七行」了），放不下时横向滚动。
+   这里可以安全用 overflow —— 日程的「移至」浮层在行下方的 .wr-edits 里，不在这个容器内，
+   所以不会被裁掉。（任务泳道那条禁令是因为它的浮层确实在卡片内部。） */
+.wr-cards{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:8px 12px;overflow-x:auto;overflow-y:hidden}
+.wr-cards::-webkit-scrollbar{height:8px}
+.wr-cards::-webkit-scrollbar-thumb{background:#dbe4ee;border-radius:99px}
+.wr-cards::-webkit-scrollbar-thumb:hover{background:#c6d1dd}
+.wr-empty{font-size:11.5px;color:#b3bec9}
+/* 卡片：等宽、两行（时间徽标 / 标题），左侧 3px 色条表达类型。
+   宽度定在 136px 是量出来的：1040px 内容区减去日期列与内边距后约 570px，136px 正好一行放四张；
+   再窄标题读不全，再宽一行只放得下两张、横向滚动会变得很频繁。
+   这一行**不放操作按钮**：五个按钮在 136px 里必然折行（任务卡片那一行的宽度预算见项目备忘），
+   所以编辑 / 移至 / 删除统一收到行下方的编辑面板里。 */
+.event-card{--ec-fill:#f7f6f2;--ec-line:#d3d1c7;--ec-bar:#888780;--ec-time:#5f5e5a;--ec-text:#2c2c2a;
+  flex:0 0 auto;width:136px;display:flex;flex-direction:column;gap:1px;padding:5px 9px;
+  border:1px solid var(--ec-line);border-left:3px solid var(--ec-bar);border-radius:8px;
+  background:var(--ec-fill);color:var(--ec-text);font:inherit;text-align:left;cursor:pointer;
+  transition:box-shadow .16s,transform .16s}
+.event-card:hover{box-shadow:0 4px 12px rgba(38,49,66,.10);transform:translateY(-1px)}
+.event-card:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.event-card.ec-meeting{--ec-fill:#eaf7f2;--ec-line:#9fe1cb;--ec-bar:#1d9e75;--ec-time:#0f6e56;--ec-text:#04342c}
+.event-card.ec-deep{--ec-fill:#eaf3fc;--ec-line:#b5d4f4;--ec-bar:#378add;--ec-time:#185fa5;--ec-text:#042c53}
+.event-card.ec-other{--ec-fill:#f7f6f2;--ec-line:#d3d1c7;--ec-bar:#888780;--ec-time:#5f5e5a;--ec-text:#2c2c2a}
+/* 没有开始时间的日程：虚线框 + 「未排时段」徽标，沉在该行最左侧。
+   它同样是那一天的事，只是没排具体时段 —— 不给它位置就等于静默丢掉（设计文档 §4）。 */
+.event-card.ec-unscheduled{--ec-fill:#fbfaf7;--ec-line:#b4b2a9;--ec-time:#888780;--ec-text:#5f5e5a;border-style:dashed;border-left-width:1px}
+/* 时间行两端对齐：右侧留给「每周」徽标（重复日程）。不写 flex 的话徽标会紧跟在时间后面，
+   而各卡片的时间串长短不一，徽标位置就会参差不齐，看着像排版坏了。 */
+.ec-time{display:flex;align-items:center;justify-content:space-between;gap:4px;font-size:11px;color:var(--ec-time);font-variant-numeric:tabular-nums;line-height:1.35}
+/* 「每周」重复标记。卡片只有 136px 宽，所以这里只写两个字，
+   完整说明（共几期、能不能单独改）挂在 title 提示上 —— 卡片里塞不下第二行解释。 */
+.ec-repeat{flex:0 0 auto;font-size:10.5px;line-height:15px;padding:0 5px;border-radius:99px;background:rgba(49,95,148,.10);color:#315f94;letter-spacing:.2px}
+.ec-title{font-size:12.5px;font-weight:500;color:var(--ec-text);line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 编辑面板挂在**行下方、跨整行宽**，左侧与卡片区对齐（缩进 = 日期列宽），
+   让「这个面板属于上面那一行」一目了然。 */
+.wr-edits{padding:0 12px 0 96px;border-bottom:1px solid #eef2f7}
+.wr-edits .edit-panel{margin:0 0 10px;box-shadow:0 8px 20px rgba(38,49,66,.06)}
+@media(max-width:768px){
+  .wr-day{flex-basis:64px;padding:8px 9px}
+  .wr-edits{padding-left:76px}
+  .event-card{width:120px}
+  .wh-range{font-size:12px}
+  .wh-meta{display:none}
+}
+@media(max-width:640px){
+  .week-head{flex-wrap:wrap;gap:6px}
+  .wh-toggle{flex:1 1 100%}
+  .wh-actions{width:100%;justify-content:flex-end}
+  .wh-hint{margin-left:0}
+}

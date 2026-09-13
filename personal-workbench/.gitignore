@@ -1,0 +1,26 @@
+# Java build
+server/target/
+
+# Local development and release data
+dev-data/
+data/
+logs/
+dist/
+
+# SQLite runtime files
+*.db
+*.db-shm
+*.db-wal
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 页面验证产物（预览截图、冒烟脚本、变异测试结果）—— 不入库
+output/
+
+# Python 运行缓存
+__pycache__/
+*.pyc
