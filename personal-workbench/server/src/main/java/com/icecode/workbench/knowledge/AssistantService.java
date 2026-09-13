@@ -3,9 +3,7 @@ package com.icecode.workbench.knowledge;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,25 +17,23 @@ import com.icecode.workbench.inbox.InboxRepository;
 import com.icecode.workbench.util.TimeUtil;
 
 /**
- * 知识库问答（轻量 RAG）：Vault 只读索引（按标题分片，指纹缓存）→ CJK 二元组打分检索
+ * 知识库问答（轻量 RAG）：Vault 只读索引（按标题分片）→ CJK 二元组打分检索
  * → 已配置 LLM（DeepSeek 等 OpenAI 兼容接口）则合成答案，否则/失败时降级为摘录式回答；
  * 检索不到足够相关内容时把问题收录为「[待补知识]」进收集箱。
+ *
+ * <p>索引本身（扫描 + 剪枝 + 快照缓存 + 落盘）在 {@link ObsidianVaultService#vaultIndex()}，
+ * 本类只消费快照，不再自己缓存 —— 缓存与失效规则各写一份，必然漂。
  */
 @Service
 public class AssistantService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AssistantService.class);
     private static final int MIN_SCORE = 6;
-    private static final long CACHE_TTL_MS = 5 * 60 * 1000L;
 
     private final ObsidianVaultService vaultService;
     private final LlmAnswerClient llmClient;
     private final InboxRepository inboxRepository;
     private final AppConfigRepository configRepository;
-
-    private volatile List<ObsidianVaultService.VaultChunk> cachedChunks;
-    private volatile String cachedFingerprint = "";
-    private volatile long cachedAt;
 
     public AssistantService(ObsidianVaultService vaultService, LlmAnswerClient llmClient,
                             InboxRepository inboxRepository, AppConfigRepository configRepository) {
@@ -51,10 +47,11 @@ public class AssistantService {
         if (!vaultService.isConfigured()) {
             return new IndexStatusVO(false, "", 0, 0, llmClient.isEnabled());
         }
-        List<ObsidianVaultService.VaultChunk> chunks = chunks();
-        Set<String> files = new HashSet<String>();
-        for (ObsidianVaultService.VaultChunk chunk : chunks) files.add(chunk.file);
-        return new IndexStatusVO(true, vaultService.vaultName(), files.size(), chunks.size(), llmClient.isEnabled());
+        // 索引的扫描、缓存与落盘统一由 ObsidianVaultService 负责：
+        // 这里以前自带一份「每次调用都算指纹」的缓存，是「打开知识库要等十几秒」的根源。
+        ObsidianVaultService.VaultIndex index = vaultService.vaultIndex();
+        return new IndexStatusVO(true, vaultService.vaultName(), index.fileCount, index.chunkCount,
+                llmClient.isEnabled());
     }
 
     public AskResponseVO ask(String question) {
@@ -62,7 +59,7 @@ public class AssistantService {
         if (q.isEmpty() || q.length() > 500) throw new BizException(ErrorCode.INVALID_PARAMETER, "提问内容不能为空，且不能超过 500 字");
         if (!vaultService.isConfigured()) throw new BizException(ErrorCode.VAULT_NOT_CONFIGURED);
 
-        List<ObsidianVaultService.VaultChunk> chunks = chunks();
+        List<ObsidianVaultService.VaultChunk> chunks = vaultService.vaultIndex().chunks;
         List<String> terms = terms(q);
         ObsidianVaultService.VaultChunk best = null;
         int bestScore = 0;
@@ -116,23 +113,6 @@ public class AssistantService {
                     "obsidian://open?vault=" + urlEncode(vaultService.vaultName()) + "&file=" + urlEncode(chunk.file)));
         }
         return new AskResponseVO(true, false, llmUsed, answer, citations);
-    }
-
-    /** 索引缓存：指纹（文件数+最新 mtime）变化或超过 5 分钟才重扫。 */
-    private List<ObsidianVaultService.VaultChunk> chunks() {
-        String fingerprint = vaultService.indexFingerprint();
-        List<ObsidianVaultService.VaultChunk> current = cachedChunks;
-        if (current != null && fingerprint.equals(cachedFingerprint)
-                && System.currentTimeMillis() - cachedAt < CACHE_TTL_MS) {
-            return current;
-        }
-        synchronized (this) {
-            current = vaultService.readChunks();
-            cachedChunks = current;
-            cachedFingerprint = fingerprint;
-            cachedAt = System.currentTimeMillis();
-            return current;
-        }
     }
 
     /** 检索词：CJK 二元组 + 拉丁词（长度≥2）。单字问题退回单字匹配。 */

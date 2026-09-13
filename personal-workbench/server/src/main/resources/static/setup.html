@@ -5,7 +5,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>个人工作台 · 首次配置</title>
 <style>
-:root{--bg:#f3f6fa;--surface:#fff;--border:#dbe5ef;--text:#263142;--muted:#63748a;--blue:#4f79a9;--blue-dark:#315f94;--danger:#a32d2d;--r:13px}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f3f6fa;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}.panel{width:min(92vw,480px);background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:30px;box-shadow:0 14px 40px rgba(49,95,148,.08)}h1{font-size:23px;margin:0 0 8px;color:#2e4d70}.intro{font-size:14px;color:var(--muted);line-height:1.7;margin:0 0 24px}.field{margin:14px 0}.field label{display:block;font-size:13px;margin-bottom:6px;color:#475b72}.field input,.field select{width:100%;min-height:44px;border:1px solid #cbd8e6;border-radius:10px;padding:10px 12px;font-size:16px;color:var(--text);background:#fff}.field input:focus,.field select:focus{outline:2px solid #a9c3df;border-color:transparent}.check{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--muted);margin:18px 0}.check input{margin-top:3px}.btn{width:100%;min-height:46px;border:0;border-radius:10px;background:var(--blue);color:#fff;font-size:15px;cursor:pointer}.btn:hover{background:var(--blue-dark)}.btn:disabled{opacity:.55;cursor:wait}.msg{min-height:22px;margin-top:12px;color:var(--danger);font-size:13px}.hint{margin-top:18px;padding:12px;background:#edf3f9;border-radius:10px;color:var(--muted);font-size:12px;line-height:1.65}.hidden{display:none}@media(max-width:520px){.panel{border:0;border-radius:0;min-height:100vh;padding:24px 18px;box-shadow:none}}
+:root{--bg:#0d1226;--surface:#fff;--border:#dbe5ef;--text:#263142;--muted:#63748a;--blue:#4f79a9;--blue-dark:#315f94;--danger:#a32d2d;--r:13px}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background-color:#0d1226;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+/* 登录页背景（2026-09-13）。用的是「可读性处理版」：暗角与底部压暗已经烘进图里，
+   所以这里**不再叠 DOM 遮罩** —— 再叠一层会把卡片边缘的对比二次削弱，白卡会发灰。
+   fixed 让图钉在视口上；图比视口窄时（窄屏）靠 cover 裁切，色心保持在中部偏下，
+   正好落在登录卡片后面。 */
+body.has-login-bg{background-image:url("/assets/backgrounds/login.jpg");background-size:cover;background-position:center 55%;background-repeat:no-repeat;background-attachment:fixed}
+.panel{width:min(92vw,480px);background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:30px;box-shadow:0 14px 40px rgba(49,95,148,.08)}h1{font-size:23px;margin:0 0 8px;color:#2e4d70}.intro{font-size:14px;color:var(--muted);line-height:1.7;margin:0 0 24px}.field{margin:14px 0}.field label{display:block;font-size:13px;margin-bottom:6px;color:#475b72}.field input,.field select{width:100%;min-height:44px;border:1px solid #cbd8e6;border-radius:10px;padding:10px 12px;font-size:16px;color:var(--text);background:#fff}.field input:focus,.field select:focus{outline:2px solid #a9c3df;border-color:transparent}.check{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--muted);margin:18px 0}.check input{margin-top:3px}.btn{width:100%;min-height:46px;border:0;border-radius:10px;background:var(--blue);color:#fff;font-size:15px;cursor:pointer}.btn:hover{background:var(--blue-dark)}.btn:disabled{opacity:.55;cursor:wait}.msg{min-height:22px;margin-top:12px;color:var(--danger);font-size:13px}.hint{margin-top:18px;padding:12px;background:#edf3f9;border-radius:10px;color:var(--muted);font-size:12px;line-height:1.65}.hidden{display:none}
+/* 移动端：panel 铺满屏幕时如果还留着背景图，卡片与背景之间会出现一圈碎边，
+   而且 fixed + cover 在移动端浏览器地址栏收放时会跳。窄屏直接退回纯色。 */
+@media(max-width:520px){.panel{border:0;border-radius:0;min-height:100vh;padding:24px 18px;box-shadow:none}body.has-login-bg{background-image:none}}
+@media print{.has-login-bg{background-image:none}}
+
 </style>
 </head>
 <body>
@@ -51,6 +62,13 @@ function showMode(status){
   if(status.initialized){login.classList.remove("hidden");document.getElementById("loginUsername").value=status.username||"";document.getElementById("loginPassword").focus()}
   else{init.classList.remove("hidden");document.getElementById("initUsername").focus()}
 }
+/* 背景图先探一次再挂 class，避免"白闪 → 深蓝"那一帧（同 app.js 的 applyLoginBackground 思路）。
+   探测失败保持静默：背景是装饰，不该因为一张图弹错误提示。 */
+(function applyLoginBackground(){
+  const img=new Image();
+  img.onload=()=>document.body.classList.add("has-login-bg");
+  img.src="/assets/backgrounds/login.jpg";
+})();
 async function submit(formId,buttonId,messageId,path,payload){
   const button=document.getElementById(buttonId),message=document.getElementById(messageId);
   button.disabled=true;message.textContent="";

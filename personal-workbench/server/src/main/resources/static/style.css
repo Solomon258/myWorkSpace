@@ -549,3 +549,41 @@ button.card{font:inherit;text-align:left;color:inherit;cursor:pointer}
   .wh-actions{width:100%;justify-content:flex-end}
   .wh-hint{margin-left:0}
 }
+
+/* ===== 页面背景（2026-09-13）
+   图在 assets/backgrounds/。这里只负责"铺满"，遮罩已经烘进图里了
+   （登录页 = 暗角 + 底部压暗；工作台 = 纯净版，靠行星自身的明度差读出形状）。
+
+   三条约束，改动前先读：
+   1) background-attachment: fixed —— 否则 .app 一长高，背景图就跟着拉伸、
+      或者出现"滚动到一半图没了"的断层。fixed 让图固定在视口上。
+   2) --bg-tint 是给 DOM 层用的同色兜底。图还没解码完的那一帧，body 是纯色而不是白闪，
+      这两处必须同色，否则会看到一次闪白。
+   3) 遮罩不会再加 DOM 层。图里的遮罩是烘死的，再加一层会把卡片对比度二次削弱。 */
+
+/* 工作台：浅色主题，用深字浅底的配色。--bg 调成浅蓝灰，
+   和背景图中段的雾色同族，避免图与页面之间出现一条硬色界。 */
+body{--bg-tint:#eef3f9;--bg:#eef3f9}
+body.has-page-bg{
+  background-color:var(--bg-tint);
+  background-image:url("/assets/backgrounds/workbench.jpg");
+  background-size:cover;
+  background-position:center 38%;
+  background-repeat:no-repeat;
+  background-attachment:fixed;
+}
+/* 纯色兜底：老浏览器 / 图片加载失败 / 打印时，退回原来的浅灰蓝 */
+@media print{.has-page-bg{background-image:none}}
+
+/* 顶栏与页签栏原本是**不透明白卡**。压到背景上之后，白色实底会把背景切成三段、
+   显得图在"贴纸下面"。这里换成半透明 + 背景模糊：既保住文字对比度（卡片本身
+   仍然是不透明的白，读文字的区域没变），又让背景从栏后面透出来。 */
+body.has-page-bg .top,
+body.has-page-bg .tabs{
+  background:rgba(255,255,255,.78);
+  -webkit-backdrop-filter:blur(10px);
+  backdrop-filter:blur(10px);
+}
+
+/* ---- 登录页（setup.html 内联样式，见该文件的 <style> 块）----
+   setup.html 是独立页面、样式内联，不走这份 style.css，此处仅作索引说明。 */

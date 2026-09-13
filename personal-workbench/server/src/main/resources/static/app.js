@@ -13,7 +13,7 @@ const state={status:null,dashboard:null,tasks:[],inbox:[],classify:[],events:[],
   // 挂上去就等于每敲一个字符把整个工作台重画一遍（现有 #memoSearch 就是这个毛病）。
   search:{q:"",open:false,scope:"all",typeFilter:"",previewOpen:true,groups:[],activeIndex:-1,loading:false,error:"",totalCount:0,elapsedMs:0,truncated:false,seq:0,timer:null,resultQuery:"",
     semanticState:"off",expandedTerms:[],semanticCount:0},
-  knowledge:{notes:[],index:null,indexLoaded:false,chat:[],asking:false},
+  knowledge:{notes:[],index:null,indexState:"idle",indexError:"",chat:[],asking:false},
   pomo:{mode:"work",remain:25*60,running:false,timer:null,endAt:0,config:{work:25,shortBreak:5,longBreak:15,auto:false},today:{count:0,minutes:0},audio:null,flashTimer:null,baseTitle:document.title}};
 const $=id=>document.getElementById(id);
 // 转义必须覆盖引号。esc 的输出**大量用在属性上下文**（`value="…"` / `href="…"` / `data-name="…"`），
@@ -108,7 +108,7 @@ function setTab(tab){
   document.querySelectorAll(".view").forEach(view=>view.classList.toggle("active",view.id==="view-"+tab));
   const gear=$("gearButton");if(gear)gear.classList.toggle("active",tab==="settings");
   // 设置页要显示 Vault 是否真的生效，所以也要拿到知识库索引
-  if((tab==="knowledge"||tab==="settings")&&!state.knowledge.indexLoaded)loadKnowledgeIndex();
+  if((tab==="knowledge"||tab==="settings")&&(state.knowledge.indexState==="idle"||state.knowledge.indexState==="error"))loadKnowledgeIndex();
   else if(tab==="settings")renderVaultStatus();
 }
 function renderDashboard(){
@@ -742,10 +742,31 @@ function renderTimeline(){
     return `<div class="tl-group${collapsed?" collapsed":""}" data-day="${esc(day)}"><button type="button" class="tl-day" data-action="toggle-day" data-day="${esc(day)}" aria-expanded="${collapsed?"false":"true"}" title="点击${collapsed?"展开":"折叠"}这一天的记录"><span class="tl-label">${esc(label)}</span><span class="tl-count">${groups[day].length} 条</span><span class="tl-caret" aria-hidden="true">▾</span></button><div class="tl-rail">${rows}</div></div>`;
   }).join("");
 }
+// 知识库索引的文案由「状态」决定，而不是「index 是不是空」。
+// 旧实现拿 index 为空当作「正在读取」，于是 index.html 里写死的「正在读取 Vault 索引…」
+// 每次强刷都会先闪一遍，而且只要后端慢就一直停在那句话上 —— 用户看不到任何进展与出路。
+// 现在四态显式化：idle 还没请求 / loading 请求中 / ready 有数据 / error 失败（给重试入口）。
+function kbIndexHtml(){
+  const k=state.knowledge,index=k.index;
+  let base="";
+  if(index){
+    base=index.configured
+      ?("已索引 Vault「"+esc(index.vaultName)+"」· "+index.fileCount+" 篇笔记 · "+index.chunkCount+" 个片段"+(index.llmEnabled?"":" · 未启用 AI，用摘录模式"))
+      :"未配置 Vault —— 请点右上角 ⚙ → Obsidian 填写库路径";
+  }else if(k.indexState==="loading"){
+    base="正在读取 Vault 索引…";
+  }
+  // 读失败时必须给出可点的出路：停在「正在读取…」上等于让用户干等一个永远不会来的结果。
+  if(k.indexState==="error"){
+    const err='<span style="color:#a32d2d">索引读取失败：'+esc(k.indexError||"")+'</span> <button class="btn sm" data-action="retry-knowledge-index">重试</button>';
+    return base?base+" ｜ "+err:err;
+  }
+  return base;
+}
 function renderKnowledge(){
-  const notes=state.knowledge.notes,index=state.knowledge.index;
+  const notes=state.knowledge.notes;
   $("kbNoteCount").textContent=notes.length?"（"+notes.length+" 条）":"";
-  $("kbIndexInfo").textContent=index?(index.configured?("已索引 Vault「"+index.vaultName+"」· "+index.fileCount+" 篇笔记 · "+index.chunkCount+" 个片段"+(index.llmEnabled?"":" · 未启用 AI，用摘录模式")):"未配置 Vault —— 请点右上角 ⚙ → Obsidian 填写库路径"):"正在读取 Vault 索引…";
+  $("kbIndexInfo").innerHTML=kbIndexHtml();
   $("kbNoteList").innerHTML=notes.length?notes.map(n=>{
     const syncPill=n.syncStatus==="synced"?'<span class="pill green">已同步</span>':n.syncStatus==="failed"?'<span class="pill red">同步失败</span>':'<span class="pill amber">待同步</span>';
     const tags=(n.tags||[]).map(t=>`<span class="pill">${esc(t)}</span>`).join("");
@@ -763,24 +784,42 @@ function renderTrash(){
 }
 function paintKbChat(){
   const box=$("kbChatBox");
+  if(!state.knowledge.chat.length){
+    // 一片空白什么都不说，用户只会以为「坏了」。索引没就绪时给出各自的下一步，
+    // 尤其失败态要指向那个「重试」按钮 —— 否则用户唯一的出路是刷新整页。
+    const hint=state.knowledge.indexState==="loading"?"正在读取 Vault 索引，稍后就能提问。"
+      :state.knowledge.indexState==="error"?"索引读取失败：先点标题旁的「重试」，成功后即可提问。"
+      :"进入本页会自动读取 Vault 索引。";
+    box.innerHTML='<div class="msg ai"><div class="bubble"><span class="muted">'+hint+'</span></div></div>';
+    return;
+  }
   box.innerHTML=state.knowledge.chat.map(m=>`<div class="msg ${m.role}"><div class="bubble">${m.html}</div></div>`).join("");
   box.scrollTop=box.scrollHeight;
 }
 async function loadKnowledgeIndex(){
+  if(state.knowledge.indexState==="loading")return;   // 键盘/连点都别并发打同一个慢接口
+  state.knowledge.indexState="loading";state.knowledge.indexError="";
+  renderKnowledge();renderVaultStatus();
   try{
     const index=await WorkbenchApi.knowledgeIndex();
-    state.knowledge.index=index;state.knowledge.indexLoaded=true;
+    state.knowledge.index=index;state.knowledge.indexState="ready";
     if(!state.knowledge.chat.length){
       state.knowledge.chat.push({role:"ai",html:index.configured?("你好，我已索引你的 Obsidian 知识库「"+esc(index.vaultName)+"」（"+index.fileCount+" 篇笔记 / "+index.chunkCount+" 个片段）。问我任何问题，答案会附出处。"):"知识库问答需要先配置 Obsidian Vault：点右上角 ⚙ → Obsidian，填写你的库路径后回来刷新。"});
     }
     renderKnowledge();
     renderVaultStatus();
-  }catch(error){$("kbIndexInfo").textContent="索引读取失败："+error.message}
+  }catch(error){
+    state.knowledge.indexState="error";state.knowledge.indexError=error.message;
+    renderKnowledge();renderVaultStatus();
+  }
 }
 async function askKnowledge(){
   const input=$("kbChatInput"),question=input.value.trim();
   if(!question||state.knowledge.asking)return;
-  if(!state.knowledge.indexLoaded){toast("索引还在加载，请稍候");return}
+  if(!state.knowledge.index){
+    toast(state.knowledge.indexState==="loading"?"索引还在加载，请稍候":"索引还没读取成功，请点标题旁的「重试」",3200);
+    return;
+  }
   if(state.knowledge.index&&!state.knowledge.index.configured){toast("请先配置 Obsidian Vault（⚙ → Obsidian）",3200);return}
   input.value="";state.knowledge.asking=true;$("kbChatSend").disabled=true;
   state.knowledge.chat.push({role:"user",html:esc(question)},{role:"ai",html:'<span class="muted">正在检索笔记…</span>'});
@@ -792,7 +831,7 @@ async function askKnowledge(){
     if(result.citations&&result.citations.length){
       html+=result.citations.map((c,i)=>`<span class="cite"><span class="src">${i===0?"出处":"相关"}：${esc(c.file)} § ${esc(c.heading)}</span><br>${esc(c.snippet)}<br><a href="${esc(c.obsidianUrl)}">obsidian:// 打开原文 ↗</a></span>`).join("");
     }
-    if(result.capturedToInbox){html+='<span class="cite"><span class="src">已收录</span><br>到「收录」页确认后，这个问题会作为新知识写入 Vault。</span>';state.knowledge.indexLoaded=false;refreshAll().catch(()=>{})}
+    if(result.capturedToInbox){html+='<span class="cite"><span class="src">已收录</span><br>到「收录」页确认后，这个问题会作为新知识写入 Vault。</span>';state.knowledge.indexState="idle";refreshAll().catch(()=>{})}
     if(result.answered&&!result.llmUsed)html+='<div class="kb-mode muted">摘录模式（配置 AI 后由模型组织答案）</div>';
     state.knowledge.chat.push({role:"ai",html});
   }catch(error){
@@ -909,7 +948,14 @@ function renderVaultStatus(){
   const path=state.settings&&state.settings.obsidianVaultPath;
   const index=state.knowledge.index;
   if(!path){el.innerHTML='<span style="color:#a96c1d">未配置 Vault 路径：知识分类与知识库问答不可用。</span>';return}
-  if(!index){el.textContent="正在检测 Vault 状态…";return}
+  if(!index){
+    if(state.knowledge.indexState==="loading"){el.textContent="正在检测 Vault 状态…";return}
+    if(state.knowledge.indexState==="error"){
+      el.innerHTML='<span style="color:#a32d2d">Vault 状态读取失败：'+esc(state.knowledge.indexError||"")+'</span><br>到「知识库」页点标题旁的「重试」可重新读取。';
+      return;
+    }
+    el.textContent="尚未读取 Vault 状态。";return
+  }
   if(index.configured){
     el.innerHTML='<span style="color:#39745b">已生效：Vault「'+esc(index.vaultName)+'」· '+index.fileCount+' 篇笔记 / '+index.chunkCount+' 个片段</span>';
   }else{
@@ -941,7 +987,9 @@ async function saveVaultSetting(){
   }catch(error){toast(error.message);return}
   // 配置变更后让知识库索引重新读取 Vault 状态：否则 state.knowledge.index.configured
   // 仍是首次访问时的旧值（false），发消息会误报「请先配置 Obsidian Vault」。
-  state.knowledge.indexLoaded=false;
+  // 换库时旧快照整个作废（它描述的是另一个 Vault），连 index 一起清掉，别让用户看到上一个库的笔记数。
+  // 换库时旧快照整个作废（它描述的是另一个 Vault），连 index 一起清掉，别让用户看到上一个库的笔记数。
+  state.knowledge.index=null;state.knowledge.indexState="idle";
   await refreshAll();
   if(state.tab==="knowledge"||state.tab==="settings") await loadKnowledgeIndex();
   toast("Vault 路径已保存");
@@ -1152,7 +1200,8 @@ async function handleAction(button){
   if(action==="cancel-memo"){$("memo-edit-"+id).classList.remove("open");return}
   if(action==="save-memo"){await WorkbenchApi.updateMemo(id,{title:$("memo-edit-title-"+id).value.trim(),content:$("memo-edit-content-"+id).value.trim(),tags:$("memo-edit-tags-"+id).value.trim(),grp:$("memo-edit-grp-"+id).value});await refreshAll();toast("备忘已更新");return}
   if(action==="delete-memo"){await WorkbenchApi.deleteMemo(id);await refreshAll();toast("已移入回收站，30 天内可恢复");return}
-  if(action==="sync-knowledge"){await WorkbenchApi.syncKnowledge(id);state.knowledge.indexLoaded=false;await refreshAll();toast("已重新同步到 Vault");return}
+  if(action==="retry-knowledge-index"){await loadKnowledgeIndex();return}
+  if(action==="sync-knowledge"){await WorkbenchApi.syncKnowledge(id);state.knowledge.indexState="idle";await refreshAll();toast("已重新同步到 Vault");return}
   if(action==="delete-knowledge"){await WorkbenchApi.deleteKnowledge(id);await refreshAll();toast("已移入回收站，30 天内可恢复（Vault 里的 .md 文件一直保留）");return}
   if(action==="delete-activity"){
     // 全应用**唯一不可逆**的删除：按 R6 规则，时间线是操作流水不是正式实体，走物理删除、不进回收站。
@@ -1186,7 +1235,16 @@ async function handleAction(button){
   toast("这个按钮暂时没有对应的操作（action="+action+"），请反馈这个按钮");
 }
 async function initialize(){
-  try{state.status=await WorkbenchApi.authStatus();if(!state.status.initialized||!state.status.loggedIn){location.replace("/setup.html");return}$("welcome").textContent=state.status.username;$("greeting").textContent=greeting()+"，"+state.status.username;$("app").classList.remove("hidden");await refreshAll();$("eventDate").value=defaultEventDate();await initPomo()}catch(error){toast(error.message)}
+  try{state.status=await WorkbenchApi.authStatus();if(!state.status.initialized||!state.status.loggedIn){location.replace("/setup.html");return}$("welcome").textContent=state.status.username;$("greeting").textContent=greeting()+"，"+state.status.username;$("app").classList.remove("hidden");applyPageBackground();await refreshAll();$("eventDate").value=defaultEventDate();await initPomo()}catch(error){toast(error.message)}
+}
+// 页面背景（2026-09-13）。**先探一次图，成功了再挂 class**，而不是直接挂：
+// 图缺失时若已经挂上 class，body 会先去加载那张图、失败后才退回兜底色，
+// 用户会看到一次闪白（白 → 浅蓝灰）。先探再挂就没有这一帧。
+// 探测失败**保持静默**：背景是装饰，不该因为一张图弹一个错误提示出来。
+function applyPageBackground(){
+  const img=new Image();
+  img.onload=()=>document.body.classList.add("has-page-bg");
+  img.src="/assets/backgrounds/workbench.jpg";
 }
 // ===== 全局搜索（跨 收录 / 任务 / 日程 / 备忘 / 时间线 + 回收站）=====
 // 设计见 docs/全文搜索功能设计.md。四条红线，每一条都对应一类真实故障：

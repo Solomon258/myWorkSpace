@@ -44,6 +44,7 @@ class KnowledgeFlowTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired private ObsidianVaultService vaultService;
     private MockHttpSession session;
 
     @BeforeEach
@@ -174,6 +175,71 @@ class KnowledgeFlowTest {
                 .andExpect(jsonPath("$.data.configured").value(true))
                 .andExpect(jsonPath("$.data.fileCount").value(1))
                 .andExpect(jsonPath("$.data.chunkCount").value(1));
+    }
+
+    @Test
+    void hiddenDirectoriesAndHiddenFilesAreNotIndexed() throws Exception {
+        // 回归（2026-09-13）：索引原本是 Files.walk(vault).filter(p -> !isHidden(p))。
+        // 隐藏内容虽然被过滤掉，但整棵树还是要先枚举一遍 —— 用户 Vault 里塞了一个 Python
+        // 虚拟环境（知识体系/.jupymd，5665 个条目）加 .git（2129 个），占 8754 个条目的 90% 以上，
+        // 而真正要索引的 .md 只有 344 个。实测容器内一次遍历 10.2 s，这就是「打开知识库要等很久」。
+        // 现在改成 preVisitDirectory 里 SKIP_SUBTREE 整棵剪掉。这条断言钉住剪枝的语义边界：
+        // 隐藏目录、隐藏文件都不进索引 —— 别为了「顺手支持隐藏文件」把剪枝去掉。
+        writeVaultNote("可见笔记.md",
+                "# 可见笔记\n\n## 小标题\n\n这是一段足够长的正文，用来确保它被分片收录进索引里。\n");
+        Path hiddenDir = vaultDir.resolve(".jupymd").resolve("Lib");
+        Files.createDirectories(hiddenDir);
+        Files.write(hiddenDir.resolve("包文档.md"),
+                "# 包文档\n\n## 说明\n\n虚拟环境里的 markdown 不应该出现在知识库里。\n".getBytes(StandardCharsets.UTF_8));
+        Files.write(vaultDir.resolve(".隐藏笔记.md"),
+                "# 隐藏笔记\n\n## 说明\n\n以点开头的文件同样不收录进索引。\n".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(get("/api/v1/knowledge/index").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.configured").value(true))
+                .andExpect(jsonPath("$.data.fileCount").value(1))
+                .andExpect(jsonPath("$.data.chunkCount").value(1));
+    }
+
+    @Test
+    void indexSnapshotIsReusedUntilInvalidated() throws Exception {
+        // 缓存契约：TTL 窗口内不再重扫，所以「热路径零磁盘访问」这件事不会被后人改回去。
+        // 应用自己的写入会主动 invalidateIndex()（见 writeInboxNote，由下一个用例守着），
+        // 这里模拟的是「绕过应用、直接在 Obsidian 里改盘」——它最多晚一个窗口生效。
+        writeVaultNote("第一篇.md",
+                "# 第一篇\n\n## 内容\n\n第一段足够长的正文内容，用来产生一个可检索的分片。\n");
+        mockMvc.perform(get("/api/v1/knowledge/index").session(session))
+                .andExpect(jsonPath("$.data.fileCount").value(1));
+
+        writeVaultNote("第二篇.md",
+                "# 第二篇\n\n## 内容\n\n第二段足够长的正文内容，用来产生一个可检索的分片。\n");
+        mockMvc.perform(get("/api/v1/knowledge/index").session(session))
+                .andExpect(jsonPath("$.data.fileCount").value(1));
+
+        vaultService.invalidateIndex();
+        mockMvc.perform(get("/api/v1/knowledge/index").session(session))
+                .andExpect(jsonPath("$.data.fileCount").value(2));
+    }
+
+    @Test
+    void writingNoteThroughAppRefreshesIndexImmediately() throws Exception {
+        // 应用自己写 Vault 必须主动作废快照：否则刚收藏的笔记要等 TTL 过期才搜得到，
+        // 表现就是「知识库问答里找不到我刚存的东西」。
+        long first = createInbox("技术方案模板标准结构：背景目标、方案对比、详细设计、容量评估");
+        mockMvc.perform(post("/api/v1/inbox/{id}/confirm", first).session(session)
+                        .contentType("application/json")
+                        .content("{\"category\":\"knowledge\",\"title\":\"技术方案模板结构\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/knowledge/index").session(session))
+                .andExpect(jsonPath("$.data.fileCount").value(1));
+
+        long second = createInbox("复盘流程说明：先收集事实，再区分事实与判断，最后落地成一条可执行的改进项");
+        mockMvc.perform(post("/api/v1/inbox/{id}/confirm", second).session(session)
+                        .contentType("application/json")
+                        .content("{\"category\":\"knowledge\",\"title\":\"复盘流程说明\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/knowledge/index").session(session))
+                .andExpect(jsonPath("$.data.fileCount").value(2));
     }
 
     @Test
