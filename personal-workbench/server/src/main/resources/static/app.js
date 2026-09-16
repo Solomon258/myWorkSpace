@@ -1,4 +1,7 @@
-const state={status:null,dashboard:null,tasks:[],inbox:[],classify:[],events:[],pendingEvents:[],memos:[],activity:[],settings:null,backups:[],trash:[],memoGrp:"all",memoArchived:false,memoQuery:"",taskQuery:"",eventQuery:"",taskSearchOpen:false,eventSearchOpen:false,memoSearchOpen:false,tab:"dashboard",timelineCollapsed:{},moveOpen:null,taskFilter:"all",dragTaskId:null,
+// 任务的工作 / 生活分组（2026-09-14）。默认 "work"：用户要求「默认选择工作」，
+// 打开任务页第一屏就是工作事项。三个取值 all / work / life，与备忘页的空间语义一致。
+// ⚠️ 这个初值必须与 index.html 里 .task-switch 上带 active 的那个按钮一致。
+const state={status:null,dashboard:null,tasks:[],inbox:[],classify:[],events:[],pendingEvents:[],memos:[],activity:[],settings:null,backups:[],trash:[],memoGrp:"all",memoArchived:false,memoQuery:"",taskQuery:"",eventQuery:"",taskSearchOpen:false,eventSearchOpen:false,memoSearchOpen:false,tab:"dashboard",timelineCollapsed:{},moveOpen:null,taskFilter:"all",taskGrp:"work",dragTaskId:null,
   // 周视图（2026-09-13，见 docs/日程周视图设计.md）。visibleWeeks 是**有序**的周起始日（周一）列表，
   // 顺序 = 页面从上到下（未来在上、过去在下），默认 [下周一, 本周一, 上周一]。
   // weekBase = 当前「本周」的周一，只由后端下发的 dashboard.date 决定，用来判断要不要整组复位。
@@ -14,7 +17,13 @@ const state={status:null,dashboard:null,tasks:[],inbox:[],classify:[],events:[],
   search:{q:"",open:false,scope:"all",typeFilter:"",previewOpen:true,groups:[],activeIndex:-1,loading:false,error:"",totalCount:0,elapsedMs:0,truncated:false,seq:0,timer:null,resultQuery:"",
     semanticState:"off",expandedTerms:[],semanticCount:0},
   knowledge:{notes:[],index:null,indexState:"idle",indexError:"",chat:[],asking:false},
-  pomo:{mode:"work",remain:25*60,running:false,timer:null,endAt:0,config:{work:25,shortBreak:5,longBreak:15,auto:false},today:{count:0,minutes:0},audio:null,flashTimer:null,baseTitle:document.title}};
+  // 收藏文章的进行中标记：只用于防重复提交，不参与 refreshAll。
+  collect:{collecting:false,importing:false},
+  pomo:{mode:"work",remain:25*60,running:false,timer:null,endAt:0,config:{work:25,shortBreak:5,longBreak:15,auto:false},today:{count:0,minutes:0},audio:null,flashTimer:null,baseTitle:document.title},
+  // 图片区（2026-09-16）：四个入口各一份。元素形如
+  // {localId,kind:"image"|"file",status:"uploading"|"done"|"failed",attachmentId,name,sizeText,url,error}
+  // 只放 state、**不参与 refreshAll** —— 上传是独立通道，重绘整页会把缩略图弄丢。
+  media:{inbox:[],task:[],event:[],memo:[]}};
 const $=id=>document.getElementById(id);
 // 转义必须覆盖引号。esc 的输出**大量用在属性上下文**（`value="…"` / `href="…"` / `data-name="…"`），
 // 而「textContent → innerHTML」那种写法只转义 & < >，引号原样输出：
@@ -79,7 +88,10 @@ async function refreshAll(){
   // 任务检索走后端 keyword（命中 标题 / 描述 / 备注），所以必须在**取数**这一步带上，
   // 不能在渲染阶段过滤：任务页只加载前 100 条，本地过滤会把「第 100 条之外的那个匹配项」
   // 静默漏掉——用户搜了、没结果，会以为那条任务不存在。
+  // 分组（grp）同理走**取数层**：任务页一次只取 100 条，若拿回来再本地按分组筛，
+  // 「工作」视图会显示不足 100 条却其实还有更多 —— 这是同一个坑的第二次。
   const taskParams={size:100};if(state.taskQuery)taskParams.keyword=state.taskQuery;
+  if(state.taskGrp&&state.taskGrp!=="all")taskParams.grp=state.taskGrp;
   // 日程页是周视图：一次取回「当前可见的所有周」那一段区间（from/to），
   // 而不是按天循环调 7 次（那会让一次刷新多出 6 个请求）。
   // 区间要先知道「本周」才算得出来，而「今天」只能由后端 dashboard.date 定义一次，
@@ -106,6 +118,9 @@ function setTab(tab){
   closeSearchPanel();
   state.tab=tab;document.querySelectorAll(".tabs button").forEach(button=>button.classList.toggle("active",button.dataset.tab===tab));
   document.querySelectorAll(".view").forEach(view=>view.classList.toggle("active",view.id==="view-"+tab));
+  // 齿轮不在 .tabs 里（它在顶栏），active 要单独维护。
+  // 回收站那枚图标按钮**在 .tabs 内**（只是排在右边），所以上面那句一把梭已经管到它了 ——
+  // 不要在这里再维护一次，两处维护同一件事迟早会漂。
   const gear=$("gearButton");if(gear)gear.classList.toggle("active",tab==="settings");
   // 设置页要显示 Vault 是否真的生效，所以也要拿到知识库索引
   if((tab==="knowledge"||tab==="settings")&&(state.knowledge.indexState==="idle"||state.knowledge.indexState==="error"))loadKnowledgeIndex();
@@ -133,6 +148,14 @@ function taskTruncationNote(){
   if(state.taskQuery){
     return state.tasks.length>=100?"<div class=\"empty\">匹配「"+esc(state.taskQuery)+"」的任务已达 100 条上限，只显示前 100 条；换个更具体的关键词能看得更准。</div>":"";
   }
+  // 分组态下同理（2026-09-14 发现的第二个入口）：`metrics.taskTotal` 是**全库**条数，
+  // 而手里这份 list 只是**某一个分组**的。停在「生活」时拿 5（全库）减 2（生活）会报出
+  // 「另有 3 条更早的任务没有显示」—— 那 3 条其实是工作事项，根本不在当前视图里，
+  // 用户会以为生活任务被截断了、去翻不存在的下一页。
+  // 分组视图能确定的只有「这个分组自己顶到 100 条上限了」，就说这一句。
+  if(state.taskGrp&&state.taskGrp!=="all"){
+    return state.tasks.length>=100?"<div class=\"empty\">「"+taskGroupName(state.taskGrp)+"」分组的任务已达 100 条上限，只显示前 100 条；切到「全部」或配合搜索看得更全。</div>":"";
+  }
   const hidden=hiddenTaskCount();
   return hidden?"<div class=\"empty\">任务较多：上面只列出前 100 条（排序为 进行中 → 待办 → 已完成，再按优先级与截止时间），另有 "+hidden+" 条更早的任务没有显示。</div>":"";
 }
@@ -140,6 +163,7 @@ function taskTruncationNote(){
 // 筛选口径必须与后端算指标时一致：是否逾期读后端的 task.overdue，「今天」用 todayString()
 // （后端按配置时区定义的那一天），不要用浏览器时钟另算一套。
 function taskFilterName(filter){return {open:"进行中与待办",done:"已完成 / 已取消",overdue:"逾期任务",today:"今天截止"}[filter]||filter}
+function taskGroupName(grp){return grp==="life"?"生活":grp==="work"?"工作":"全部"}
 function taskVisible(task){
   const filter=state.taskFilter||"all";
   if(filter==="open")return task.status==="todo"||task.status==="doing";
@@ -232,6 +256,7 @@ function debounceInPage(key,run){
 async function reloadTasks(){
   const params={size:100};
   if(state.taskQuery)params.keyword=state.taskQuery;
+  if(state.taskGrp&&state.taskGrp!=="all")params.grp=state.taskGrp;
   state.tasks=(await WorkbenchApi.tasks(params))||[];
   renderTasks();
 }
@@ -306,17 +331,27 @@ function renderTasks(){
   // （用户改了口径却看不出为什么条数没变）。
   const filterNote=$("taskFilterNote");
   if(filterNote){
+    // 分组与「筛选」「检索」三者都是**会收窄列表的条件**，必须各自说清。
+    // 分组尤其不能省：它是默认生效的（默认「工作」），用户一旦忘了自己停在哪一侧，
+    // 看到条数不对只会以为任务丢了 —— 这正是本项目最忌讳的「静默过滤」。
+    // 所以「全部」时也要给一句话，让用户随时知道自己在看整体而不是某一半。
     const scope=filter==="all"?"":"只显示「"+taskFilterName(filter)+"」";
     const searching=query?"搜索「"+esc(query)+"」":"";
+    const group=state.taskGrp==="all"?"":"在「"+taskGroupName(state.taskGrp)+"」分组里";
     let text="";
-    if(scope&&searching)text="当前"+scope+"，并在其中"+searching+"，共 "+visible.length+" 条。";
+    if(group)text="当前"+group+(scope?"，"+scope:"")+(searching?"，"+searching:"")+"，共 "+visible.length+" 条。";
+    else if(scope&&searching)text="当前"+scope+"，并在其中"+searching+"，共 "+visible.length+" 条。";
     else if(searching)text="当前在全部任务里"+searching+"，共 "+visible.length+" 条。";
     else if(scope)text="当前"+scope+"，共 "+visible.length+" 条。";
-    // 一键取消要一次清干净（筛选 + 检索）：只清一半的话，用户点了按钮条数却没变回去，
-    // 看起来就是「这个按钮坏了」。按钮文案跟着说清它会清掉几样东西。
+    // 「一键取消」只清「筛选 + 检索」这两样，**不动分组**：分组是常驻的视图选择（像页签），
+    // 按钮紧挨着分组切换器，若它顺手把分组也重置了，用户会以为分组开关坏了。
+    // 所以按钮文案只说它会清掉的这两样。
     const clearLabel=scope&&searching?"清除筛选与搜索":searching?"清除搜索":"显示全部任务";
-    filterNote.classList.toggle("hidden",!narrowed);
-    filterNote.innerHTML=narrowed?("<span>"+text+"</span><button class=\"btn sm ghost\" data-action=\"clear-task-filter\">"+clearLabel+"</button>"):"";
+    // 提示条只在「筛选 / 检索」生效时出现；分组单独生效时不出现（否则默认视图上就常驻一条提示，
+    // 反而变成噪音，让用户以为哪里点错了）。分组的影响由上面那排切换器自身的选中态表达。
+    const showNote=narrowed||state.taskGrp!=="all";
+    filterNote.classList.toggle("hidden",!showNote);
+    filterNote.innerHTML=showNote?("<span>"+text+"</span>"+(narrowed?"<button class=\"btn sm ghost\" data-action=\"clear-task-filter\">"+clearLabel+"</button>":"")):"";
   }
   // 空泳道的文案分两种：没筛选时教怎么把卡片弄进来（空泳道不写清楚，看起来就像坏了）；
   // 筛选 / 检索时别再说「从上面新建一条」——用户此刻看的是筛出来的结果，不是空列表。
@@ -335,6 +370,21 @@ function renderTasks(){
   if(boardNote)boardNote.innerHTML=taskTruncationNote();
   // 搜索行的显隐 / 小圆点跟着 state 一起同步：收起态也要能看出「还在检索」。
   applySearchRow("task");
+  // 分组切换器的选中态也跟着 state 走。**不能只在点击时切 class**：
+  // 全局搜索等入口会把 state.taskGrp 改掉（比如跳到一个生活任务），
+  // 只切 class 的话按钮还停在「工作」上，看起来就是「筛的是工作、显示的却是生活」。
+  // typeof 守卫是为了让这个函数在**静态检查脚本**里也能跑：那套工装把 renderTasks 抠出来
+  // 在 Node 里执行（只注入 esc / $ / state 等少数依赖），没有 document。
+  // 少了守卫，整段检查会在加载时就抛 ReferenceError，看起来像「任务页写坏了」，
+  // 其实只是工装缺了个全局对象。
+  if(typeof document!=="undefined"){
+    // 限定在 .task-switch 内：任务按钮与备忘按钮共用 .memo-choice 类，
+    // 按属性区分（data-task-grp / data-grp）本已足够，但选择器收紧一层，
+    // 将来谁改了属性名也不会突然把备忘那排一起改掉。
+    document.querySelectorAll(".task-switch [data-task-grp]").forEach(button=>{
+      button.classList.toggle("active",button.dataset.taskGrp===(state.taskGrp||"work"));
+    });
+  }
 }
 function taskCard(task){
   const ended=task.status==="done"||task.status==="canceled";
@@ -348,7 +398,14 @@ function taskCard(task){
   // 编辑表单放**最底下**，与备忘卡片一致：点「编辑」不会把上面的按钮顶来顶去。
   // draggable 默认 false、由 mousedown 动态打开（见文件末尾 taskBoard 的绑定）：
   // 整卡常驻 draggable=true 会让编辑表单里的输入框没法用鼠标选中文本，Chrome / Firefox 都会。
-  return `<div class="task-card${canceled?" is-canceled":""}" draggable="false" data-task-id="${task.id}" data-status="${task.status}"><div class="tc-top"><button class="status-button ${task.status}" data-action="status" data-id="${task.id}" data-status="${nextStatus(task.status)}" title="切换任务状态：待办 → 进行中 → 已完成 → 待办">${task.status==="done"?"✓":task.status==="doing"?"…":""}</button><div class="grow"><div class="task-title${canceled?" strike":""}">${esc(task.title)} ${flags}</div><div class="task-meta">${statusName(task.status)} · 截止 ${formatDate(task.due)}${task.overdue?` · <span class="overdue-text">逾期 ${task.overdueDays} 天</span>`:""}${task.postponed?` · 已顺延 ${task.postponed} 次`:""}</div>${task.note?`<div class="task-meta">备注：${esc(task.note)}</div>`:""}</div><span class="pill task-prio${prio?" "+prio:""}">${task.priority}</span></div><div class="actions tc-acts"><button class="btn sm" data-action="edit" data-id="${task.id}">编辑</button>${!ended?`<button class="btn sm" data-action="postpone" data-id="${task.id}">顺延</button>`:""}<button class="btn sm" data-action="status" data-id="${task.id}" data-status="${task.status==="canceled"||task.status==="done"?"todo":"canceled"}">${ended?"恢复":"取消"}</button>${moveMenu("task",task.id)}<button class="btn sm danger" data-action="delete" data-id="${task.id}">删除</button></div><div class="edit-panel me-form" id="edit-${task.id}"><div class="me-head">编辑任务</div><label class="me-field"><span class="me-label">标题</span><input id="edit-title-${task.id}" value="${esc(task.title)}" maxlength="200"></label><div class="me-row"><label class="me-field"><span class="me-label">优先级</span><select id="edit-priority-${task.id}">${["P0","P1","P2","P3"].map(p=>`<option ${p===task.priority?"selected":""}>${p}</option>`).join("")}</select></label><label class="me-field"><span class="me-label">截止日期</span><input type="date" id="edit-due-${task.id}" value="${task.due||""}"></label></div><label class="me-field"><span class="me-label">备注</span><input id="edit-note-${task.id}" value="${esc(task.note||"")}" placeholder="备注" maxlength="1000"></label><div class="checks me-checks"><label><input type="checkbox" id="edit-deep-${task.id}" ${task.deep?"checked":""}> 深度工作</label><label><input type="checkbox" id="edit-blocking-${task.id}" ${task.blocking?"checked":""}> 阻塞他人</label></div><div class="me-actions"><button class="btn sm" data-action="cancel" data-id="${task.id}">取消</button><button class="btn sm primary" data-action="save" data-id="${task.id}">保存</button></div></div></div>`;
+  // 分组徽标（2026-09-14）：可点，点一下在工作 / 生活之间切换。
+  // 放在优先级胶囊左边、同属卡片右上角那一列：两者都是「这条任务的属性标签」，
+  // 圆点里的字用 W / 生 两个短字符，卡片窄（约 350px）时不会把标题挤下去。
+  // 为什么不做成下拉而是一键切换：只有两个取值，下拉要点两下还多一层浮层，
+  // 而浮层遮挡是本项目已经踩过的坑（控制台不报、只有截图看得见）。
+  const grpLife=task.grp==="life";
+  const grpBadge=`<button class="pill task-grp${grpLife?" life":""}" data-action="task-group" data-id="${task.id}" data-grp="${grpLife?"work":"life"}" title="这条任务属于「${grpLife?"生活":"工作"}」，点击改为「${grpLife?"工作":"生活"}」">${grpLife?"生活":"工作"}</button>`;
+  return `<div class="task-card${canceled?" is-canceled":""}" draggable="false" data-task-id="${task.id}" data-status="${task.status}"><div class="tc-top"><button class="status-button ${task.status}" data-action="status" data-id="${task.id}" data-status="${nextStatus(task.status)}" title="切换任务状态：待办 → 进行中 → 已完成 → 待办">${task.status==="done"?"✓":task.status==="doing"?"…":""}</button><div class="grow"><div class="task-title${canceled?" strike":""}">${esc(task.title)} ${flags}</div><div class="task-meta">${statusName(task.status)} · 截止 ${formatDate(task.due)}${task.overdue?` · <span class="overdue-text">逾期 ${task.overdueDays} 天</span>`:""}${task.postponed?` · 已顺延 ${task.postponed} 次`:""}</div>${task.note?`<div class="task-meta">备注：${esc(task.note)}</div>`:""}</div><span class="pill task-prio${prio?" "+prio:""}">${task.priority}</span>${grpBadge}</div><div class="actions tc-acts"><button class="btn sm" data-action="edit" data-id="${task.id}">编辑</button>${!ended?`<button class="btn sm" data-action="postpone" data-id="${task.id}">顺延</button>`:""}<button class="btn sm" data-action="status" data-id="${task.id}" data-status="${task.status==="canceled"||task.status==="done"?"todo":"canceled"}">${ended?"恢复":"取消"}</button>${moveMenu("task",task.id)}<button class="btn sm danger" data-action="delete" data-id="${task.id}">删除</button></div><div class="edit-panel me-form" id="edit-${task.id}"><div class="me-head">编辑任务</div><label class="me-field"><span class="me-label">标题</span><input id="edit-title-${task.id}" value="${esc(task.title)}" maxlength="200"></label><div class="me-row"><label class="me-field"><span class="me-label">优先级</span><select id="edit-priority-${task.id}">${["P0","P1","P2","P3"].map(p=>`<option ${p===task.priority?"selected":""}>${p}</option>`).join("")}</select></label><label class="me-field"><span class="me-label">截止日期</span><input type="date" id="edit-due-${task.id}" value="${task.due||""}"></label><label class="me-field"><span class="me-label">分组</span><select id="edit-grp-${task.id}" title="修改后若它不再属于当前分组，这条会从列表里移走"><option value="work" ${task.grp!=="life"?"selected":""}>工作</option><option value="life" ${task.grp==="life"?"selected":""}>生活</option></select></label></div><label class="me-field"><span class="me-label">备注</span><input id="edit-note-${task.id}" value="${esc(task.note||"")}" placeholder="备注" maxlength="1000"></label><div class="checks me-checks"><label><input type="checkbox" id="edit-deep-${task.id}" ${task.deep?"checked":""}> 深度工作</label><label><input type="checkbox" id="edit-blocking-${task.id}" ${task.blocking?"checked":""}> 阻塞他人</label></div><div class="me-actions"><button class="btn sm" data-action="cancel" data-id="${task.id}">取消</button><button class="btn sm primary" data-action="save" data-id="${task.id}">保存</button></div></div></div>`;
 }
 // 拖动落点 = 把卡片换到目标泳道对应的状态。
 // 这里**不能只发一次 status 请求**：后端是严格状态机（todo→doing→done，「开始」这一步跳不过去），
@@ -420,9 +477,13 @@ function syncPendingHint(id){
 }
 // 与后端 InboxService.confirmHighConfidence 的筛选条件保持一致：
 // 置信度 >= 0.70，且知识类必须已配置 Vault（否则后端会跳过，前端不能虚报数量）。
+// **图片条目一律排除**：后端按 origin='image' 无条件跳过（截图里往往同时写着日期、
+// 负责人、好几件事，0.9 的置信度也不代表读对了，必须用户看过才落库）。
+// 少了这一条，按钮上会写「一键确认高置信度（3）」而点下去只生成 0 条 —— 数字骗人。
 function batchConfirmableCount(){
   const vaultReady=!!(state.settings&&state.settings.obsidianVaultPath);
   return state.classify.filter(item=>{
+    if(item.origin==="image")return false;
     const ai=item.ai;if(!ai||typeof ai.confidence!=="number")return false;
     if(ai.confidence<0.70)return false;
     if(ai.category==="knowledge"&&!vaultReady)return false;
@@ -636,7 +697,13 @@ function memoTime(value){
 }
 function renderMemos(){
   const view=$("view-memos");view.className="view memo-theme-"+state.memoGrp+(state.tab==="memos"?" active":"");
-  document.querySelectorAll(".memo-choice").forEach(b=>b.classList.toggle("active",b.dataset.grp===state.memoGrp));
+  // ⚠️ 必须限定在备忘页自己的那排按钮里（.memo-switch-wrap 内），不能用裸的 `.memo-choice`：
+  // 任务页的分组切换器为了复用样式也带着 .memo-choice 类，裸选择器会把它的三个按钮一起选进来。
+  // 而任务按钮的取值属性是 data-task-grp（不是 data-grp），于是 b.dataset.grp === undefined，
+  // 每次渲染备忘页都会把任务那排**全部清成非选中** —— 表现出来就是
+  // 「任务页点了生活、列表确实筛成生活了，但按钮还亮在工作上」，即筛选与指示器互相矛盾。
+  document.querySelectorAll(".memo-switch-wrap .memo-switch:not(.task-switch) .memo-choice")
+    .forEach(b=>b.classList.toggle("active",b.dataset.grp===state.memoGrp));
   const list=state.memos;
   $("memoList").innerHTML=list.length?list.map(m=>{
     const tags=(m.tags||[]).map(t=>`<span class="pill">${esc(t)}</span>`).join("");
@@ -659,7 +726,25 @@ function renderMemos(){
   }
   applySearchRow("memo");
 }
-function setMemoGrp(grp){state.memoGrp=grp;refreshAll().catch(error=>toast(error.message))}
+// 切备忘空间。加与 setTaskGrp 同样的幂等守卫：值没变就不必重新取数。
+// 守卫还有一个更实际的作用 —— 任何一次误调（比如委托绑错元素、取到 undefined）
+// 都会当场变成「一次多余的 refreshAll」，把整页请求数抬高一倍；
+// 有守卫时至少「值没变」这一类不会产生副作用，问题更容易在开发阶段暴露。
+function setMemoGrp(grp){
+  if(grp!=="all"&&grp!=="work"&&grp!=="life")return; // 非法值直接忽略，绝不写进 state
+  if(state.memoGrp===grp)return;
+  state.memoGrp=grp;
+  refreshAll().catch(error=>toast(error.message));
+}
+// 切任务分组。与 setMemoGrp 一样要**重新取数**（分组是后端过滤的，见 refreshAll 里的注释），
+// 不能只重渲染：本地重渲染只会过滤掉手里那 100 条里不合分组的，看起来「切过去了」，
+// 其实该分组里更早的任务一条都没加载进来。
+function setTaskGrp(grp){
+  if(grp!=="all"&&grp!=="work"&&grp!=="life")return; // 同上：非法值忽略，不污染 state
+  if(state.taskGrp===grp)return;
+  state.taskGrp=grp;
+  refreshAll().catch(error=>toast(error.message));
+}
 function timelineTypeName(type){return {inbox:"收录",task:"事件",praise:"完成",memo:"备忘",pomo:"番茄",plan:"计划"}[type]||"记录"}
 const TL_COLORS={inbox:"#378ADD",task:"#534AB7",praise:"#639922",memo:"#BA7517","memo:work":"#6C9D81","memo:life":"#D98267",pomo:"#0F6E56",plan:"#888780"};
 function dayString(date){return date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0")}
@@ -811,6 +896,47 @@ async function loadKnowledgeIndex(){
   }catch(error){
     state.knowledge.indexState="error";state.knowledge.indexError=error.message;
     renderKnowledge();renderVaultStatus();
+  }
+}
+// 把 Vault 里早就存在的笔记补进知识库。后端保证幂等，所以这个按钮可以放心重复点。
+// 结果必须把「扫描 / 新导入 / 已存在」三个数都报出来 —— 只报一个数字会让用户分不清
+// 「没扫到」和「全都导过了」。
+async function importVault(){
+  if(state.collect.importing)return;
+  const dir=$("importDirInput").value.trim();
+  state.collect.importing=true;
+  const button=$("importVaultButton");button.disabled=true;button.textContent="导入中…";
+  try{
+    const result=await WorkbenchApi.importVault(dir);
+    toast("扫描 "+result.scanned+" 篇，新导入 "+result.imported+" 篇，已存在 "+result.skipped+" 篇",4800);
+    state.knowledge.indexState="idle";
+    await refreshAll();
+  }catch(error){
+    toast(error.message,4200);
+  }finally{
+    state.collect.importing=false;button.disabled=false;button.textContent="从 Vault 导入";
+  }
+}
+// 收藏一篇得到文章：解析、归档、录入知识库都在后端完成，这里只负责递文本并如实反馈结果。
+// 失败时把后端的原话透出去（后端给的是中文可操作原因，如「没能从这个链接里读出文章信息」），
+// 不要吞成统一的「操作失败」——那会让用户不知道该改什么。
+async function collectArticle(){
+  const input=$("collectInput"),content=input.value.trim();
+  if(!content){toast("请先粘贴得到分享链接");return}
+  if(state.collect.collecting)return;
+  state.collect.collecting=true;
+  const button=$("collectButton");button.disabled=true;button.textContent="收藏中…";
+  try{
+    const result=await WorkbenchApi.collectArticle(content);
+    input.value="";
+    toast("已收藏「"+result.title+"」→ "+result.collection,4200);
+    // 笔记刚写进 Vault，索引快照要作废，否则紧接着搜是搜不到的。
+    state.knowledge.indexState="idle";
+    await refreshAll();
+  }catch(error){
+    toast(error.message,4200);
+  }finally{
+    state.collect.collecting=false;button.disabled=false;button.textContent="收藏";
   }
 }
 async function askKnowledge(){
@@ -978,7 +1104,7 @@ async function savePomoSetting(){
   toast("番茄时长已保存");
 }
 async function saveAiSetting(){
-  await WorkbenchApi.saveAi({enabled:$("setAiEnabled").checked,baseUrl:$("setAiBaseUrl").value.trim(),model:$("setAiModel").value.trim(),apiKey:$("setAiKey").value.trim()});
+  await WorkbenchApi.saveAi({enabled:$("setAiEnabled").checked,baseUrl:$("setAiBaseUrl").value.trim(),model:$("setAiModel").value.trim(),visionModel:$("setAiVisionModel").value.trim(),visionLocalOnly:$("setAiVisionLocalOnly").checked,apiKey:$("setAiKey").value.trim()});
   $("setAiKey").value="";await refreshAll();toast("AI 配置已保存");
 }
 async function saveVaultSetting(){
@@ -1005,6 +1131,341 @@ async function doShutdown(){
   try{await WorkbenchApi.shutdown()}catch(error){/* 连接中断属正常 */}
   setTimeout(()=>{document.body.innerHTML="<div style=\"padding:60px 24px;font-family:sans-serif;text-align:center;color:#33415c\"><h2>工作台已关闭</h2><p>可以关闭此页面。重新使用请双击「启动工作台」。</p></div>"},900);
 }
+/* ===== 图片区（2026-09-16） =====
+   两个入口共用一条底栏：左「＋AI」解析图片、右「附件」带任意文件，提交按钮在最右。
+   二者的区别不在位置而在职责 —— 前者会调用模型且**阻塞提交**，后者不解析。
+   整个容器是拖拽落点：拖图片走解析，拖其它文件进附件；在输入框里 Ctrl+V 粘截图也行。
+
+   文件一律「先上传拿 id、提交表单时才绑定」：上传阶段就完成了类型 / 大小 / 魔数校验，
+   提交时只做归属。上传失败的条目**不阻断提交**，但仍会被移出待绑定列表并在 toast 里说明。 */
+const MEDIA_MAX_IMAGES=3;   // 解析图片上限：一张截图常出 2–3 条，3 张已能产生十来个待确认条目
+const MEDIA_MAX_FILES=9;    // 附件上限，与后端 @Size(max=9) 逐字对齐
+const MEDIA_IMAGE_ACCEPT="image/png,image/jpeg,image/gif,image/webp";
+
+function mediaScopeOf(el){return el.closest?el.closest("[data-media-scope]"):null}
+function mediaKeyOf(el){const box=mediaScopeOf(el);return box?box.dataset.mediaScope:""}
+function mediaBox(scope){return document.querySelector('[data-media-scope="'+scope+'"]')}
+function mediaList(scope){if(!state.media[scope])state.media[scope]=[];return state.media[scope]}
+
+/** 提交时要带给后端的附件 id —— 只收**上传成功**的那些。 */
+function mediaIds(scope){
+  return mediaList(scope).filter(item=>item.status==="done"&&item.attachmentId).map(item=>item.attachmentId);
+}
+function mediaBusy(scope){return mediaList(scope).some(item=>item.status==="uploading")}
+
+/** 提交按钮：还有文件在上传就置灰。否则用户点下去、图还没传完，
+ *  创建出来的记录将不带附件，而界面上完全看不出少了什么。 */
+function mediaSyncSubmit(scope){
+  const box=mediaBox(scope);if(!box)return;
+  const btn=box.querySelector(".btn.primary");if(!btn)return;
+  if(!btn.dataset.label)btn.dataset.label=btn.textContent;
+  const busy=mediaBusy(scope);
+  btn.disabled=busy;
+  btn.textContent=busy?"上传中…":btn.dataset.label;
+  const cnt=box.querySelector("[data-media-count]");
+  // 用 .hidden 类而不是 hidden 属性：.media-add/.media-cnt 自己带 display:grid/inline-flex，
+  // 作者样式的优先级高于浏览器给 [hidden] 的 display:none —— 属性写了也**照样显示**。
+  // （2026-09-16 截图发现：＋AI 明明设了 hidden，页面上还是露着。）
+  if(cnt){const n=mediaList(scope).filter(i=>i.kind!=="image").length;cnt.classList.toggle("hidden",n===0);cnt.textContent=n}
+}
+
+function mediaSizeText(bytes){
+  if(bytes>=1024*1024)return (bytes/1024/1024).toFixed(1)+" MB";
+  if(bytes>=1024)return Math.round(bytes/1024)+" KB";
+  return bytes+" B";
+}
+
+function mediaRender(scope){
+  const box=mediaBox(scope);if(!box)return;
+  const strip=box.querySelector("[data-media-strip]");if(!strip)return;
+  let imgIndex=0;
+  strip.innerHTML=mediaList(scope).map(item=>{
+    if(item.kind==="image"){
+      imgIndex++;
+      const mark=item.status==="uploading"
+        ?'<span class="ms-mask"><span class="media-spin"></span></span>'
+        :item.status==="failed"
+          ?'<span class="ms-err" title="'+esc(item.error||"上传失败")+'">!</span>'
+          :'<span class="ms-ok">✓</span>';
+      return '<span class="media-shot'+(item.status==="failed"?" is-err":"")+'" title="'+esc(item.name)+'">'
+        +'<img src="'+esc(item.url||"")+'" alt="">'
+        +'<span class="ms-no">图'+imgIndex+'</span>'+mark
+        +'<button class="ms-x" type="button" data-media-remove="'+esc(item.localId)+'" title="移除">&times;</button>'
+        +'</span>';
+    }
+    const ext=(item.name.split(".").pop()||"").toLowerCase();
+    const known=["pdf","xls","xlsx","doc","docx","md","json"].indexOf(ext)>=0?ext:"other";
+    return '<span class="media-file" title="'+esc(item.name)+'">'
+      +'<span class="mf-k '+known+'">'+esc(ext.toUpperCase().slice(0,4)||"FILE")+'</span>'
+      +'<span class="mf-n">'+esc(item.name)+'</span>'
+      +'<span class="mf-s">'+esc(item.sizeText||"")+'</span>'
+      +'<button class="mf-x" type="button" data-media-remove="'+esc(item.localId)+'" title="移除">&times;</button>'
+      +'</span>';
+  }).join("");
+  mediaSyncSubmit(scope);
+}
+
+let mediaSeq=0;
+async function mediaUpload(scope,file,kind){
+  const item={localId:"m"+(++mediaSeq),kind:kind,status:"uploading",name:file.name,
+    size:file.size,sizeText:mediaSizeText(file.size),attachmentId:null,url:"",error:""};
+  mediaList(scope).push(item);
+  mediaRender(scope);
+  try{
+    const saved=await WorkbenchApi.uploadAttachment(file);
+    item.status="done";item.attachmentId=saved.id;item.url=saved.url;
+  }catch(error){
+    // 失败的单条不影响其余，也不阻断提交：图没传上去，但表单内容不该白填。
+    item.status="failed";item.error=error.message;
+    toast("「"+file.name+"」上传失败："+error.message+"（可移除后重选，其余不受影响）",5600);
+  }
+  mediaRender(scope);
+}
+
+function mediaPick(scope,kind){
+  const picker=document.createElement("input");
+  picker.type="file";picker.multiple=true;
+  if(kind==="image")picker.accept=MEDIA_IMAGE_ACCEPT;
+  picker.addEventListener("change",()=>{
+    mediaAdd(scope,Array.prototype.slice.call(picker.files||[]),kind);
+  });
+  picker.click();
+}
+
+function mediaAdd(scope,files,kind){
+  const list=mediaList(scope);
+  let imageCount=list.filter(i=>i.kind==="image").length;
+  let fileCount=list.filter(i=>i.kind!=="image").length;
+  files.forEach(file=>{
+    if(kind==="image"){
+      if(!/^image\//.test(file.type)){toast("「"+file.name+"」不是图片，已跳过",4200);return}
+      if(imageCount>=MEDIA_MAX_IMAGES){toast("解析图片最多 "+MEDIA_MAX_IMAGES+" 张，多余的已忽略",4600);return}
+      imageCount++;mediaUpload(scope,file,"image");
+    }else{
+      if(fileCount>=MEDIA_MAX_FILES){toast("附件最多 "+MEDIA_MAX_FILES+" 个，多余的已忽略",4600);return}
+      fileCount++;mediaUpload(scope,file,"file");
+    }
+  });
+}
+
+async function mediaRemove(scope,localId){
+  const list=mediaList(scope);
+  const index=list.findIndex(i=>i.localId===localId);
+  if(index<0)return;
+  const item=list.splice(index,1)[0];
+  mediaRender(scope);
+  // 服务端也删掉：这条还没挂到任何记录上，留着就是孤儿（虽然清理任务会兜底，
+  // 但让用户点了「×」之后数据还在，等于骗他）。
+  if(item.attachmentId){
+    try{await WorkbenchApi.deleteAttachment(item.attachmentId)}catch(error){/* 孤儿清理会兜底 */}
+  }
+}
+
+function mediaClear(scope){state.media[scope]=[];mediaRender(scope)}
+
+// ===== 图片多模态解析（阶段二，2026-09-16）=====
+// 三个入口里图片的**去向不同**：
+//   inbox  → 解析结果进「整理合并」，用户在待确认卡里逐条核对后生成（与文字收录同一套 UI）
+//   task/schedule/memo → 「抽取预填」：把抽到的标题/日期/时间填进表单，用户自己按保存
+// 这个差别是刻意的：表单页没有待确认卡，硬塞一个确认页会让流程变成两段。
+const PARSE_POLL_MS=1200;
+let parsePollTimer=null;
+
+/** 图片解析中 / 失败 / 已完成的计数，进页面时同步一次。进首页即恢复轮询。 */
+async function syncParseStatus(){
+  let status;
+  try{status=await WorkbenchApi.parseStatus()}catch(error){return}
+  state.parseStatus=status||{running:0,failed:0,success:0,lastError:null};
+  renderParseStatus();
+  // 还挂着未完成的解析（比如上次关页面时正在跑）→ 继续轮询。
+  // 少了这句，用户关掉页面再回来，界面上就永远是「解析中…」而它其实早跑完了。
+  if(state.parseStatus.running>0)startParsePoll();
+}
+function renderParseStatus(){
+  const el=$("parseStatus");if(!el)return;
+  const s=state.parseStatus||{};const running=s.running||0;const failed=s.failed||0;
+  // 只在「有话说」时出现：正常跑完的状态栏是噪音，用户不需要知道「0 条失败」。
+  // ⚠️ 判断必须**三分支**，不能写成 `if(running>0){跑} else {失败}`：
+  // 那样 failed===0 时也会渲染成「有 0 张图片没能解析」，自相矛盾。
+  // ⚠️ 而且这里**不能整体赋 className** —— 那会把上面 toggle 出来的 `hidden` 冲掉，
+  // 于是「0 失败」的状态栏照样显示在页面上（2026-09-16 冒烟脚本抓到的真 bug）。
+  if(running<=0&&failed<=0){el.className="parse-status hidden";el.innerHTML="";return}
+  if(running>0){
+    el.className="parse-status is-running";
+    el.innerHTML='<span class="media-spin"></span>正在解析 '+running+' 张图片…（一张约 3–10 秒，按顺序处理）';
+  }else{
+    el.className="parse-status is-failed";
+    el.innerHTML='有 '+failed+' 张图片没能解析：'+esc(s.lastError||"换个格式或更清晰的图再试一次")+'。它们仍留在「待整理」里，可以手动补文字。';
+  }
+}
+function startParsePoll(){
+  if(parsePollTimer)return;
+  parsePollTimer=setInterval(async()=>{
+    let status;
+    try{status=await WorkbenchApi.parseStatus()}catch(error){return}
+    state.parseStatus=status||state.parseStatus;
+    renderParseStatus();
+    if(!state.parseStatus||!state.parseStatus.running){
+      stopParsePoll();
+      await refreshAll();
+      const done=(state.parseStatus&&state.parseStatus.success)||0;
+      if(done)toast("图片解析完成，共 "+done+" 条待确认，核对后点「确认生成」",5600);
+    }
+  },PARSE_POLL_MS);
+}
+function stopParsePoll(){
+  if(parsePollTimer){clearInterval(parsePollTimer);parsePollTimer=null}
+}
+
+/**
+ * 提交图片解析。
+ *
+ * <p>只收**上传成功**的图片 —— 失败的那些还在条上标着「!」，把它们算进去
+ * 会让后端报「附件不存在」，用户以为是解析坏了，其实是上传就没成功。</p>
+ *
+ * @returns {Promise<boolean>} 是否真的触发了（false 时调用方不要清空输入框）
+ */
+async function submitMediaParsing(scope,source){
+  const images=mediaList(scope).filter(i=>i.kind==="image");
+  if(!images.length)return false;
+  if(mediaBusy(scope)){toast("图片还在上传，请稍候再试");return false}
+  const ids=images.filter(i=>i.status==="done"&&i.attachmentId).map(i=>i.attachmentId);
+  if(!ids.length){toast("图片都没有上传成功，无法解析；可移除后重选",5600);return false}
+  const failed=images.length-ids.length;
+  try{
+    await WorkbenchApi.parseImages(ids,source||"web");
+  }catch(error){
+    // 同步报错（没配视觉模型 / 开了「仅本地」）→ 原文照旧留在输入框，用户去设置页配好就能重试。
+    toast(error.message,6400);
+    return false;
+  }
+  if(failed)toast("有 "+failed+" 张没上传成功，本次只解析 "+ids.length+" 张",5600);
+  await syncParseStatus();
+  return true;
+}
+
+// 从解析结果里挑「抽取预填」要用的那一条。
+// 优先取类别与当前表单匹配的（在任务页就优先用 task 的抽取结果），
+// 没有匹配的才退回第一条 —— 用户传的是一张日程截图但停在任务页，标题也该预填上，
+// 只是不替他把类别搬过去。
+function pickPrefill(items,category){
+  if(!items||!items.length)return null;
+  for(let i=0;i<items.length;i++){
+    if(items[i].ai&&items[i].ai.category===category)return items[i];
+  }
+  return items[0];
+}
+
+/**
+ * 把解析结果预填进表单：只填**空着的**字段。
+ *
+ * <p>不覆盖用户已经敲进去的内容 —— 他可能先写了标题才想起来补张截图，
+ * 预填把它顶掉等于「传张图，我刚写的没了」。</p>
+ */
+function prefillFromParsed(item,map){
+  if(!item||!item.ai)return;
+  const payload=item.ai.payload||{};
+  const title=(payload.title||"").trim();
+  Object.keys(map).forEach(field=>{
+    const el=$(map[field].id);if(!el)return;
+    const value=map[field].from(payload,title);
+    if(value&&!el.value)el.value=value;
+  });
+}
+
+function prefillTaskFromImage(item){
+  prefillFromParsed(item,{
+    title:{id:"taskTitle",from:function(p,t){return t}},
+    due:{id:"taskDue",from:function(p){return p.due||""}}
+  });
+}
+function prefillEventFromImage(item){
+  prefillFromParsed(item,{
+    title:{id:"eventTitle",from:function(p,t){return t}},
+    start:{id:"eventStart",from:function(p){return p.start||""}},
+    end:{id:"eventEnd",from:function(p){return p.end||""}}
+  });
+}
+function prefillMemoFromImage(item){
+  prefillFromParsed(item,{
+    title:{id:"memoTitle",from:function(p,t){return t}},
+    // 正文只在完全空的时候补，且用**整图原文**（raw）——那张图里的信息量
+    // 往往比一个标题多得多，丢掉等于让用户重新打字。
+    content:{id:"memoContent",from:function(){return item.raw||""}}
+  });
+}
+
+function bindMedia(){
+  document.addEventListener("click",event=>{
+    const extractBtn=event.target.closest?event.target.closest("[data-media-extract]"):null;
+    if(extractBtn){
+      const scope=extractBtn.dataset.scope;
+      const category=extractBtn.dataset.category;
+      // 三个表单页共用这一段：抽到的字段各自往自己的表单里填。
+      const apply=category==="task"?prefillTaskFromImage
+        :category==="schedule"?prefillEventFromImage:prefillMemoFromImage;
+      extractBtn.disabled=true;
+      const label=extractBtn.textContent;
+      extractBtn.textContent="识别中…";
+      // finally 里恢复按钮：失败时也要能重试，留着「识别中…」的按钮等于把入口锁死了。
+      extractFromImages(scope,category,apply)
+        .catch(error=>toast(error.message))
+        .then(()=>{extractBtn.disabled=false;extractBtn.textContent=label});
+      return;
+    }
+    const parseBtn=event.target.closest?event.target.closest("[data-media-parse]"):null;
+    // 「＋AI」只负责选图与上传；**解析在提交时触发**（见 submitMediaParsing），
+    // 因为任务/日程/备忘三个入口是「抽取预填」，要先有表单上下文才知道抽到哪去。
+    if(parseBtn){mediaPick(mediaKeyOf(parseBtn),"image");return}
+    const attachBtn=event.target.closest?event.target.closest("[data-media-attach]"):null;
+    if(attachBtn){mediaPick(mediaKeyOf(attachBtn),"file");return}
+    const removeBtn=event.target.closest?event.target.closest("[data-media-remove]"):null;
+    if(removeBtn){mediaRemove(mediaKeyOf(removeBtn),removeBtn.dataset.mediaRemove);return}
+  });
+
+  // 拖拽：整个输入容器都是落点。
+  document.querySelectorAll("[data-media-scope]").forEach(box=>{
+    box.addEventListener("dragover",event=>{
+      // 这个 preventDefault 不能省：默认行为是**打开这个文件**，整页会跳走。
+      event.preventDefault();
+      box.classList.add("media-dragover");
+    });
+    box.addEventListener("dragleave",event=>{
+      if(box.contains(event.relatedTarget))return;   // 在子元素之间移动不该熄灭高亮
+      box.classList.remove("media-dragover");
+    });
+    box.addEventListener("drop",event=>{
+      event.preventDefault();
+      box.classList.remove("media-dragover");
+      const files=Array.prototype.slice.call(event.dataTransfer&&event.dataTransfer.files||[]);
+      if(!files.length)return;
+      const scope=box.dataset.mediaScope;
+      // 按类型分流：图片走「解析图片」，其它进「附件」—— 用户不用先记住该点哪个按钮。
+      const images=files.filter(f=>/^image\//.test(f.type));
+      const others=files.filter(f=>!/^image\//.test(f.type));
+      if(images.length)mediaAdd(scope,images,"image");
+      if(others.length)mediaAdd(scope,others,"file");
+    });
+  });
+
+  // 在输入区里 Ctrl+V 粘截图：截图党的主要路径。
+  document.addEventListener("paste",event=>{
+    const box=mediaScopeOf(event.target);
+    if(!box)return;
+    const items=(event.clipboardData&&event.clipboardData.items)||[];
+    const files=[];
+    for(let i=0;i<items.length;i++){
+      if(items[i].kind==="file"&&/^image\//.test(items[i].type)){
+        const file=items[i].getAsFile();
+        if(file)files.push(file);
+      }
+    }
+    if(!files.length)return;
+    event.preventDefault();
+    mediaAdd(box.dataset.mediaScope,files,"image");
+  });
+}
+
 async function createMemo(){
   const content=$("memoContent").value.trim();
   const title=$("memoTitle").value.trim();
@@ -1012,10 +1473,11 @@ async function createMemo(){
   // 两者都空才会被后端拒（400/1002「备忘的标题和正文不能同时为空，至少写一项」），
   // 前端先拦一次只是为了不白跑一趟接口，措辞与后端保持一致。
   if(!content&&!title){toast("标题和正文至少写一项");$("memoTitle").focus();return}
+  if(mediaBusy("memo")){toast("附件还在上传，请稍候再保存");return}
   // title / content 只能传 null（不能传空串）：空串会让后端把「留空」当成「显式写了空标题」，
   // 于是显式标题的回退逻辑（取正文前 24 字）被跳过，备忘会存成没有标题的一条。
-  await WorkbenchApi.createMemo({title:title||null,content:content||null,tags:$("memoTags").value.trim()||null,grp:$("memoGrp").value});
-  $("memoTitle").value="";$("memoContent").value="";$("memoTags").value="";await refreshAll();toast("备忘已保存");
+  await WorkbenchApi.createMemo({title:title||null,content:content||null,tags:$("memoTags").value.trim()||null,grp:$("memoGrp").value,attachmentIds:mediaIds("memo")});
+  $("memoTitle").value="";$("memoContent").value="";$("memoTags").value="";mediaClear("memo");await refreshAll();toast("备忘已保存");
 }
 // 日期默认预填**今天**，不跟着正在查看的那一周走。
 // 「日期为空」仍然只剩一种含义：还没定下哪一天 → 落到「待定时间」区。
@@ -1030,8 +1492,9 @@ async function createEvent(){
   const title=$("eventTitle").value.trim();if(!title){toast("请输入日程标题");return}
   const date=$("eventDate").value||null;
   const weeks=Number(($("eventRepeat")||{}).value)||1;
-  const result=await WorkbenchApi.createEvent({title:title,type:$("eventType").value,date:date,start:$("eventStart").value||null,end:$("eventEnd").value||null,repeatWeeks:weeks});
-  $("eventTitle").value="";$("eventStart").value="";$("eventEnd").value="";$("eventDate").value=defaultEventDate();
+  if(mediaBusy("event")){toast("附件还在上传，请稍候再加入");return}
+  const result=await WorkbenchApi.createEvent({title:title,type:$("eventType").value,date:date,start:$("eventStart").value||null,end:$("eventEnd").value||null,repeatWeeks:weeks,attachmentIds:mediaIds("event")});
+  $("eventTitle").value="";$("eventStart").value="";$("eventEnd").value="";$("eventDate").value=defaultEventDate();mediaClear("event");
   // 重复选项每次用完都要回到「不重复」：留着上一次的「连续 4 周」，下一条日程会被静默地
   // 也生成 4 期，而用户以为自己只是加了一件事。
   if($("eventRepeat"))$("eventRepeat").value="1";
@@ -1044,18 +1507,41 @@ async function createEvent(){
 }
 // 「收录」= 收录 + 整理合并成一步：先把原文写进收录箱，紧接着跑一遍整理。
 // 用户不用再单独点一次「开始整理」，页面直接显示分类建议供核对。
+//
+// 图片走**另一条路**：图片不再随文字写进收录箱，而是交给视觉模型解析，
+// 解析出的每一条都变成一个待确认条目（与文字收录共用同一套待确认 UI）。
+// 这正是用户最初的抱怨：「传张邮件截图，还没看到解析结果，任务就被建好了」——
+// 所以图片必须等解析完、且必须由用户核对，绝不能直接落成任务。
 async function createInbox(){
-  const raw=$("inboxInput").value.trim();if(!raw){toast("请输入内容");return}
-  const created=await WorkbenchApi.createInbox(raw);
-  $("inboxInput").value="";$("inboxInput").focus();
-  await WorkbenchApi.classifyInbox();
-  await refreshAll();
-  // 用接口返回的 id 精确找回刚收录的这一条，而不是猜「列表第一条就是刚存的」：
-  // 自动整理失败时它会落到「待整理」，必须说清楚，不能笼统报一句「已收录」让用户以为一切正常。
-  const mine=state.classify.filter(item=>String(item.id)===String(created.id))[0];
-  if(mine&&mine.ai)toast("已收录并整理为「"+categoryName(mine.ai.category)+"」，核对后点「确认生成」",4600);
-  else if(state.inbox.some(item=>String(item.id)===String(created.id)))toast("已收录，但自动整理没成功，可在下面「待整理」里点「重新整理」",5600);
-  else toast("已收录");
+  const raw=$("inboxInput").value.trim();
+  const hasImages=mediaList("inbox").some(i=>i.kind==="image");
+  if(!raw&&!hasImages){toast("请输入内容或添加图片");return}
+  if(mediaBusy("inbox")){toast("附件还在上传，请稍候再收录");return}
+
+  let parsed=false;
+  if(hasImages){parsed=await submitMediaParsing("inbox","web")}
+
+  let created=null;
+  if(raw){
+    created=await WorkbenchApi.createInbox(raw,mediaIds("inbox"));
+  }else if(!parsed){
+    // 只有图片、且没能触发解析（没配模型 / 仅本地）→ 什么都没发生，输入框保持原样。
+    return;
+  }
+  $("inboxInput").value="";$("inboxInput").focus();mediaClear("inbox");
+
+  if(raw){
+    await WorkbenchApi.classifyInbox();
+    await refreshAll();
+    // 用接口返回的 id 精确找回刚收录的这一条，而不是猜「列表第一条就是刚存的」：
+    // 自动整理失败时它会落到「待整理」，必须说清楚，不能笼统报一句「已收录」让用户以为一切正常。
+    const mine=state.classify.filter(item=>String(item.id)===String(created.id))[0];
+    if(mine&&mine.ai)toast("已收录并整理为「"+categoryName(mine.ai.category)+"」，核对后点「确认生成」",4600);
+    else if(state.inbox.some(item=>String(item.id)===String(created.id)))toast("已收录，但自动整理没成功，可在下面「待整理」里点「重新整理」",5600);
+    else toast("已收录");
+  }else{
+    await refreshAll();
+  }
 }
 async function confirmHighConfidence(){
   const targets=batchConfirmableCount();
@@ -1080,10 +1566,80 @@ async function reclassifyInbox(id){
   await WorkbenchApi.reclassifyInbox(id);
   await refreshAll();toast("已重新整理，请再核对分类和字段");
 }
+
+/**
+ * 表单页（任务 / 日程 / 备忘）的「从图片识别」。
+ *
+ * <p>与收录页的区别：这里**不生成任何记录**，只把抽到的字段填进表单，
+ * 由用户自己按「保存」。三个表单页都没有待确认卡，硬塞一个确认页会把
+ * 「补张截图」变成两段流程；而且用户本来就在填表单，预填后他还能顺手改 ——
+ * 比让他先在另一个页面确认一遍再回来重填更省事。</p>
+ */
+async function extractFromImages(scope,category,apply){
+  const images=mediaList(scope).filter(i=>i.kind==="image");
+  if(!images.length){toast("请先用左下的 + 添加图片");return}
+  // 记下本次要解析的附件 id：一张图可能解析出好几条，按「条数」认领会错，
+  // 必须按**来源附件 id** 认领才准（同一张图出的条目都带同一个 sourceAttachmentId）。
+  const wanted=images.filter(i=>i.status==="done"&&i.attachmentId).map(i=>i.attachmentId);
+  const started=await submitMediaParsing(scope,"web");
+  if(!started)return;
+
+  // 等这一批解析完（后端单线程串行，轮询是唯一可靠的方式）。
+  const items=await waitForParsedImages(wanted);
+  if(!items.length){toast("没能从图片里识别出内容，可以手动填写",5600);return}
+  const picked=pickPrefill(items,category);
+  apply(picked);
+  toast("已按图片预填，核对后点保存（只填了空着的字段，不会覆盖你写好的内容）",6400);
+  // 预填完就把**图片**从条上拿掉：它们已经被读过了，留在那里会让用户以为
+  // 「保存后图片还会挂到这条记录上」——其实这条表单走的不是同一条路。
+  // 只清图片、保留附件：附件是真要随记录一起保存的。
+  state.media[scope]=mediaList(scope).filter(i=>i.kind!=="image");
+  mediaRender(scope);
+}
+
+/**
+ * 轮询到这一批解析结束，返回**由这批附件**产生的条目。
+ *
+ * <p>按 {@code sourceAttachmentId} 认领，不按条数也不按时间戳：一张截图常出 2–3 条，
+ * 按「图片张数」切片会少认；按时间戳则会和别的标签页互相干扰。
+ * 也正因为认的是附件 id，用户同时开着收录页在解析别的图，也不会被抽进来。</p>
+ *
+ * <p>结束判定是「running 归零」，超时 60 秒兜底：单线程串行 + 每张最多 60 秒读超时，
+ * 3 张理论上最坏 3 分钟 —— 但那种情况下让用户干等也没意义，不如放他手动填。</p>
+ */
+async function waitForParsedImages(wanted){
+  const deadline=Date.now()+60000;
+  while(Date.now()<deadline){
+    let status;
+    try{status=await WorkbenchApi.parseStatus()}catch(error){break}
+    state.parseStatus=status||{running:0,failed:0,success:0,lastError:null};
+    renderParseStatus();
+    if((status.running||0)===0)break;
+    await new Promise(resolve=>setTimeout(resolve,PARSE_POLL_MS));
+  }
+  stopParsePoll();
+  try{
+    // 待确认列表就是 status='processed' 那一批（与 refreshAll 里第 5 个请求同一个）。
+    state.classify=(await WorkbenchApi.inbox("processed"))||state.classify;
+  }catch(error){/* 列表刷新失败不影响预填 */}
+  const wantedSet={};
+  (wanted||[]).forEach(id=>{wantedSet[String(id)]=true});
+  return state.classify.filter(item=>item.origin==="image"
+    && wantedSet[String(item.sourceAttachmentId)]);
+}
 async function createTask(){
   const title=$("taskTitle").value.trim();if(!title){toast("请输入任务标题");return}
-  await WorkbenchApi.createTask({title:title,priority:$("taskPriority").value,due:$("taskDue").value||null,deep:$("taskDeep").checked,blocking:$("taskBlocking").checked,note:$("taskNote").value.trim()||null});
-  $("taskTitle").value="";$("taskNote").value="";$("taskDeep").checked=false;$("taskBlocking").checked=false;await refreshAll();toast("任务已创建");
+  // 分组：当前停在「工作」或「生活」时，**以用户眼前的这一侧为准**（前端预填，不是后端硬编码）。
+  // 理由：在「生活」页里新建一条任务，后台关键词判定若把它算成工作，这条会当场从列表里消失，
+  // 用户只会以为「新建没成功」—— 这是本项目最忌讳的一类失效。
+  // 停在「全部」时传 auto，让后端按标题 / 描述的关键词判定（与备忘页同一套规则）。
+  const grp=state.taskGrp==="work"||state.taskGrp==="life"?state.taskGrp:"auto";
+  if(mediaBusy("task")){toast("附件还在上传，请稍候再创建");return}
+  const created=await WorkbenchApi.createTask({title:title,priority:$("taskPriority").value,due:$("taskDue").value||null,deep:$("taskDeep").checked,blocking:$("taskBlocking").checked,note:$("taskNote").value.trim()||null,grp:grp,attachmentIds:mediaIds("task")});
+  $("taskTitle").value="";$("taskNote").value="";$("taskDeep").checked=false;$("taskBlocking").checked=false;mediaClear("task");await refreshAll();
+  // 说清它落到哪一侧：默认视图是「工作」，用户在「全部」里建了一条生活任务时，
+  // 不提示的话他会以为任务没建上（直到切到生活才发现）。
+  toast("任务已创建"+(state.taskGrp==="all"?"，归到「"+taskGroupName(created.grp)+"」分组":""));
 }
 async function handleAction(button){
   const id=button.dataset.id,action=button.dataset.action;
@@ -1134,6 +1690,23 @@ async function handleAction(button){
     renderTasks();return
   }
   if(action==="clear-event-search"){clearEventQuery();await refreshAll();return}
+  // 卡片上的分组徽标：点一下在「工作 / 生活」之间切换（只有两值，不需要浮层菜单）。
+  if(action==="task-group"){
+    const target=button.dataset.grp;
+    const result=await WorkbenchApi.changeTaskGroup(id,target);
+    // 关键的分支：改完之后这条任务**还属不属于当前正在看的分组**。
+    // ① 当前是「全部」→ 它一定还在，只是徽标变了，刷新那一条即可；
+    // ② 当前是具体分组、改到了另一侧 → 它会立刻不满足筛选条件，必须**说出来**，
+    //    否则用户看到卡片凭空消失、又没有半句解释，会以为改分组把任务弄丢了。
+    const stays=state.taskGrp==="all"||state.taskGrp===target;
+    await refreshAll();
+    if(stays){
+      toast("已把「"+result.title+"」改到「"+taskGroupName(target)+"」",2600);
+    }else{
+      toast("已把「"+result.title+"」改到「"+taskGroupName(target)+"」，它已不在当前「"+taskGroupName(state.taskGrp)+"」分组里；切到那一侧即可看到。",8000);
+    }
+    return
+  }
   // 「点周头 = 把这一周设为当前展开的那一周」（手风琴：任何时刻只有一个展开）。
   // 全程只动 DOM、不重绘：切换旧/新两条的 collapsed class，再把这一个 `.wh-actions` 节点
   // 从旧的那条搬到新的那条。重绘会把滚动位置弹回顶部，长列表里点一下就「跳走」。
@@ -1175,7 +1748,12 @@ async function handleAction(button){
   if(action==="clear-memo-search"){clearMemoQuery();await refreshAll();return}
   if(action==="edit"){$("edit-"+id).classList.toggle("open");return}
   if(action==="cancel"){$("edit-"+id).classList.remove("open");return}
-  if(action==="save"){await WorkbenchApi.updateTask(id,{title:$("edit-title-"+id).value.trim(),priority:$("edit-priority-"+id).value,due:$("edit-due-"+id).value||"",note:$("edit-note-"+id).value.trim(),deep:$("edit-deep-"+id).checked,blocking:$("edit-blocking-"+id).checked});await refreshAll();toast("任务已更新");return}
+  if(action==="save"){const el=$("edit-grp-"+id);const grp=el?el.value:null;const before=state.taskGrp!==undefined?state.taskGrp:"all";await WorkbenchApi.updateTask(id,{title:$("edit-title-"+id).value.trim(),priority:$("edit-priority-"+id).value,due:$("edit-due-"+id).value||"",note:$("edit-note-"+id).value.trim(),deep:$("edit-deep-"+id).checked,blocking:$("edit-blocking-"+id).checked,grp:grp});await refreshAll();
+    // 改了分组且它已经不属于当前视图时要说出来：卡片会当场从列表里消失，
+    // 不解释的话用户会以为「保存把任务删了」。
+    if(grp&&before!=="all"&&grp!==before)toast("任务已更新；它已改到「"+taskGroupName(grp)+"」分组，不在当前「"+taskGroupName(before)+"」视图里了。",8000);
+    else toast("任务已更新");
+    return}
   if(action==="status"){await WorkbenchApi.changeTaskStatus(id,button.dataset.status);await refreshAll();toast("任务已改为「"+statusName(button.dataset.status)+"」");return}
   if(action==="postpone"){const task=await WorkbenchApi.postponeTask(id);await refreshAll();toast("已顺延到 "+formatDate(task.due)+"，第 "+task.postponed+" 次");return}
   if(action==="confirm-inbox"){await confirmInbox(id);return}
@@ -1235,7 +1813,7 @@ async function handleAction(button){
   toast("这个按钮暂时没有对应的操作（action="+action+"），请反馈这个按钮");
 }
 async function initialize(){
-  try{state.status=await WorkbenchApi.authStatus();if(!state.status.initialized||!state.status.loggedIn){location.replace("/setup.html");return}$("welcome").textContent=state.status.username;$("greeting").textContent=greeting()+"，"+state.status.username;$("app").classList.remove("hidden");applyPageBackground();await refreshAll();$("eventDate").value=defaultEventDate();await initPomo()}catch(error){toast(error.message)}
+  try{state.status=await WorkbenchApi.authStatus();if(!state.status.initialized||!state.status.loggedIn){location.replace("/setup.html");return}$("welcome").textContent=state.status.username;$("greeting").textContent=greeting()+"，"+state.status.username;$("app").classList.remove("hidden");applyPageBackground();await refreshAll();$("eventDate").value=defaultEventDate();await initPomo();await syncParseStatus()}catch(error){toast(error.message)}
 }
 // 页面背景（2026-09-13）。**先探一次图，成功了再挂 class**，而不是直接挂：
 // 图缺失时若已经挂上 class，body 会先去加载那张图、失败后才退回兜底色，
@@ -1704,6 +2282,8 @@ async function collectSearchQuery(){
   await refreshAll();
   toast("已把「"+query+"」收录到待整理，到「收录」页点「重新整理」即可");
 }
+// 页签栏的点击委托。回收站那枚图标按钮**排在页签栏最右边，但仍是 .tabs 的直接子元素**，
+// 所以这一条委托 + setTab 里的 active 一把梭就把它一起覆盖了，不需要为它单开绑定。
 document.querySelector(".tabs").addEventListener("click",event=>{const button=event.target.closest("button[data-tab]");if(button)setTab(button.dataset.tab)});
 $("gearButton").addEventListener("click",()=>setTab("settings"));
 // 委托到任何带 data-action 的元素，而不只是 button：驾驶舱的指标卡是 button，
@@ -1801,7 +2381,20 @@ $("memoTitle").addEventListener("keydown",event=>{if(event.key==="Enter"){event.
 $("memoContent").addEventListener("keydown",event=>{if(event.key==="Enter"&&(event.ctrlKey||event.metaKey)){event.preventDefault();createMemo().catch(error=>toast(error.message))}});
 $("memoSearch").addEventListener("input",()=>{state.memoQuery=$("memoSearch").value.trim();debounceInPage("memo",function(){reloadMemos().catch(error=>toast(error.message))})});
 $("memoShowArchived").addEventListener("change",()=>{state.memoArchived=$("memoShowArchived").checked;refreshAll().catch(error=>toast(error.message))});
-document.querySelector(".memo-switch").addEventListener("click",event=>{const button=event.target.closest(".memo-choice");if(button)setMemoGrp(button.dataset.grp)});
+// ⚠️ 这里**必须**用 `.memo-switch:not(.task-switch)`，不能像以前那样写裸的 `.memo-switch`：
+// querySelector 只取第一个匹配，而任务页的分组切换器（DOM 里更靠前）同样带着 .memo-switch 类，
+// 于是备忘那段的委托会**绑到任务那排按钮上**、备忘页自己的空间切换器反而一个监听都没挂。
+// 后果有两个，都会真实伤到用户：
+//   ① 任务页点分组时，备忘的处理器也会跑一次，拿 dataset.grp（任务按钮上是 undefined）
+//      调 setMemoGrp(undefined)，把 state.memoGrp 写成 undefined 并**多发一次 refreshAll**；
+//   ② 备忘页的「空间 全部/工作/生活」点了完全没反应 —— 这是「接口/结构都在、入口没接上」的
+//      典型形态，控制台不报错，只能靠这排按钮点不动才发现。
+document.querySelector(".memo-switch:not(.task-switch)").addEventListener("click",event=>{const button=event.target.closest(".memo-choice");if(button)setMemoGrp(button.dataset.grp)});
+// 任务分组切换器（2026-09-14）。属性名特意用 data-task-grp 而不是 data-grp：
+// 两个切换器共用一套 .memo-choice 样式，用不同属性名区分，将来就算把两段委托合并也不会互相串味。
+// 用 `.task-switch` 精确定位任务那排（它是 .memo-switch 之外额外挂的类），配合上面的 :not ，
+// 两个切换器的「选中态同步」与「点击委托」就都各自只作用于自己。
+document.querySelector(".task-switch").addEventListener("click",event=>{const button=event.target.closest(".memo-choice");if(button)setTaskGrp(button.dataset.taskGrp)});
 $("themeSaveButton").addEventListener("click",()=>saveTheme().catch(error=>toast(error.message)));
 $("themeInput").addEventListener("keydown",event=>{if(event.key==="Enter")saveTheme().catch(error=>toast(error.message))});
 $("pomoChip").addEventListener("click",()=>{$("pomoMask").classList.add("show")});
@@ -1822,6 +2415,9 @@ $("shutdownButton").addEventListener("click",()=>doShutdown().catch(error=>toast
 $("logoutButton").addEventListener("click",async()=>{try{await WorkbenchApi.logout()}finally{location.replace("/setup.html")}});
 $("kbChatSend").addEventListener("click",()=>askKnowledge().catch(error=>toast(error.message)));
 $("kbChatInput").addEventListener("keydown",event=>{if(event.key==="Enter")askKnowledge().catch(error=>toast(error.message))});
+$("collectButton").addEventListener("click",()=>collectArticle().catch(error=>toast(error.message)));
+$("collectInput").addEventListener("keydown",event=>{if(event.key==="Enter")collectArticle().catch(error=>toast(error.message))});
+$("importVaultButton").addEventListener("click",()=>importVault().catch(error=>toast(error.message)));
 // ===== 全局搜索的接线 =====
 // 输入即搜（防抖 200ms）。这里**只打 /api/v1/search 一个接口**：
 // 现有 #memoSearch 是 input → refreshAll，每敲一个字符会拉 11 个接口并重绘 11 个视图。
@@ -1930,6 +2526,8 @@ function bindComposer(tab,toggleId,bodyId){
     if(open){const first=body.querySelector("input:not([type=checkbox]),textarea");if(first)first.focus()}
   });
 }
+// 图片区只绑一次：它用事件委托覆盖四个入口（点击 / 拖拽 / 粘贴都在 bindMedia 内部挂）。
+bindMedia();
 bindComposer("task","composerToggleTask","composerBodyTask");
 bindComposer("event","composerToggleEvent","composerBodyEvent");
 bindComposer("memo","composerToggleMemo","composerBodyMemo");

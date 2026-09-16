@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>上传区交互确认 v2 · personal-workbench</title>
+<style>
+:root{
+  --bg:#f3f6fa;--surface:#fff;--surface2:#edf3f9;--border:#dfe7ef;
+  --text:#263142;--muted:#63748a;--blue:#4f79a9;--blue-dark:#315f94;
+  --red:#a32d2d;--amber:#a96c1d;--green:#39745b;--purple:#534AB7;
+  --ink-soft:#96a3b4;--r:13px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Microsoft YaHei",sans-serif;
+  font-size:13.5px;line-height:1.6}
+.app{max-width:1120px;margin:auto;padding:18px}
+
+/* ---------- 顶部 ---------- */
+.top{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px}
+.top h1{font-size:16px;margin:0 0 3px;color:#2e4d70}
+.top p{margin:0;color:var(--muted);font-size:12.5px}
+.top .rule{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)}
+.top .rule b{color:var(--text);font-weight:600}
+
+/* ---------- Tab ---------- */
+.tabs{display:flex;gap:3px;margin:11px 0 14px;padding:5px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--r);overflow:auto}
+.tabs button{min-height:36px;white-space:nowrap;border:0;background:transparent;color:var(--muted);
+  border-radius:8px;padding:7px 14px;cursor:pointer;font:inherit;font-size:13px}
+.tabs button.active{background:#e9f1fa;color:var(--blue-dark);font-weight:600}
+
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:start}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+.card + .card{margin-top:12px}
+.card-head{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.4px;margin-bottom:10px}
+
+/* ================= 核心：单容器输入框 ================= */
+.cbox{
+  border:1px solid #cbd8e6;border-radius:14px;background:#fff;
+  padding:11px 13px 9px;
+  transition:border-color .18s,box-shadow .18s,background .18s;
+}
+.cbox:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px rgba(79,121,169,.13)}
+.cbox.dragover{border:1px dashed var(--purple);background:#faf9ff;box-shadow:0 0 0 3px rgba(83,74,183,.10)}
+.cbox textarea.plain{
+  display:block;width:100%;border:0;background:transparent;padding:0;resize:none;
+  font:inherit;font-size:13.5px;line-height:1.7;color:var(--text);outline:none;
+}
+.cbox textarea.plain::placeholder{color:#a9b4c2}
+
+/* 表单页的字段（轻边框，保持结构感） */
+.ff{margin-bottom:9px}
+.ff:last-of-type{margin-bottom:0}
+.ff > label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}
+.f-in,.f-sel,.f-area{width:100%;min-height:34px;padding:6px 9px;font:inherit;font-size:13px;
+  border:1px solid #e2e9f1;border-radius:8px;background:#fbfcfe;color:var(--text)}
+.f-area{min-height:54px;resize:vertical;line-height:1.6}
+.f-in:focus,.f-sel:focus,.f-area:focus{outline:none;border-color:var(--blue);background:#fff;box-shadow:0 0 0 3px rgba(79,121,169,.10)}
+.f2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+
+/* ---------- 缩略图 / 附件 chip ---------- */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.chips:empty{display:none}
+
+.shot{position:relative;width:46px;height:46px;border-radius:10px;overflow:hidden;
+  border:1px solid #e0daf3;background:#eef1f5;flex:0 0 auto}
+.shot .ph{display:flex;flex-direction:column;gap:3px;padding:5px;height:100%;background:#eceff4}
+.shot .ph i{display:block;height:5px;border-radius:3px}
+.shot .ph i.l{width:72%;background:#c9d2dd}
+.shot .ph i.r{width:56%;background:#b7cfe8;margin-left:auto}
+.shot .no{position:absolute;top:0;left:0;padding:0 5px;background:rgba(38,49,66,.78);
+  color:#fff;font-size:10px;font-weight:600;line-height:15px;
+  border-bottom-right-radius:7px;pointer-events:none}
+.shot .x{position:absolute;top:0;right:0;width:16px;height:16px;border:0;padding:0;
+  background:rgba(38,49,66,.62);color:#fff;font-size:11px;line-height:16px;cursor:pointer;
+  border-bottom-left-radius:6px}
+.shot .x:hover{background:var(--red)}
+.shot .mask{position:absolute;inset:0;display:grid;place-items:center;background:rgba(255,255,255,.75)}
+.shot .ok{position:absolute;bottom:0;right:0;width:15px;height:15px;background:var(--green);
+  color:#fff;font-size:10px;line-height:15px;text-align:center;border-top-left-radius:6px}
+.shot.err{border-color:#e8b4b4}
+.shot.err .bang{position:absolute;bottom:0;right:0;width:15px;height:15px;background:var(--red);
+  color:#fff;font-size:10px;line-height:15px;text-align:center;border-top-left-radius:6px}
+
+.spin{width:13px;height:13px;border:2px solid #d8d3ee;border-top-color:var(--purple);
+  border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+.achip{display:inline-flex;align-items:center;gap:7px;height:46px;max-width:210px;
+  padding:0 8px 0 9px;border:1px solid #e6edf5;border-radius:10px;background:#f7f9fc;flex:0 0 auto}
+.achip .k{font-size:9px;font-weight:700;border-radius:4px;padding:2px 4px;flex:0 0 auto;letter-spacing:.3px}
+.achip .k.pdf{background:#fdeceb;color:#a32d2d}
+.achip .k.xls{background:#e9f5ee;color:#39745b}
+.achip .k.doc{background:#e9f0fa;color:#315f94}
+.achip .k.md{background:#f0eefb;color:#534AB7}
+.achip .k.json{background:#fdf4e6;color:#a96c1d}
+.achip .n{font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.achip .s{font-size:10.5px;color:var(--ink-soft);flex:0 0 auto}
+.achip .x{border:0;background:transparent;color:#9aa8b8;cursor:pointer;font-size:14px;
+  line-height:1;padding:0 2px;flex:0 0 auto}
+.achip .x:hover{color:var(--red)}
+
+/* ---------- 工具栏 ---------- */
+.tbar{display:flex;align-items:center;gap:7px;margin-top:10px;padding-top:9px;border-top:1px solid #eef2f7}
+.tbar .gap{flex:1}
+.plus{position:relative;width:34px;height:34px;flex:0 0 auto;display:grid;place-items:center;padding:0;
+  border:1px solid #ddd5f0;border-radius:10px;background:#f8f6fd;color:var(--purple);cursor:pointer;
+  transition:background .16s,border-color .16s,transform .16s}
+.plus:hover{background:#efeafc;border-color:var(--purple)}
+.plus svg{width:16px;height:16px}
+.plus[disabled]{opacity:.5;cursor:not-allowed}
+/* 「AI」角标：贴右上角，白描边让它从按钮上「浮」起来 */
+.plus .ai{position:absolute;top:-5px;right:-6px;padding:1px 3px;border-radius:4px;
+  background:var(--purple);color:#fff;font-size:9px;font-weight:700;letter-spacing:.3px;
+  line-height:1.15;border:1.5px solid #fff;pointer-events:none;
+  box-shadow:0 1px 3px rgba(83,74,183,.28)}
+.attach .cnt{min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 4px;
+  background:#e9f1fa;color:var(--blue-dark);border-radius:99px;font-size:10.5px;font-weight:700}
+.attach .cnt[hidden]{display:none}
+.attach{display:inline-flex;align-items:center;gap:5px;min-height:34px;padding:0 11px;
+  border:1px solid #cbd8e6;border-radius:10px;background:#fff;color:#52657b;
+  font:inherit;font-size:12.5px;cursor:pointer;transition:background .16s,color .16s}
+.attach:hover{background:var(--surface2);color:var(--blue-dark)}
+.attach svg{width:14px;height:14px}
+.go{min-height:34px;padding:0 17px;border:1px solid var(--blue-dark);border-radius:10px;
+  background:var(--blue-dark);color:#fff;font:inherit;font-size:13px;cursor:pointer;
+  transition:background .16s}
+.go:hover{background:#2a5586}
+.go:disabled{background:#b8c6d6;border-color:#b8c6d6;cursor:not-allowed}
+
+/* ---------- 状态提示条 ---------- */
+.status{display:none;align-items:center;gap:6px;margin-top:8px;font-size:11.5px}
+.status.show{display:flex}
+.status.wait{color:var(--amber)}
+.status.err{color:var(--red)}
+.status.done{color:var(--green)}
+
+/* ---------- 解析结果（收录页） ---------- */
+.res{margin-top:9px;padding-top:9px;border-top:1px dashed #e6e2f4}
+.res-h{font-size:11.5px;font-weight:600;color:#3f3877;margin-bottom:5px}
+.ri{display:flex;align-items:flex-start;gap:6px;font-size:12.5px;padding:2px 0}
+.ri input{margin:3px 0 0}
+.ri .fig{font-size:9.5px;font-weight:700;background:#eef1f6;color:#7d8899;
+  border-radius:4px;padding:1px 4px;flex:0 0 auto;margin-top:2px}
+.tagcat{font-size:10px;font-weight:700;border-radius:4px;padding:1px 5px;flex:0 0 auto;margin-top:1px}
+.tagcat.task{background:#e9f0fa;color:#315f94}
+.tagcat.schedule{background:#f0eefb;color:#534AB7}
+.tagcat.memo{background:#fdf4e6;color:#a96c1d}
+.ri-t{flex:1;min-width:0}
+.ri-meta{font-size:11px;color:var(--ink-soft);margin-left:5px}
+.ri-q{font-size:11px;color:#8a84a8;padding-left:46px;line-height:1.5;margin-bottom:3px;
+  border-left:2px solid #ded6f2;padding-left:8px;margin-left:22px}
+
+/* ---------- 字段来源标记 ---------- */
+.from-img{display:inline-block;margin-left:5px;background:#efeafc;color:var(--purple);
+  border-radius:99px;padding:0 6px;font-size:10px;font-weight:600}
+
+/* ---------- 右侧 ---------- */
+.side h3{font-size:12.5px;margin:0 0 8px;color:#2e4d70}
+.side p{margin:0 0 8px;font-size:11.5px;color:var(--muted);line-height:1.6}
+.side ol{margin:0;padding-left:16px;font-size:11.5px;color:var(--muted);line-height:1.65}
+.side li{margin-bottom:4px}
+.side code{background:#eef2f7;border-radius:4px;padding:1px 4px;font-size:10.5px;color:#42505f}
+.cmp{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:8px}
+.cmp th,.cmp td{border:1px solid var(--border);padding:4px 6px;text-align:left}
+.cmp th{background:#f7f9fc;color:var(--muted);font-weight:600}
+.cmp td.a{color:#42505f}
+.cmp td.b{color:#3f3877}
+.pill{display:inline-block;font-size:10px;border-radius:99px;padding:1px 6px;font-weight:600}
+.pill.gray{background:#eceff4;color:#7d8899}
+.pill.purple{background:#efeafc;color:var(--purple)}
+.btn.sm{min-height:30px;padding:4px 10px;font-size:11.5px;border:1px solid #cbd8e6;
+  border-radius:8px;background:#fff;color:#52657b;cursor:pointer}
+.btn.sm:hover{background:var(--surface2)}
+
+@media(max-width:980px){.layout{grid-template-columns:1fr}}
+@media(max-width:640px){.f2{grid-template-columns:1fr}.app{padding:10px}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="top">
+    <h1>上传区交互确认 v2 · 单容器形态</h1>
+    <p>输入框左下角「＋」解析图片，右下角提交；附件收在提交按钮左边 —— 全部压进一个容器，不再单开区块。</p>
+    <div class="rule">
+      <div><b>＋ AI</b> 解析图片（识别内容，阻塞提交，最多 3 张）</div>
+      <div><b>附件</b> 任意文件，不解析、不阻塞，带计数</div>
+      <div><b>拖入</b> 图片走解析，其它文件进附件</div>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="inbox" class="active">收录</button>
+    <button data-tab="task">任务</button>
+    <button data-tab="event">日程</button>
+    <button data-tab="memo">备忘</button>
+  </nav>
+
+  <div class="layout">
+    <main>
+
+      <!-- ================= 收录 ================= -->
+      <section class="card panel" data-panel="inbox">
+        <div class="card-head">收录页</div>
+        <div class="cbox" data-drop>
+          <textarea class="plain" rows="2" placeholder="一句话记录，回车即收录并整理；图片可直接拖进来"></textarea>
+          <div class="chips" data-chips></div>
+          <div class="res" data-result hidden></div>
+          <div class="tbar">
+            <button class="plus" data-parse title="解析图片（AI 识别图中内容）">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              <span class="ai">AI</span>
+            </button>
+            <span class="gap"></span>
+            <button class="attach" data-attach>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              附件
+              <span class="cnt" hidden></span>
+            </button>
+            <button class="go" data-submit>收录</button>
+          </div>
+          <div class="status" data-status></div>
+        </div>
+      </section>
+
+      <!-- ================= 任务 ================= -->
+      <section class="card panel" data-panel="task" hidden>
+        <div class="card-head">任务页</div>
+        <div class="cbox" data-drop>
+          <div class="ff"><label>标题</label>
+            <input class="f-in" data-fill="taskTitle" placeholder="要做什么"></div>
+          <div class="ff f2">
+            <div><label>优先级</label>
+              <select class="f-sel"><option>P2</option><option>P1</option><option>P0</option><option>P3</option></select></div>
+            <div><label>截止日期</label>
+              <input class="f-in" data-fill="taskDue" placeholder="YYYY-MM-DD"></div>
+          </div>
+          <div class="ff"><label>备注</label>
+            <textarea class="f-area" rows="2" data-fill="taskNote" placeholder="补充说明；图片可直接拖进来解析"></textarea></div>
+          <div class="chips" data-chips></div>
+          <div class="tbar">
+            <button class="plus" data-parse title="解析图片（AI 识别图中内容）">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              <span class="ai">AI</span>
+            </button>
+            <span class="gap"></span>
+            <button class="attach" data-attach>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              附件
+              <span class="cnt" hidden></span>
+            </button>
+            <button class="go" data-submit>新建任务</button>
+          </div>
+          <div class="status" data-status></div>
+        </div>
+      </section>
+
+      <!-- ================= 日程 ================= -->
+      <section class="card panel" data-panel="event" hidden>
+        <div class="card-head">日程页</div>
+        <div class="cbox" data-drop>
+          <div class="ff"><label>标题</label>
+            <input class="f-in" data-fill="evTitle" placeholder="日程标题"></div>
+          <div class="ff f2">
+            <div><label>日期</label>
+              <input class="f-in" data-fill="evDate" placeholder="YYYY-MM-DD"></div>
+            <div><label>类型</label>
+              <select class="f-sel"><option>会议</option><option>深度块</option><option>其他</option></select></div>
+          </div>
+          <div class="ff f2">
+            <div><label>开始</label>
+              <input class="f-in" data-fill="evStart" placeholder="HH:mm"></div>
+            <div><label>结束</label>
+              <input class="f-in" data-fill="evEnd" placeholder="HH:mm"></div>
+          </div>
+          <div class="chips" data-chips></div>
+          <div class="tbar">
+            <button class="plus" data-parse title="解析图片（AI 识别图中内容）">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              <span class="ai">AI</span>
+            </button>
+            <span class="gap"></span>
+            <button class="attach" data-attach>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              附件
+              <span class="cnt" hidden></span>
+            </button>
+            <button class="go" data-submit>新建日程</button>
+          </div>
+          <div class="status" data-status></div>
+        </div>
+      </section>
+
+      <!-- ================= 备忘 ================= -->
+      <section class="card panel" data-panel="memo" hidden>
+        <div class="card-head">备忘页</div>
+        <div class="cbox" data-drop>
+          <div class="ff"><label>标题</label>
+            <input class="f-in" data-fill="memoTitle" placeholder="标题（可空）"></div>
+          <div class="ff"><label>正文</label>
+            <textarea class="f-area" rows="2" data-fill="memoContent" placeholder="正文（与标题至少写一项）；图片可直接拖进来"></textarea></div>
+          <div class="ff f2">
+            <div><label>标签</label><input class="f-in" placeholder="逗号分隔"></div>
+            <div><label>空间</label>
+              <select class="f-sel"><option>自动</option><option>工作</option><option>生活</option></select></div>
+          </div>
+          <div class="chips" data-chips></div>
+          <div class="tbar">
+            <button class="plus" data-parse title="解析图片（AI 识别图中内容）">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              <span class="ai">AI</span>
+            </button>
+            <span class="gap"></span>
+            <button class="attach" data-attach>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              附件
+              <span class="cnt" hidden></span>
+            </button>
+            <button class="go" data-submit>新建备忘</button>
+          </div>
+          <div class="status" data-status></div>
+        </div>
+      </section>
+
+    </main>
+
+    <aside class="side">
+      <div class="card">
+        <h3>两个入口的分工</h3>
+        <table class="cmp">
+          <tr><th></th><th>＋（左下）</th><th>附件</th></tr>
+          <tr><td>类型</td><td class="b">仅图片</td><td class="a">pdf/word/excel/md/json…</td></tr>
+          <tr><td>AI</td><td class="b">识别内容</td><td class="a">不调用</td></tr>
+          <tr><td>提交</td><td class="b">等解析完</td><td class="a">立即</td></tr>
+          <tr><td>失败</td><td class="b">可重试 / 移除</td><td class="a">不影响</td></tr>
+          <tr><td>下载</td><td class="b">支持</td><td class="a">支持</td></tr>
+        </table>
+        <p>两者都能拖进输入框：拖图片走解析，拖其它文件进附件。</p>
+      </div>
+
+      <div class="card">
+        <h3>提交按钮的状态机</h3>
+        <ol>
+          <li><span class="pill gray">就绪</span> 可点</li>
+          <li><span class="pill purple">解析中</span> 置灰「解析中…」</li>
+          <li><span class="pill gray">完成</span> 恢复可点</li>
+          <li><span class="pill gray">失败</span> 仍可点，按附件保存</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <h3>直接看某个状态</h3>
+        <ol>
+          <li><code>?demo=attach</code> 只加附件（看计数）</li>
+          <li><code>?demo=parsing</code> 解析中</li>
+          <li><code>?demo=multi</code> 两张图：一完成一解析中</li>
+          <li><code>?demo=failed</code> 解析失败</li>
+          <li><code>?demo=done</code> 解析完成</li>
+          <li><code>?tab=task&amp;demo=done</code> 表单回填</li>
+        </ol>
+        <button class="btn sm" id="reset" style="margin-top:7px">重置演示</button>
+      </div>
+
+      <div class="card">
+        <h3>待确认</h3>
+        <ol>
+          <li>「AI」角标位置与大小合适吗？</li>
+          <li>附件计数徽标够不够显眼？</li>
+          <li>解析图上限设 <b>3 张</b> 合适吗？</li>
+        </ol>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function () {
+  var ATTACH_SAMPLES = [
+    { name: '2026Q3销售数据.xlsx', size: '284 KB', kind: 'xls', tag: 'XLS' },
+    { name: '产品需求文档.pdf',    size: '1.2 MB', kind: 'pdf', tag: 'PDF' },
+    { name: '接口约定.md',         size: '18 KB',  kind: 'md',  tag: 'MD'  }
+  ];
+  var attachCursor = 0;
+  var MAX_SHOTS = 3;   /* 解析图片上限：一张图常有多条，3 张已能出十来个条目 */
+
+  function el(html) {
+    var d = document.createElement('div');
+    d.innerHTML = html.trim();
+    return d.firstChild;
+  }
+
+  function panelOf(node) { return node.closest('.panel'); }
+  function chipsOf(panel) { return panel.querySelector('[data-chips]'); }
+  function statusOf(panel) { return panel.querySelector('[data-status]'); }
+
+  function setStatus(panel, text, cls) {
+    var st = statusOf(panel);
+    st.className = 'status' + (text ? ' show ' + (cls || '') : '');
+    st.textContent = text || '';
+  }
+
+  function setSubmit(panel, state) {
+    var btn = panel.querySelector('[data-submit]');
+    if (!btn.dataset.label) btn.dataset.label = btn.textContent;
+    btn.disabled = state === 'wait';
+    btn.textContent = state === 'wait' ? '解析中…' : btn.dataset.label;
+  }
+
+  var RETRY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:12px;height:12px;vertical-align:-1px"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>';
+
+  /* ---------- 附件 chip ---------- */
+  function refreshAttachCount(panel) {
+    var cnt = panel.querySelector('.attach .cnt');
+    if (!cnt) return;
+    var n = chipsOf(panel).querySelectorAll('.achip').length;
+    cnt.hidden = n === 0;
+    cnt.textContent = n;
+  }
+
+  function addAttach(panel) {
+    var s = ATTACH_SAMPLES[attachCursor % ATTACH_SAMPLES.length];
+    attachCursor++;
+    var node = el(
+      '<span class="achip">' +
+        '<span class="k ' + s.kind + '">' + s.tag + '</span>' +
+        '<span class="n">' + s.name + '</span>' +
+        '<span class="s">' + s.size + '</span>' +
+        '<button class="x" title="移除">&times;</button>' +
+      '</span>');
+    node.querySelector('.x').addEventListener('click', function () {
+      node.remove();
+      refreshAttachCount(panel);
+    });
+    chipsOf(panel).appendChild(node);
+    refreshAttachCount(panel);
+    updateStatus(panel);
+  }
+
+  /* ---------- 解析图片（支持多张，上限 MAX_SHOTS） ---------- */
+  function renumber(panel) {
+    var shots = panel.querySelectorAll('.shot');
+    for (var i = 0; i < shots.length; i++) {
+      var no = shots[i].querySelector('.no');
+      if (no) no.textContent = '图' + (i + 1);
+    }
+  }
+
+  /* 只要还有任一张在解析，就不能提交 */
+  function refreshSubmitByShots(panel) {
+    var parsing = panel.querySelector('.shot .mask') !== null;
+    setSubmit(panel, parsing ? 'wait' : 'ready');
+  }
+
+  /* 统一状态：把所有图片的进度汇总成一条提示 */
+  function updateStatus(panel) {
+    var st = statusOf(panel);
+    var old = st.querySelector('.btn.sm');
+    if (old) old.remove();
+
+    var shots = panel.querySelectorAll('.shot');
+    if (!shots.length) { setStatus(panel, ''); return; }
+
+    var parsing = 0, failed = 0, done = 0;
+    for (var i = 0; i < shots.length; i++) {
+      if (shots[i].querySelector('.mask')) parsing++;
+      else if (shots[i].classList.contains('err')) failed++;
+      else done++;
+    }
+
+    if (parsing) { setStatus(panel, '正在解析 ' + parsing + ' 张图片，请稍候（约 3–10 秒）…', 'wait'); return; }
+    if (failed) {
+      /* 单张时说清原因（用户才知道该怎么办）；多张时给汇总 */
+      var msg = shots.length === 1
+        ? '解析失败：识别服务超时，图片仍会作为附件保存　'
+        : (done ? done + ' 张已完成，' : '') + failed + ' 张解析失败，仍会作为附件保存　';
+      setStatus(panel, msg, 'err');
+      st.appendChild(el('<button class="btn sm" type="button">' + RETRY_SVG + ' 重试</button>'));
+      return;
+    }
+    setStatus(panel, panel.dataset.panel === 'inbox'
+      ? '解析完成，请确认下方条目' : '解析完成，已填入上方字段', 'done');
+  }
+
+  /* mode: 省略=正常(2.2s) | instant | freeze | failed */
+  function addShot(panel, mode) {
+    var chips = chipsOf(panel);
+    var existing = chips.querySelectorAll('.shot').length;
+    if (existing >= MAX_SHOTS) { setStatus(panel, '最多 ' + MAX_SHOTS + ' 张解析图片'); return; }
+    var no = existing + 1;
+
+    var node = el(
+      '<span class="shot" data-shot>' +
+        '<span class="no">图' + no + '</span>' +
+        '<span class="ph"><i class="l"></i><i class="r"></i><i class="l"></i><i class="r"></i></span>' +
+        '<button class="x" title="移除">&times;</button>' +
+      '</span>');
+    chips.appendChild(node);
+    node.dataset.pool = String(no);   /* 记住内容索引：移除别的图后重编号时，内容不能跟着变 */
+
+    /* 移除这张图：它贡献的结果与回填要一并收回，其余图重编号后重建 */
+    node.querySelector('.x').addEventListener('click', function () {
+      node.remove();
+      rebuild(panel);
+    });
+
+    if (mode === 'freeze') {
+      node.appendChild(el('<span class="mask"><span class="spin"></span></span>'));
+    } else if (mode === 'failed') {
+      node.classList.add('err');
+      node.appendChild(el('<span class="bang">!</span>'));
+    } else {
+      node.appendChild(el('<span class="mask"><span class="spin"></span></span>'));
+      var finish = function () {
+        var m = node.querySelector('.mask'); if (m) m.remove();
+        node.appendChild(el('<span class="ok">&#10003;</span>'));
+        node.dataset.done = '1';
+        appendResult(panel, no, no);
+        refreshSubmitByShots(panel);
+        updateStatus(panel);
+      };
+      if (mode === 'instant') finish();
+      else setTimeout(finish, 2200);
+    }
+
+    renumber(panel);
+    refreshSubmitByShots(panel);
+    updateStatus(panel);
+  }
+
+  /* 移除图片后全量重建：结果 / 回填 / 编号都按当前剩余的图重算 */
+  function rebuild(panel) {
+    var box = panel.querySelector('[data-result]');
+    if (box) { box.innerHTML = ''; box.hidden = true; }
+    clearFills(panel);
+    renumber(panel);
+    var shots = panel.querySelectorAll('.shot');
+    for (var i = 0; i < shots.length; i++) {
+      if (shots[i].dataset.done === '1') {
+        appendResult(panel, Number(shots[i].dataset.pool), i + 1);
+      }
+    }
+    refreshSubmitByShots(panel);
+    updateStatus(panel);
+  }
+
+  function clearFills(panel) {
+    panel.querySelectorAll('[data-fill]').forEach(function (i) { i.value = ''; });
+    panel.querySelectorAll('[data-badge]').forEach(function (b) { b.remove(); });
+  }
+
+  /* ---------- 解析结果 ---------- */
+  var CAT_NAME = { task: '任务', schedule: '日程', memo: '备忘', knowledge: '知识' };
+  var RESULT_POOL = [
+    [ { cat: 'task', title: '给老王发销售数据', meta: '9-16 推算', def: true,
+        quote: '我：明天下午发你' },
+      { cat: 'memo', title: '销售数据相关讨论',
+        quote: '老王：那个销售数据你看下' } ],
+    [ { cat: 'schedule', title: '周五 14:00 项目评审会', meta: '9-18', def: true,
+        quote: '@所有人 周五下午两点评审，会议室 B' },
+      { cat: 'task', title: '评审前把设计稿发张工',
+        quote: '张工：设计稿记得提前发我' } ],
+    [ { cat: 'task', title: '报销上季度差旅发票', meta: '9-30', def: true,
+        quote: '财务：月底前务必提交发票' } ]
+  ];
+
+  function refreshResultHead(box) {
+    var h = box.querySelector('.res-h');
+    if (!h) return;
+    var rows = box.querySelectorAll('.ri');
+    var seen = {}, uniq = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var f = rows[i].dataset.from;
+      if (f && !seen[f]) { seen[f] = 1; uniq++; }
+    }
+    var checked = box.querySelectorAll('.ri input:checked').length;
+    h.textContent = '识别 ' + uniq + ' 张图 · 共 ' + rows.length + ' 条，已勾选 ' + checked + ' 条';
+  }
+
+  /* poolIdx = 取哪组识别结果（内容）；showNo = 当前显示第几张（会随移除重编号） */
+  function appendResult(panel, poolIdx, showNo) {
+    var box = panel.querySelector('[data-result]');
+    if (!box) { fillForm(panel); return; }   /* 表单入口没有结果列表，直接回填 */
+
+    var items = RESULT_POOL[(poolIdx - 1) % RESULT_POOL.length];
+    box.hidden = false;
+    if (!box.querySelector('.res-h')) box.insertAdjacentHTML('beforeend', '<div class="res-h"></div>');
+
+    items.forEach(function (it) {
+      box.insertAdjacentHTML('beforeend',
+        '<label class="ri" data-from="' + showNo + '"><input type="checkbox"' + (it.def ? ' checked' : '') + '>' +
+          '<span class="fig">图' + showNo + '</span>' +
+          '<span class="tagcat ' + it.cat + '">' + CAT_NAME[it.cat] + '</span>' +
+          '<span class="ri-t">' + it.title +
+            (it.meta ? '<span class="ri-meta">' + it.meta + '</span>' : '') + '</span></label>' +
+        '<div class="ri-q" data-from="' + showNo + '">「' + it.quote + '」</div>');
+    });
+    refreshResultHead(box);
+    fillForm(panel);
+  }
+
+  /* 表单入口：把识别结果回填进字段（只填空字段，不覆盖用户已输入的内容） */
+  function fillForm(panel) {
+    var map = {
+      task:  { taskTitle: '给老王发销售数据', taskDue: '2026-09-16',
+               taskNote: '老王催销售数据，答应明天下午发他' },
+      event: { evTitle: '与老王对齐销售数据', evDate: '2026-09-16', evStart: '14:00', evEnd: '14:30' },
+      memo:  { memoContent: '老王：那个销售数据你什么时候给我\n我：明天下午发你' }
+    }[panel.dataset.panel];
+    if (!map) return;
+
+    Object.keys(map).forEach(function (key) {
+      var input = panel.querySelector('[data-fill="' + key + '"]');
+      if (!input || input.value.trim() !== '') return;
+      input.value = map[key];
+      markFromImage(input, key);
+    });
+  }
+
+  function markFromImage(input, id) {
+    /* 宿主必须是「只含这一个字段」的容器。`.ff.f2` 里两个字段并排，
+       用 closest('.ff') 会把标签贴到同一行的另一个字段上（2026-09-16 截图发现：
+       「来自图片」挂到了"优先级"，实际回填的却是"截止日期"）。 */
+    var host = input.parentNode;
+    var label = host.querySelector('label');
+    if (!label || label.querySelector('[data-badge="' + id + '"]')) return;
+    label.appendChild(el('<span class="from-img" data-badge="' + id + '">来自图片</span>'));
+    input.addEventListener('input', function handler() {
+      var b = label.querySelector('[data-badge="' + id + '"]');
+      if (b) b.remove();
+      input.removeEventListener('input', handler);
+    });
+  }
+
+  /* ---------- Tab ---------- */
+  document.getElementById('tabs').addEventListener('click', function (e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    document.querySelectorAll('#tabs button').forEach(function (b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    document.querySelectorAll('.panel').forEach(function (p) {
+      p.hidden = p.dataset.panel !== btn.dataset.tab;
+    });
+  });
+
+  /* ---------- 点击 ---------- */
+  document.addEventListener('click', function (e) {
+    var plus = e.target.closest('[data-parse]');
+    if (plus) { addShot(panelOf(plus)); return; }
+    var at = e.target.closest('[data-attach]');
+    if (at) { addAttach(panelOf(at)); return; }
+  });
+
+  /* 勾选变化时同步表头计数 */
+  document.addEventListener('change', function (e) {
+    if (!e.target.closest || !e.target.closest('.ri input')) return;
+    var box = e.target.closest('[data-result]');
+    if (box) refreshResultHead(box);
+  });
+
+  /* ---------- 拖拽：整个输入框都是落点 ---------- */
+  document.querySelectorAll('[data-drop]').forEach(function (box) {
+    var panel = panelOf(box);
+    box.addEventListener('dragover', function (e) { e.preventDefault(); box.classList.add('dragover'); });
+    box.addEventListener('dragleave', function (e) {
+      if (box.contains(e.relatedTarget)) return;
+      box.classList.remove('dragover');
+    });
+    box.addEventListener('drop', function (e) {
+      e.preventDefault();
+      box.classList.remove('dragover');
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      /* 有真实文件时按类型分流；原型里无文件则图片走解析 */
+      if (f && !/^image\//.test(f.type)) addAttach(panel);
+      else addShot(panel);
+    });
+  });
+
+  /* ---------- 重置 ---------- */
+  document.getElementById('reset').addEventListener('click', function () {
+    attachCursor = 0;
+    document.querySelectorAll('.panel').forEach(function (p) {
+      chipsOf(p).innerHTML = '';
+      refreshAttachCount(p);
+      var r = p.querySelector('[data-result]');
+      if (r) { r.hidden = true; r.innerHTML = ''; }
+      clearFills(p);
+      setSubmit(p, 'ready');
+      setStatus(p, '');
+    });
+  });
+
+  /* ---------- URL 参数：?tab=task&demo=done ---------- */
+  document.querySelectorAll('[data-submit]').forEach(function (b) { b.dataset.label = b.textContent; });
+  (function bootDemo() {
+    var q = new URLSearchParams(location.search);
+    var tab = q.get('tab') || 'inbox';
+    var demo = q.get('demo');
+    if (tab !== 'inbox') {
+      var btn = document.querySelector('#tabs button[data-tab="' + tab + '"]');
+      if (btn) btn.click();
+    }
+    if (!demo) return;
+    var panel = document.querySelector('.panel[data-panel="' + tab + '"]');
+    if (!panel) return;
+    if (demo === 'attach' || demo === 'both') { addAttach(panel); addAttach(panel); }
+    if (demo === 'parsing') addShot(panel, 'freeze');
+    if (demo === 'failed') addShot(panel, 'failed');
+    if (demo === 'done' || demo === 'both') addShot(panel, 'instant');
+    if (demo === 'multi') { addShot(panel, 'instant'); addShot(panel, 'freeze'); }
+  })();
+})();
+</script>
+</body>
+</html>

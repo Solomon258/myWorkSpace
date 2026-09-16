@@ -1,5 +1,7 @@
 package com.icecode.workbench.schedule;
 
+import java.util.List;
+
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotBlank;
@@ -35,6 +37,13 @@ public class EventCreateRequest {
     @Max(value = 12, message = "重复期数最多 12 期")
     private Integer repeatWeeks;
 
+    /**
+     * 要挂到这条日程上的附件 id（先在 {@code POST /api/v1/attachments} 上传拿到 id）。
+     * 留空或 null = 没有附件，行为与加这个字段之前完全一致。
+     */
+    @Size(max = 9, message = "一条记录最多带 9 个附件")
+    private List<Long> attachmentIds;
+
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
     public String getType() { return type; }
@@ -47,4 +56,6 @@ public class EventCreateRequest {
     public void setEnd(String end) { this.end = end; }
     public Integer getRepeatWeeks() { return repeatWeeks; }
     public void setRepeatWeeks(Integer repeatWeeks) { this.repeatWeeks = repeatWeeks; }
+    public List<Long> getAttachmentIds() { return attachmentIds; }
+    public void setAttachmentIds(List<Long> attachmentIds) { this.attachmentIds = attachmentIds; }
 }

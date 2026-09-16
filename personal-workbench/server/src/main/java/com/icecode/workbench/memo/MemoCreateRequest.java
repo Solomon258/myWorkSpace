@@ -1,5 +1,7 @@
 package com.icecode.workbench.memo;
 
+import java.util.List;
+
 import javax.validation.constraints.Pattern;
 import javax.validation.constraints.Size;
 
@@ -25,6 +27,13 @@ public class MemoCreateRequest {
     @Pattern(regexp = "auto|work|life", message = "备忘空间只能填 自动(auto) / 工作(work) / 生活(life)")
     private String grp = "auto";
 
+    /**
+     * 要挂到这条备忘上的附件 id（先在 {@code POST /api/v1/attachments} 上传拿到 id）。
+     * 留空或 null = 没有附件，行为与加这个字段之前完全一致。
+     */
+    @Size(max = 9, message = "一条记录最多带 9 个附件")
+    private List<Long> attachmentIds;
+
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
     public String getTitle() { return title; }
@@ -33,4 +42,6 @@ public class MemoCreateRequest {
     public void setTags(String tags) { this.tags = tags; }
     public String getGrp() { return grp; }
     public void setGrp(String grp) { this.grp = grp; }
+    public List<Long> getAttachmentIds() { return attachmentIds; }
+    public void setAttachmentIds(List<Long> attachmentIds) { this.attachmentIds = attachmentIds; }
 }

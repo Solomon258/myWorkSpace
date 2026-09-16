@@ -39,10 +39,10 @@ class SchemaMigrationTest {
                 String.class);
 
         assertThat(tables).containsAll(Arrays.asList(
-                "activity_log", "ai_job", "app_config", "daily_plan", "daily_plan_item",
+                "activity_log", "ai_job", "app_config", "attachment", "daily_plan", "daily_plan_item",
                 "flyway_schema_history", "inbox_item", "knowledge_note", "memo", "pomodoro",
                 "schedule_event", "task", "wechat_msg_log"));
-        assertThat(tables).hasSize(13);
+        assertThat(tables).hasSize(14);
     }
 
     @Test
@@ -113,9 +113,41 @@ class SchemaMigrationTest {
     void recordsAllMigrationsExactlyOnce() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         Integer count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1 AND version IN ('1', '2', '3', '4', '5', '6', '7', '8')",
+                "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1 AND version IN ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10')",
                 Integer.class);
-        assertThat(count).isEqualTo(8);
+        assertThat(count).isEqualTo(10);
+    }
+
+    /**
+     * V9 的核心意图：任务带上工作 / 生活分组，且**存量任务不会因为升级而消失**。
+     *
+     * <p>用户的要求是「默认选择工作」，也就是打开任务页先看到工作事项。如果这一列留空，
+     * 默认筛选「工作」时老任务既不属于工作也不属于生活，会集体从默认视图里消失 ——
+     * 攒了几百条任务的人升级完只会以为数据丢了。所以这一列必须 NOT NULL + DEFAULT 'work'。</p>
+     */
+    @Test
+    void givesEveryTaskAGroupAndNeverLeavesItNull() {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+
+        // 列存在、NOT NULL、默认值是 work
+        assertThat(jdbc.queryForMap(
+                "SELECT dflt_value, \"notnull\" FROM pragma_table_info('task') WHERE name='grp'"))
+                .containsEntry("dflt_value", "'work'")
+                .containsEntry("notnull", 1);
+
+        // 不写 grp 的插入必须落到 work（这正是升级时存量数据走的那条路）
+        jdbc.update("INSERT INTO task(title, created_at) VALUES (?, ?)", "没写分组的老任务", "2026-09-14 10:00:00");
+        assertThat(jdbc.queryForObject(
+                "SELECT grp FROM task WHERE title=?", String.class, "没写分组的老任务")).isEqualTo("work");
+
+        // 显式给 life 也要能存进去（而不是被默认值吃掉）
+        jdbc.update("INSERT INTO task(title, grp, created_at) VALUES (?, ?, ?)", "买奶粉", "life", "2026-09-14 10:00:00");
+        assertThat(jdbc.queryForObject(
+                "SELECT grp FROM task WHERE title=?", String.class, "买奶粉")).isEqualTo("life");
+
+        assertThat(jdbc.queryForObject(
+                "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_task_grp'", String.class))
+                .isEqualTo("idx_task_grp");
     }
 
     /**
@@ -194,5 +226,79 @@ class SchemaMigrationTest {
         assertThat(pending).isEqualTo(1);
 
         jdbc.update("DELETE FROM schedule_event WHERE title=?", "时间待定的日程");
+    }
+
+    /**
+     * V10 的核心意图之一：**存量收录条目不会因为加了 origin 而变成「图片条目」**。
+     *
+     * <p>历史数据全是手打/转发进来的文字。如果 origin 这一列允许为空、或者默认值写成 'image'，
+     * 那么升级之后所有老条目都会落进「必须人工确认、不参与一键批量确认」那一档 ——
+     * 用户会发现自己的一键确认按钮突然失灵，而界面上完全看不出原因。</p>
+     */
+    @Test
+    void treatsHistoricalInboxItemsAsTextNotImage() {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+
+        assertThat(jdbc.queryForMap(
+                "SELECT dflt_value, \"notnull\" FROM pragma_table_info('inbox_item') WHERE name='origin'"))
+                .containsEntry("dflt_value", "'text'")
+                .containsEntry("notnull", 1);
+
+        // 不写 origin 的插入必须落到 text（升级时存量数据走的就是这条路）
+        jdbc.update("INSERT INTO inbox_item(raw_content, content_type, source, status, created_at, updated_at, is_demo)"
+                + " VALUES (?, 'text', 'web', 'processed', ?, ?, 0)", "一条老收录", "2026-09-16 10:00:00", "2026-09-16 10:00:00");
+        assertThat(jdbc.queryForObject(
+                "SELECT origin FROM inbox_item WHERE raw_content=?", String.class, "一条老收录")).isEqualTo("text");
+
+        // 解析相关的四列必须存在，且 raw_truncated 默认 0（存量数据没有被截断过）
+        assertThat(jdbc.queryForMap(
+                "SELECT dflt_value, \"notnull\" FROM pragma_table_info('inbox_item') WHERE name='raw_truncated'"))
+                .containsEntry("dflt_value", "0")
+                .containsEntry("notnull", 1);
+        for (String column : new String[] {"parse_status", "parse_error", "source_attachment_id"}) {
+            assertThat(jdbc.queryForList(
+                    "SELECT name FROM pragma_table_info('inbox_item') WHERE name=?", String.class, column))
+                    .as("inbox_item 应有 " + column + " 列").containsExactly(column);
+        }
+
+        jdbc.update("DELETE FROM inbox_item WHERE raw_content=?", "一条老收录");
+    }
+
+    /**
+     * V10 的核心意图之二：附件的归属要么两者都有、要么两者都无。
+     *
+     * <p>「有 owner_id 却没有 owner_type」这种半绑定状态会让附件既查不出来
+     * （按 owner 查要两个字段）、也不在孤儿清理的范围内（要求 owner_id IS NULL）——
+     * 它会在盘上永远留着，而且谁都不知道它属于谁。</p>
+     */
+    @Test
+    void rejectsHalfBoundAttachmentOwner() {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        String now = "2026-09-16 10:00:00";
+
+        // 只给 owner_id，不给 owner_type -> 拦下
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO attachment(owner_id, file_name, mime_type, byte_size, sha256, created_at)"
+                        + " VALUES (?, ?, ?, ?, ?, ?)", 1L, "abc.png", "image/png", 100L, "deadbeef", now))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasRootCauseInstanceOf(SQLiteException.class)
+                .hasMessageContaining("chk_attachment_owner_pair");
+
+        // 两者都不给（待绑定）是合法状态：上传完成但还没提交表单就是这个形态
+        jdbc.update("INSERT INTO attachment(file_name, mime_type, byte_size, sha256, created_at)"
+                + " VALUES (?, ?, ?, ?, ?)", "pending.png", "image/png", 100L, "cafebabe", now);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM attachment WHERE file_name='pending.png' AND owner_id IS NULL", Integer.class))
+                .isEqualTo(1);
+
+        // owner_type 不在白名单里 -> 拦下
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO attachment(owner_type, owner_id, file_name, mime_type, byte_size, sha256, created_at)"
+                        + " VALUES (?, ?, ?, ?, ?, ?, ?)", "unknown_entity", 1L, "x.png", "image/png", 1L, "aa", now))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasRootCauseInstanceOf(SQLiteException.class)
+                .hasMessageContaining("chk_attachment_owner_type");
+
+        jdbc.update("DELETE FROM attachment WHERE file_name IN ('pending.png')");
     }
 }

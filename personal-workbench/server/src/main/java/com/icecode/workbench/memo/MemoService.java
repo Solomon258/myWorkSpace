@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.icecode.workbench.attachment.AttachmentService;
 import com.icecode.workbench.auth.AppConfigRepository;
 import com.icecode.workbench.auth.AuthConstants;
 import com.icecode.workbench.common.BizException;
@@ -27,11 +28,14 @@ public class MemoService {
 
     private final MemoRepository memoRepository;
     private final AppConfigRepository configRepository;
+    private final AttachmentService attachmentService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public MemoService(MemoRepository memoRepository, AppConfigRepository configRepository) {
+    public MemoService(MemoRepository memoRepository, AppConfigRepository configRepository,
+                       AttachmentService attachmentService) {
         this.memoRepository = memoRepository;
         this.configRepository = configRepository;
+        this.attachmentService = attachmentService;
     }
 
     public List<MemoVO> list(String grp, String keyword, boolean includeArchived) {
@@ -57,6 +61,7 @@ public class MemoService {
         String url = extractUrl(content);
         String now = now();
         long id = memoRepository.insert(title, content, url, writeTags(tags), grp, now);
+        attachmentService.bindAll(request.getAttachmentIds(), "memo", id);
         memoRepository.insertActivity("memo", grp, "保存备忘「" + title + "」（" + ("work".equals(grp) ? "工作" : "生活") + "）", now);
         return get(id);
     }

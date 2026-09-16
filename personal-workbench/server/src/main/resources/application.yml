@@ -11,6 +11,15 @@ server:
 spring:
   application:
     name: personal-workbench
+  servlet:
+    multipart:
+      # 全局档位取「文档」这一档；图片的 10MB 由 AttachmentService 按类型再判一次
+      # —— Spring 这里是全局配置，做不到按文件类型区分上限。
+      max-file-size: 100MB
+      # 前端多选是循环调用（一次请求一个文件），留一点余量给 multipart 边界即可
+      max-request-size: 110MB
+      # 超过 1MB 就落到临时文件，避免大附件整个读进内存
+      file-size-threshold: 1MB
   datasource:
     driver-class-name: org.sqlite.JDBC
   flyway:

@@ -98,35 +98,105 @@ public class ObsidianVaultService {
 
     /** 写入 Vault/00-Inbox/&lt;标题&gt;.md，返回相对路径；Vault 未配置或写入失败返回 null。 */
     public String writeInboxNote(String title, String content, List<String> tags, String now) {
+        return writeAt(INBOX_DIR, title, content, tags, now, true, null);
+    }
+
+    /**
+     * 写入 Vault/&lt;relativeDir&gt;/&lt;标题&gt;.md，供「文章收藏」使用，返回相对路径。
+     *
+     * <p>与 {@link #writeInboxNote} 只有两处差异，目的是让新笔记和用户 Vault 里已有的文章
+     * 长得一模一样（对齐 2026-09-14 实测的 46 篇存量笔记的形态）：
+     * <ul>
+     *   <li>frontmatter <b>只写 tags</b>，不写 created/source；</li>
+     *   <li>正文首行是 {@code [原文链接](url)}，且<b>不写 H1</b> —— 文件名本身就是标题。</li>
+     * </ul>
+     *
+     * <p>重名不覆盖：沿用加序号另存（{@code 标题-2.md}），这样重复分享同一篇文章
+     * 会得到一个新文件而不是把旧内容冲掉。
+     *
+     * @param relativeDir 相对 Vault 的目录，如 {@code 知识体系/得到/吴军·教育的方法50讲}；
+     *                    为空或非法时退化为 {@link #INBOX_DIR}
+     * @param sourceUrl   原文链接；为空则不写链接行
+     */
+    public String writeArticleNote(String relativeDir, String title, String content,
+                                   List<String> tags, String sourceUrl, String now) {
+        return writeAt(relativeDir, title, content, tags, now, false, sourceUrl);
+    }
+
+    /**
+     * 写入的唯一实现。{@code inboxStyle} 决定 frontmatter 形态（true = 收录风格，带 created/source 和 H1；
+     * false = 文章风格，只有 tags + 原文链接行）。两种形态共用重名加序号与 invalidateIndex 逻辑，
+     * 避免「写 Vault」这件事出现第二份实现。
+     */
+    private String writeAt(String relativeDir, String title, String content, List<String> tags,
+                           String now, boolean inboxStyle, String sourceUrl) {
         Path vault = vaultPath();
         if (vault == null || !Files.isDirectory(vault)) return null;
+        Path dir = resolveInsideVault(vault, relativeDir);
+        if (dir == null) return null;
         try {
-            Path inboxDir = vault.resolve(INBOX_DIR);
-            Files.createDirectories(inboxDir);
+            Files.createDirectories(dir);
             String baseName = sanitizeFileName(title);
-            Path target = inboxDir.resolve(baseName + ".md");
+            Path target = dir.resolve(baseName + ".md");
             int suffix = 2;
             while (Files.exists(target) && suffix < 100) {
-                target = inboxDir.resolve(baseName + "-" + suffix + ".md");
+                target = dir.resolve(baseName + "-" + suffix + ".md");
                 suffix++;
             }
             StringBuilder markdown = new StringBuilder();
-            markdown.append("---\ncreated: ").append(now).append("\nsource: personal-workbench\n");
+            markdown.append("---\n");
+            if (inboxStyle) {
+                markdown.append("created: ").append(now).append("\nsource: personal-workbench\n");
+            }
             if (tags != null && !tags.isEmpty()) {
                 markdown.append("tags:\n");
                 for (String tag : tags) markdown.append("  - ").append(tag).append("\n");
             }
-            markdown.append("---\n\n# ").append(title).append("\n\n")
-                    .append(content == null ? "" : content).append("\n");
+            markdown.append("---\n\n");
+            if (inboxStyle) markdown.append("# ").append(title).append("\n\n");
+            if (sourceUrl != null && !sourceUrl.trim().isEmpty()) {
+                markdown.append("[原文链接](").append(sourceUrl.trim()).append(")\n\n");
+            }
+            markdown.append(content == null ? "" : content).append("\n");
             Files.write(target, markdown.toString().getBytes(StandardCharsets.UTF_8));
             // 刚写进去的笔记必须立刻可检索：不等 TTL 到期，主动作废快照。
             // 这是「知识库问答里搜不到刚收藏的笔记」的唯一防线。
             invalidateIndex();
-            return INBOX_DIR + "/" + target.getFileName().toString();
+            String prefix = vault.relativize(dir).toString().replace('\\', '/');
+            return prefix.isEmpty() ? target.getFileName().toString()
+                    : prefix + "/" + target.getFileName().toString();
         } catch (Exception exception) {
             LOGGER.warn("写入 Vault 笔记失败：{}", exception.getMessage());
             return null;
         }
+    }
+
+    /**
+     * 把调用方给的目标目录安全地解析到 Vault 内部。
+     *
+     * <p>目录名来自外部网页（课程名、作者名），属于<b>不可信输入</b>，所以这里必须做两件事：
+     * 逐段清洗非法字符，再校验 {@code normalize()} 之后没有逃出 Vault 根 ——
+     * 否则一个形如 {@code ../../..} 的课程名就能把笔记写到 Vault 之外，
+     * 而调用方（解析外部网页）完全无法察觉。
+     */
+    private Path resolveInsideVault(Path vault, String relativeDir) {
+        if (relativeDir == null || relativeDir.trim().isEmpty()) return vault.resolve(INBOX_DIR);
+        List<String> segments = new ArrayList<String>();
+        for (String segment : relativeDir.replace('\\', '/').split("/")) {
+            String safe = segment.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "").trim();
+            if (safe.isEmpty() || ".".equals(safe) || "..".equals(safe)) continue;
+            if (safe.length() > 60) safe = safe.substring(0, 60).trim();
+            if (!safe.isEmpty()) segments.add(safe);
+        }
+        if (segments.isEmpty()) return vault.resolve(INBOX_DIR);
+        Path resolved = vault;
+        for (String segment : segments) resolved = resolved.resolve(segment);
+        resolved = resolved.normalize();
+        if (!resolved.startsWith(vault)) {
+            LOGGER.warn("拒绝越出 Vault 的目标目录：{}", relativeDir);
+            return null;
+        }
+        return resolved;
     }
 
     /**
@@ -319,6 +389,93 @@ public class ObsidianVaultService {
                 .replace("==", "").replaceAll("%%[^%]*%%", "").trim();
         if (text.length() < 20) return;
         chunks.add(new VaultChunk(file, heading, text.length() > 1200 ? text.substring(0, 1200) : text));
+    }
+
+    /** Vault 里一篇现成的 Markdown 笔记（存量导入用）。 */
+    public static final class VaultNote {
+        /** Vault 内相对路径，正斜杠分隔，如 {@code 知识体系/得到/吴军·逻辑思维训练50讲/01｜….md}。 */
+        public final String relativePath;
+        /** 文件名去掉 .md —— 用户既有笔记没有 H1，标题就是文件名。 */
+        public final String title;
+        /** 去掉 frontmatter 之后的正文。 */
+        public final String content;
+        /** frontmatter 里的 tags，可能为空。 */
+        public final List<String> tags;
+
+        VaultNote(String relativePath, String title, String content, List<String> tags) {
+            this.relativePath = relativePath;
+            this.title = title;
+            this.content = content;
+            this.tags = tags;
+        }
+    }
+
+    /**
+     * 列出 Vault 某个目录下现成的 Markdown 笔记，用于把用户已有的笔记回填进知识库。
+     *
+     * <p>只读，不移动也不修改任何文件 —— 这些笔记是用户自己的资产，导入只是「让工作台知道
+     * 它们存在」，感知的方式就是往 knowledge_note 里写一条指向它的记录。
+     *
+     * <p>剪枝规则与索引扫描保持一致（隐藏目录跳过），否则又会撞上 Vault 里那个 5665 条的
+     * Python 虚拟环境。
+     */
+    public List<VaultNote> listVaultNotes(String relativeDir) {
+        Path vault = vaultPath();
+        if (vault == null || !Files.isDirectory(vault)) return new ArrayList<VaultNote>();
+        final Path root = resolveInsideVault(vault, relativeDir);
+        if (root == null || !Files.isDirectory(root)) return new ArrayList<VaultNote>();
+
+        final List<VaultNote> notes = new ArrayList<VaultNote>();
+        try {
+            Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
+                @Override public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                    return isHiddenDirectory(root, dir) ? FileVisitResult.SKIP_SUBTREE : FileVisitResult.CONTINUE;
+                }
+                @Override public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                    if (!isIndexableMarkdown(file, attrs)) return FileVisitResult.CONTINUE;
+                    VaultNote note = readNote(vault, file);
+                    if (note != null) notes.add(note);
+                    return FileVisitResult.CONTINUE;
+                }
+                @Override public FileVisitResult visitFileFailed(Path file, IOException exception) {
+                    return FileVisitResult.CONTINUE;
+                }
+                @Override public FileVisitResult postVisitDirectory(Path dir, IOException exception) {
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException exception) {
+            LOGGER.warn("扫描 Vault 目录失败：{}", exception.getMessage());
+        }
+        return notes;
+    }
+
+    private VaultNote readNote(Path vault, Path file) {
+        try {
+            List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+            List<String> tags = new ArrayList<String>();
+            int start = 0;
+            if (!lines.isEmpty() && "---".equals(lines.get(0).trim())) {
+                start = 1;
+                while (start < lines.size() && !"---".equals(lines.get(start).trim())) {
+                    String line = lines.get(start).trim();
+                    if (line.startsWith("- ")) tags.add(line.substring(2).trim());
+                    start++;
+                }
+                start++; // 跳过收尾的 ---
+            }
+            StringBuilder body = new StringBuilder();
+            for (int i = start; i < lines.size(); i++) body.append(lines.get(i)).append('\n');
+
+            String fileName = file.getFileName().toString();
+            String title = fileName.toLowerCase().endsWith(".md")
+                    ? fileName.substring(0, fileName.length() - 3) : fileName;
+            String relative = vault.relativize(file).toString().replace('\\', '/');
+            return new VaultNote(relative, title, body.toString().trim(), tags);
+        } catch (Exception exception) {
+            LOGGER.warn("读取 Vault 笔记失败：{}：{}", file, exception.getMessage());
+            return null;
+        }
     }
 
     private String sanitizeFileName(String title) {

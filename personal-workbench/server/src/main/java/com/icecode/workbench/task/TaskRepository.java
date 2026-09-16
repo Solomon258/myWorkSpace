@@ -28,6 +28,7 @@ public class TaskRepository {
             record.deep = rs.getInt("is_deep_work") == 1;
             record.blocking = rs.getInt("is_blocking") == 1;
             record.note = rs.getString("note");
+            record.grp = rs.getString("grp");
             record.postponed = rs.getInt("postponed");
             long sourceInboxId = rs.getLong("source_inbox_id");
             record.sourceInboxId = rs.wasNull() ? null : Long.valueOf(sourceInboxId);
@@ -43,7 +44,7 @@ public class TaskRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public List<TaskRecord> find(String status, String priority, String keyword, String dueFrom,
+    public List<TaskRecord> find(String status, String priority, String grp, String keyword, String dueFrom,
                                  String dueTo, int page, int size) {
         StringBuilder sql = new StringBuilder("SELECT * FROM task WHERE deleted = 0");
         List<Object> args = new ArrayList<Object>();
@@ -54,6 +55,11 @@ public class TaskRepository {
         if (notBlank(priority)) {
             sql.append(" AND priority = ?");
             args.add(priority);
+        }
+        // 工作 / 生活筛选（V9）。空值 = 「全部」，所以不传 grp 时不会额外收窄结果。
+        if (notBlank(grp)) {
+            sql.append(" AND grp = ?");
+            args.add(grp);
         }
         if (notBlank(keyword)) {
             sql.append(" AND (LOWER(title) LIKE ? ESCAPE '\\' OR LOWER(COALESCE(description,'')) LIKE ? ESCAPE '\\' OR LOWER(COALESCE(note,'')) LIKE ? ESCAPE '\\')");
@@ -104,7 +110,7 @@ public class TaskRepository {
         KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbcTemplate.update(connection -> {
             java.sql.PreparedStatement statement = connection.prepareStatement(
-                    "INSERT INTO task(title, description, priority, status, due_date, is_deep_work, is_blocking, note, source_inbox_id, created_at, updated_at, is_demo) VALUES (?,?,?,'todo',?,?,?,?,?,?,?,?)",
+                    "INSERT INTO task(title, description, priority, status, due_date, is_deep_work, is_blocking, note, grp, source_inbox_id, created_at, updated_at, is_demo) VALUES (?,?,?,'todo',?,?,?,?,?,?,?,?,?)",
                     java.sql.Statement.RETURN_GENERATED_KEYS);
             statement.setString(1, request.getTitle().trim());
             statement.setString(2, trimToNull(request.getDescription()));
@@ -113,20 +119,23 @@ public class TaskRepository {
             statement.setInt(5, request.isDeep() ? 1 : 0);
             statement.setInt(6, request.isBlocking() ? 1 : 0);
             statement.setString(7, trimToNull(request.getNote()));
-            if (sourceInboxId == null) statement.setNull(8, java.sql.Types.INTEGER);
-            else statement.setLong(8, sourceInboxId.longValue());
-            statement.setString(9, now);
+            // `grp` 必须已经在 Service 层落定（判定或校验过），Repository 只负责存。
+            // 这里兜一个 'work' 是为了让「直接用 Repository 建任务」的老代码不会写进 NULL —— 见下一条注释。
+            statement.setString(8, request.getGrp() == null || request.getGrp().trim().isEmpty() ? "work" : request.getGrp());
+            if (sourceInboxId == null) statement.setNull(9, java.sql.Types.INTEGER);
+            else statement.setLong(9, sourceInboxId.longValue());
             statement.setString(10, now);
-            statement.setInt(11, demo ? 1 : 0);
+            statement.setString(11, now);
+            statement.setInt(12, demo ? 1 : 0);
             return statement;
         }, keyHolder);
         return keyHolder.getKey().longValue();
     }
 
     public void update(TaskRecord task) {
-        jdbcTemplate.update("UPDATE task SET title=?, description=?, priority=?, due_date=?, is_deep_work=?, is_blocking=?, note=?, updated_at=? WHERE id=? AND deleted=0",
+        jdbcTemplate.update("UPDATE task SET title=?, description=?, priority=?, due_date=?, is_deep_work=?, is_blocking=?, note=?, grp=?, updated_at=? WHERE id=? AND deleted=0",
                 task.title, task.description, task.priority, task.due, task.deep ? 1 : 0,
-                task.blocking ? 1 : 0, task.note, task.updatedAt, task.id);
+                task.blocking ? 1 : 0, task.note, task.grp, task.updatedAt, task.id);
     }
 
     public void updateStatus(long id, String status, String completedAt, String updatedAt) {

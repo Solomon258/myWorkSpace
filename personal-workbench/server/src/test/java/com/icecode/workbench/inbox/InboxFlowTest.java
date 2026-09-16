@@ -318,6 +318,175 @@ class InboxFlowTest {
                 "SELECT COUNT(*) FROM schedule_event WHERE source_inbox_id=? AND event_date IS NULL", Integer.class, id)).isEqualTo(1);
     }
 
+    // ------------------------------------------------------------ 图片条目（阶段二）
+
+    /**
+     * 图片条目**永远不参与**一键批量确认，哪怕置信度是 0.95。
+     *
+     * <p>这条用例守的是用户最初的那句抱怨：「传张邮件截图，还没看到解析结果，
+     * 任务就被建好了」。截图是整张图，里面往往同时写着日期、负责人、几件事 ——
+     * 视觉模型给 0.9 的置信度也不代表它读对了，用户必须**看过**才能落库。
+     * 所以判定条件是 {@code origin='image'}，与置信度无关。</p>
+     */
+    @Test
+    void imageItemsNeverJoinHighConfidenceBatchConfirmEvenWhenConfident() throws Exception {
+        long id = insertImageItem("会议通知：周三 14:00 需求评审", 0.95);
+
+        mockMvc.perform(post("/api/v1/inbox/confirm-high-confidence").session(session))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(0));
+
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM inbox_item WHERE id=?", String.class, id))
+                .isEqualTo("processed");
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM schedule_event", Integer.class)).isEqualTo(0);
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM task", Integer.class)).isEqualTo(0);
+    }
+
+    /** 图片条目虽然不进批量确认，但**人工逐条确认必须照常可用**（低置信度也不拦）。 */
+    @Test
+    void imageItemStillAllowsManualConfirm() throws Exception {
+        long id = insertImageItem("会议通知：周三 14:00 需求评审", 0.55);
+
+        mockMvc.perform(post("/api/v1/inbox/{id}/confirm", id).session(session)
+                        .contentType("application/json")
+                        .content("{\"category\":\"schedule\",\"title\":\"需求评审\",\"eventType\":\"meeting\",\"due\":\"2026-09-23\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.category").value("schedule"));
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM schedule_event WHERE source_inbox_id=?", Integer.class, id)).isEqualTo(1);
+    }
+
+    /**
+     * 纯文本的条目不受影响 —— 排除规则必须**只**盯 {@code origin='image'}，
+     * 不能顺手把整条链路关掉。
+     */
+    @Test
+    void textItemsStillJoinHighConfidenceBatchConfirm() throws Exception {
+        createInbox("明天下午3点约业务方对齐Q4需求评审");
+        mockMvc.perform(post("/api/v1/inbox/classify").session(session)).andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/inbox/confirm-high-confidence").session(session))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(1));
+    }
+
+    /**
+     * 批量确认是**一个事务**：其中一条不符合校验，整体回滚，不留半成品。
+     *
+     * <p>用 {@code GET} 数条数验证，而不是看响应 —— 只看响应的话，「部分成功」
+     * 和「全失败」都是 4xx，看不出区别。</p>
+     */
+    @Test
+    void batchConfirmRollsBackEverythingWhenOneItemIsInvalid() throws Exception {
+        long okId = createInbox("开会");
+        mockMvc.perform(post("/api/v1/inbox/classify").session(session)).andExpect(status().isOk());
+
+        String body = "{\"items\":["
+                + "{\"inboxId\":" + okId + ",\"confirm\":{\"category\":\"task\",\"title\":\"开会\",\"priority\":\"P2\"}},"
+                // 第二条的标题超出 @Size(max=200)：整批必须回滚
+                + "{\"inboxId\":" + okId + ",\"confirm\":{\"category\":\"task\",\"title\":\""
+                + repeat('长', 201) + "\",\"priority\":\"P2\"}}"
+                + "]}";
+        mockMvc.perform(post("/api/v1/inbox/confirm-items").session(session)
+                        .contentType("application/json").content(body))
+                .andExpect(status().isBadRequest());
+
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM task", Integer.class)).isEqualTo(0);
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM inbox_item WHERE id=?", String.class, okId))
+                .isEqualTo("processed");
+    }
+
+    @Test
+    void batchConfirmReturnsOneEntityPerItem() throws Exception {
+        long first = createInbox("开会");
+        long second = createInbox("买东西");
+        mockMvc.perform(post("/api/v1/inbox/classify").session(session)).andExpect(status().isOk());
+
+        String body = "{\"items\":["
+                + "{\"inboxId\":" + first + ",\"confirm\":{\"category\":\"task\",\"title\":\"开会\",\"priority\":\"P2\"}},"
+                + "{\"inboxId\":" + second + ",\"confirm\":{\"category\":\"memo\",\"title\":\"买东西\"}}"
+                + "]}";
+        mockMvc.perform(post("/api/v1/inbox/confirm-items").session(session)
+                        .contentType("application/json").content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2));
+
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM task", Integer.class)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM memo", Integer.class)).isEqualTo(1);
+    }
+
+    /** 超过 50 条要报 1002 并说明上限 —— 一次几百条的确认会把池里的 4 个连接全占死。 */
+    @Test
+    void batchConfirmRejectsOverlongList() throws Exception {
+        StringBuilder body = new StringBuilder("{\"items\":[");
+        for (int i = 0; i < 51; i++) {
+            if (i > 0) {
+                body.append(',');
+            }
+            body.append("{\"inboxId\":1,\"confirm\":{\"category\":\"task\",\"title\":\"x\",\"priority\":\"P2\"}}");
+        }
+        body.append("]}");
+        mockMvc.perform(post("/api/v1/inbox/confirm-items").session(session)
+                        .contentType("application/json").content(body.toString()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1002));
+    }
+
+    /** 解析进度要能查到「有几条在跑、几条失败」，否则前端只能靠猜。 */
+    @Test
+    void parseStatusReportsRunningFailedAndSuccessCounts() throws Exception {
+        insertImageItem("解析中的图", 0.0);
+        jdbcTemplate.update("UPDATE inbox_item SET parse_status='running' WHERE raw_content='解析中的图'");
+        insertImageItem("失败的图", 0.0);
+        jdbcTemplate.update("UPDATE inbox_item SET parse_status='failed', parse_error='这张图里没读出任何内容'"
+                + " WHERE raw_content='失败的图'");
+        insertImageItem("成功的图", 0.0);
+        jdbcTemplate.update("UPDATE inbox_item SET parse_status='success' WHERE raw_content='成功的图'");
+
+        mockMvc.perform(get("/api/v1/inbox/parse-status").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.running").value(1))
+                .andExpect(jsonPath("$.data.failed").value(1))
+                .andExpect(jsonPath("$.data.success").value(1))
+                .andExpect(jsonPath("$.data.lastError").value("这张图里没读出任何内容"));
+    }
+
+    /** 未配置视觉模型时触发解析：同步路径就要报错并指向设置页，不能静默 202。 */
+    @Test
+    void parseImagesWithoutVisionModelIsRejectedSynchronously() throws Exception {
+        mockMvc.perform(post("/api/v1/inbox/parse-images").session(session)
+                        .contentType("application/json")
+                        .content("{\"attachmentIds\":[1],\"source\":\"web\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(3015));
+    }
+
+    @Test
+    void parseImagesRejectsEmptyAttachmentList() throws Exception {
+        mockMvc.perform(post("/api/v1/inbox/parse-images").session(session)
+                        .contentType("application/json")
+                        .content("{\"attachmentIds\":[],\"source\":\"web\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1002));
+    }
+
+    /** 直接插一条伪装成「视觉模型刚写完」的图片条目，绕过解析（不能真调模型）。 */
+    private long insertImageItem(String raw, double confidence) {
+        jdbcTemplate.update("INSERT INTO inbox_item(raw_content, content_type, source, status, origin,"
+                        + " ai_category, ai_confidence, parse_status, processed_at, created_at, updated_at, is_demo)"
+                        + " VALUES (?,'text','web','processed','image','schedule',?,'success',"
+                        + " '2026-09-16 10:00:00','2026-09-16 10:00:00','2026-09-16 10:00:00',0)",
+                raw, Double.valueOf(confidence));
+        return jdbcTemplate.queryForObject(
+                "SELECT id FROM inbox_item WHERE raw_content=?", Long.class, raw).longValue();
+    }
+
+    private static String repeat(char ch, int times) {
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < times; i++) {
+            builder.append(ch);
+        }
+        return builder.toString();
+    }
+
     private long createInbox(String raw) throws Exception {
         mockMvc.perform(post("/api/v1/inbox").session(session)
                         .contentType("application/json")

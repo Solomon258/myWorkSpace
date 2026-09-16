@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -11,16 +12,24 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.icecode.workbench.attachment.AttachmentService;
 import com.icecode.workbench.auth.AppConfigRepository;
 import com.icecode.workbench.auth.AuthConstants;
 import com.icecode.workbench.common.BizException;
 import com.icecode.workbench.common.ErrorCode;
+import com.icecode.workbench.util.TextUtil;
 import com.icecode.workbench.util.TimeUtil;
 
 @Service
 public class InboxService {
 
     private static final double AUTO_CONFIRM_THRESHOLD = 0.70;
+
+    /**
+     * 落库标题的上限，与 {@code InboxConfirmRequest.title} 的 {@code @Size(max=200)}
+     * 以及 task / memo / knowledge 表各自的标题上限一致。
+     */
+    private static final int MAX_TITLE_LENGTH = 200;
 
     private final InboxRepository inboxRepository;
     private final ClassifyRouter classifyService;
@@ -30,18 +39,25 @@ public class InboxService {
     // 日程一律走 EventRepository 写入：「收录确认」与「加入日程」是两条不同的入口，
     // 而「物化重复日程」的逻辑只能有一份（见 EventRepository.insertRepeating）。
     private final com.icecode.workbench.schedule.EventRepository eventRepository;
+    // 收录确认生成任务时的「工作 / 生活」判定复用 TaskService 的实现（只有一份规则）。
+    private final com.icecode.workbench.task.TaskService taskService;
+    private final AttachmentService attachmentService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public InboxService(InboxRepository inboxRepository, ClassifyRouter classifyService,
                         AppConfigRepository configRepository, JdbcTemplate jdbcTemplate,
                         com.icecode.workbench.knowledge.KnowledgeService knowledgeService,
-                        com.icecode.workbench.schedule.EventRepository eventRepository) {
+                        com.icecode.workbench.schedule.EventRepository eventRepository,
+                        com.icecode.workbench.task.TaskService taskService,
+                        AttachmentService attachmentService) {
         this.inboxRepository = inboxRepository;
         this.classifyService = classifyService;
         this.configRepository = configRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.knowledgeService = knowledgeService;
         this.eventRepository = eventRepository;
+        this.taskService = taskService;
+        this.attachmentService = attachmentService;
     }
 
     public List<InboxVO> list(String status) {
@@ -58,6 +74,7 @@ public class InboxService {
         String source = request.getSource() == null ? "web" : request.getSource();
         String now = now();
         long id = inboxRepository.insert(raw, contentType, source, now);
+        attachmentService.bindAll(request.getAttachmentIds(), "inbox_item", id);
         inboxRepository.insertActivity("inbox", "收录「" + shortText(raw) + "」", now);
         return get(id);
     }
@@ -109,8 +126,15 @@ public class InboxService {
                     "该条目已归档，但没有找到对应的「" + categoryName(request.getCategory()) + "」记录；可能是对应数据已被删除");
         }
         validateConfirm(record);
-        String title = request.getTitle() == null || request.getTitle().trim().isEmpty()
-                ? record.raw : request.getTitle().trim();
+        // 标题长度必须与落库表的实际上限对齐（task/memo/knowledge 都是 200）。
+        // 原来直接拿 record.raw 兜底，而 raw_content 的上限是 4000 —— 图片解析把整张图的
+        // 文字吐进 raw_content 之后，一条没填标题的确认会写出一个 4000 字的标题，
+        // 之后在列表里占满整屏、编辑保存时又被 @Size(max=200) 拒掉，
+        // 而用户根本没动过标题。裁剪用 TextUtil.clip（只裁不加省略号）。
+        String title = TextUtil.clip(
+                request.getTitle() == null || request.getTitle().trim().isEmpty()
+                        ? record.raw : request.getTitle(),
+                MAX_TITLE_LENGTH);
         String due = normalizeDate(request.getDue());
         String now = now();
         long entityId;
@@ -137,12 +161,20 @@ public class InboxService {
      * 手动那条路由前端把日期框预填今天（用户可以改，也可以清空表示「时间待定」），
      * 而这条路径用户看不到任何字段，缺省必须是今天 —— 否则批量生成的条目全部没有日期，
      * 既不出现在驾驶舱的今日清单里，也没有任何提示，表现就是「生成了却哪儿都找不到」。</p>
+     *
+     * <p><b>图片条目一律排除</b>（{@code origin='image'}）。视觉模型对结构清晰的截图
+     * 置信度常超过 0.70，若被自动确认，用户还没看到解析结果任务就已经建好了 ——
+     * 而「传张邮件截图还没看到解析结果，任务就被建好了」恰恰是用户提出这次改版的原始问题。
+     * 图片解析是最需要人工过目的场景（模型会把「预计完成」读成日期、把发件人读成负责人），
+     * 所以哪怕置信度 0.99 也必须由人点一下。</p>
      */
     @Transactional(rollbackFor = Exception.class)
     public List<ConfirmResultVO> confirmHighConfidence() {
         List<ConfirmResultVO> results = new ArrayList<ConfirmResultVO>();
         for (InboxRecord record : inboxRepository.findByStatus("processed")) {
             if (record.aiConfidence == null || record.aiConfidence.doubleValue() < AUTO_CONFIRM_THRESHOLD) continue;
+            // 图片条目必须在人工确认后才落库，不看置信度（见方法注释）。
+            if ("image".equals(record.origin)) continue;
             // 未配置 Vault 时跳过知识类，避免自动确认报错；用户配置后可在整理页手动确认
             if ("knowledge".equals(record.aiCategory) && !knowledgeService.vaultConfigured()) continue;
             ClassifyPayload payload = readPayload(record.aiPayload);
@@ -164,7 +196,63 @@ public class InboxService {
         return date == null || date.trim().isEmpty() ? TimeUtil.format(TimeUtil.localDate(timezone())) : date;
     }
 
+    /**
+     * 在原事务里确认多条（供 {@link #confirmBatch} 复用）。
+     *
+     * <p>逐条调 {@link #confirm}：它是 {@code @Transactional} 的，但**同类内部调用不走代理**，
+     * 所以这里实际是直接调用方法体，事务边界完全由外层决定 —— 这正是我们要的：
+     * 整批一个事务，中途任何一条失败（比如某条已被别处确认过）就全部回滚，
+     * 不会留下「确认了一半」这种用户无从收拾的局面。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public List<ConfirmResultVO> confirmBatch(InboxBatchConfirmRequest request) {
+        List<ConfirmResultVO> results = new ArrayList<ConfirmResultVO>();
+        for (InboxBatchConfirmRequest.Item item : request.getItems()) {
+            results.add(confirm(item.getInboxId().longValue(), item.getConfirm()));
+        }
+        return results;
+    }
+
     public InboxVO get(long id) { return toVO(requireInbox(id)); }
+
+    /**
+     * 图片解析的进度快照（前端轮询用）。
+     *
+     * <p>返回三个数 + 最近一次解析错误，理由是前端只需要回答两件事：</p>
+     * <ol>
+     *   <li>「还在解析吗」→ {@code running} 计数 &gt; 0；</li>
+     *   <li>「解析完了吗、读出了几条」→ {@code total} 与 {@code lastError}。</li>
+     * </ol>
+     *
+     * <p>不返回条目本体：那会让轮询接口变重，而且前端本来就会在拿到
+     * {@code running == 0} 之后走一次正常刷新 —— 由那条链路统一渲染，
+     * 避免「轮询渲染」和「刷新渲染」两套代码把同一块 DOM 画成不同样子。</p>
+     */
+    public Map<String, Object> parseStatus() {
+        Map<String, Object> result = new java.util.HashMap<String, Object>();
+        int running = 0;
+        int failed = 0;
+        int success = 0;
+        for (InboxRecord record : inboxRepository.findByOrigin("image")) {
+            if ("running".equals(record.parseStatus)) running++;
+            else if ("failed".equals(record.parseStatus)) failed++;
+            else if ("success".equals(record.parseStatus)) success++;
+        }
+        result.put("running", Integer.valueOf(running));
+        result.put("failed", Integer.valueOf(failed));
+        result.put("success", Integer.valueOf(success));
+        // 最近一条失败原因：用户看到「解析失败」时必须知道为什么，
+        // 否则他唯一的动作就是反复重试同一个注定失败的输入。
+        String lastError = null;
+        for (InboxRecord record : inboxRepository.findByOrigin("image")) {
+            if (record.parseError != null && !record.parseError.trim().isEmpty()) {
+                lastError = record.parseError;
+                break;   // findByOrigin 已按 created_at DESC 排好，第一条就是最近的
+            }
+        }
+        result.put("lastError", lastError);
+        return result;
+    }
 
     private void validateConfirm(InboxRecord record) {
         // 注意：ai_confidence < 0.70 只表示「不参与批量自动确认」（见 confirmHighConfidence），
@@ -186,8 +274,12 @@ public class InboxService {
     }
 
     private long createTask(long inboxId, String title, String priority, String due, String now) {
-        jdbcTemplate.update("INSERT INTO task(title, priority, status, due_date, is_deep_work, is_blocking, source_inbox_id, created_at, updated_at, is_demo) VALUES (?,?, 'todo', ?, 0, 0, ?, ?, ?, 0)",
-                title, priority, due, inboxId, now, now);
+        // 分组走与手工新建任务**同一套**判定规则（MemoService.autoGroup）。
+        // 这里曾经是两条独立的写库路径，一旦各自判定就会漂成「收录进来的算工作、
+        // 手工建的算生活」，而界面上完全看不出来 —— 所以判定只留一个入口。
+        String grp = taskService.resolveGroupFor(title, null);
+        jdbcTemplate.update("INSERT INTO task(title, priority, status, due_date, is_deep_work, is_blocking, grp, source_inbox_id, created_at, updated_at, is_demo) VALUES (?,?, 'todo', ?, 0, 0, ?, ?, ?, ?, 0)",
+                title, priority, due, grp, inboxId, now, now);
         return jdbcTemplate.queryForObject("SELECT id FROM task WHERE source_inbox_id=? ORDER BY id DESC LIMIT 1", Long.class, inboxId).longValue();
     }
 
@@ -216,11 +308,33 @@ public class InboxService {
         ClassifySuggestionVO ai = null;
         if (record.aiCategory != null && record.aiConfidence != null) {
             ClassifyPayload payload = readPayload(record.aiPayload);
-            ai = new ClassifySuggestionVO(record.aiCategory, record.aiConfidence.doubleValue(), payload,
-                    record.aiConfidence.doubleValue() < AUTO_CONFIRM_THRESHOLD);
+            // 图片条目的置信度**不参与**批量确认（见 confirmHighConfidence），
+            // 所以这里一律标 needsConfirm —— 前端按钮上的条数才不会虚报。
+            boolean needsConfirm = record.aiConfidence.doubleValue() < AUTO_CONFIRM_THRESHOLD
+                    || "image".equals(record.origin);
+            ai = new ClassifySuggestionVO(record.aiCategory, record.aiConfidence.doubleValue(), payload, needsConfirm);
         }
         return new InboxVO(record.id, record.raw, record.contentType, record.source, record.status,
-                record.createdAt, record.processedAt, ai);
+                record.createdAt, record.processedAt, ai,
+                record.origin == null ? "text" : record.origin,
+                record.parseStatus, record.parseError, record.rawTruncated,
+                record.sourceAttachmentId, countEntities(record.id));
+    }
+
+    /**
+     * 这条收录已经生成过几条实体。
+     *
+     * <p>图片条目常一次抽出多条，整理页要能显示「已确认 2 / 3」——
+     * 否则用户刷新页面后完全看不出自己刚才确认过哪几条，只能重新核对一遍。</p>
+     */
+    private int countEntities(long inboxId) {
+        Integer value = jdbcTemplate.queryForObject(
+                "SELECT (SELECT COUNT(*) FROM task WHERE source_inbox_id=? AND deleted=0)"
+                        + " + (SELECT COUNT(*) FROM schedule_event WHERE source_inbox_id=? AND deleted=0)"
+                        + " + (SELECT COUNT(*) FROM memo WHERE source_inbox_id=? AND deleted=0)"
+                        + " + (SELECT COUNT(*) FROM knowledge_note WHERE source_inbox_id=? AND deleted=0)",
+                Integer.class, inboxId, inboxId, inboxId, inboxId);
+        return value == null ? 0 : value.intValue();
     }
 
     private InboxRecord requireInbox(long id) {

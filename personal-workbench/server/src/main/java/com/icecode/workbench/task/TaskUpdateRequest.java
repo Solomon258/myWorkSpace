@@ -20,6 +20,14 @@ public class TaskUpdateRequest {
     private Boolean deep;
     private Boolean blocking;
 
+    /**
+     * 工作 / 生活分组（V9）。留空表示「不改这一项」—— 注意这与创建时的
+     * 「留空 = 自动判定」语义不同：编辑一条已有任务时，用户没动下拉就不该把
+     * 原来的分组冲掉。要显式改成某一侧就传 work / life。
+     */
+    @Pattern(regexp = "^(work|life)?$", message = "分组只能填 work 或 life")
+    private String grp;
+
     @Size(max = 1000, message = "备注不能超过 1000 字")
     private String note;
 
@@ -35,6 +43,8 @@ public class TaskUpdateRequest {
     public void setDeep(Boolean deep) { this.deep = deep; }
     public Boolean getBlocking() { return blocking; }
     public void setBlocking(Boolean blocking) { this.blocking = blocking; }
+    public String getGrp() { return grp; }
+    public void setGrp(String grp) { this.grp = grp; }
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }
 }

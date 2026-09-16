@@ -13,6 +13,7 @@ public class TaskVO {
     private final boolean deep;
     private final boolean blocking;
     private final String note;
+    private final String grp;
     private final int postponed;
     private final Long sourceInboxId;
     private final String createdAt;
@@ -22,7 +23,7 @@ public class TaskVO {
 
     public TaskVO(long id, String title, String description, String priority, String status, String due,
                   boolean overdue, int overdueDays, boolean deep, boolean blocking, String note,
-                  int postponed, Long sourceInboxId, String createdAt, String updatedAt,
+                  String grp, int postponed, Long sourceInboxId, String createdAt, String updatedAt,
                   String completedAt, boolean demo) {
         this.id = id;
         this.title = title;
@@ -35,6 +36,7 @@ public class TaskVO {
         this.deep = deep;
         this.blocking = blocking;
         this.note = note;
+        this.grp = grp;
         this.postponed = postponed;
         this.sourceInboxId = sourceInboxId;
         this.createdAt = createdAt;
@@ -54,6 +56,7 @@ public class TaskVO {
     public boolean isDeep() { return deep; }
     public boolean isBlocking() { return blocking; }
     public String getNote() { return note; }
+    public String getGrp() { return grp; }
     public int getPostponed() { return postponed; }
     public Long getSourceInboxId() { return sourceInboxId; }
     public String getCreatedAt() { return createdAt; }

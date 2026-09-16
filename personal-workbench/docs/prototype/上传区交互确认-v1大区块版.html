@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>上传区交互确认 · personal-workbench</title>
+<style>
+:root{
+  --bg:#f3f6fa;--surface:#fff;--surface2:#edf3f9;--border:#dfe7ef;
+  --text:#263142;--muted:#63748a;--blue:#4f79a9;--blue-dark:#315f94;
+  --red:#a32d2d;--amber:#a96c1d;--green:#39745b;--purple:#534AB7;
+  --ink-soft:#96a3b4;--r:13px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Microsoft YaHei",sans-serif;
+  font-size:13.5px;line-height:1.6}
+.app{max-width:1120px;margin:auto;padding:18px}
+
+/* ---------- 顶部 ---------- */
+.top{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 20px}
+.top h1{font-size:17px;margin:0 0 4px;color:#2e4d70}
+.top p{margin:0;color:var(--muted);font-size:12.5px}
+.top .rule{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.top .rule div{font-size:12px;color:var(--muted)}
+.top .rule b{color:var(--text);font-weight:600}
+
+/* ---------- Tab ---------- */
+.tabs{display:flex;gap:3px;margin:12px 0 16px;padding:5px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--r);overflow:auto}
+.tabs button{min-height:40px;white-space:nowrap;border:0;background:transparent;color:var(--muted);
+  border-radius:9px;padding:8px 15px;cursor:pointer;font:inherit;font-size:13.5px}
+.tabs button.active{background:#e9f1fa;color:var(--blue-dark);font-weight:600}
+
+/* ---------- 布局 ---------- */
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px}
+.card + .card{margin-top:14px}
+.card-head{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.4px;margin-bottom:12px}
+
+/* ---------- 表单 ---------- */
+.field{display:block;margin-bottom:11px}
+.label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:5px}
+input[type=text],textarea,select{width:100%;min-height:38px;padding:7px 10px;font:inherit;font-size:13.5px;
+  border:1px solid #cbd8e6;border-radius:9px;background:#fff;color:var(--text)}
+textarea{resize:vertical;line-height:1.7}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(79,121,169,.13)}
+.row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.btn{min-height:44px;border:1px solid #cbd8e6;border-radius:9px;background:#fff;color:#52657b;
+  padding:8px 14px;cursor:pointer;font:inherit;font-size:13.5px}
+.btn:hover{background:var(--surface2)}
+.btn.primary{background:var(--blue-dark);border-color:var(--blue-dark);color:#fff}
+.btn.primary:hover{background:#2a5586}
+.btn.primary:disabled{background:#b8c6d6;border-color:#b8c6d6;cursor:not-allowed}
+.btn.sm{min-height:32px;padding:4px 10px;font-size:12px}
+
+/* 字段来源标记 */
+.from-img{display:inline-block;margin-left:6px;background:#efeafc;color:var(--purple);
+  border-radius:99px;padding:0 7px;font-size:10.5px;font-weight:600;vertical-align:1px}
+
+/* ---------- 上传区：公共 ---------- */
+.zone{border-radius:11px;padding:12px;margin-bottom:10px}
+.zone-head{display:flex;align-items:center;gap:7px;margin-bottom:9px}
+.zone-title{font-size:13px;font-weight:600}
+.zone-badge{margin-left:auto;font-size:11px;border-radius:99px;padding:1px 8px}
+.zone-hint{margin:9px 0 0;font-size:11.5px;color:var(--ink-soft);line-height:1.55}
+.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  min-height:76px;border-radius:9px;cursor:pointer;text-align:center;padding:10px;transition:.16s}
+.drop-main{font-size:13px}
+.drop-sub{font-size:11.5px;color:var(--ink-soft)}
+
+/* ---------- 区一：附件（中性灰） ---------- */
+.zone-attach{background:#f7f9fc;border:1px solid #e6edf5;border-left:3px solid #c7d3e2}
+.zone-attach .zone-title{color:#42505f}
+.zone-attach .zone-badge{background:#eceff4;color:#7d8899}
+.zone-attach .drop{border:1px dashed #c7d3e2;background:#fff;color:#52657b}
+.zone-attach .drop:hover{border-color:var(--blue);border-style:solid;background:#f6fafd;color:var(--blue-dark)}
+.zone-attach .drop.dragover{border-color:var(--blue);border-style:solid;background:#eaf2fb}
+
+/* ---------- 区二：解析图片（紫色强调 + AI 标识） ---------- */
+.zone-parse{background:#f8f6fd;border:1px solid #ddd5f0;border-left:3px solid var(--purple)}
+.zone-parse .zone-title{color:#3f3877}
+.zone-parse .zone-badge{background:#efeafc;color:var(--purple);font-weight:600}
+.zone-parse .drop{border:1px dashed #b9aee6;background:#fff;color:#4a4180}
+.zone-parse .drop:hover{border-color:var(--purple);border-style:solid;background:#f5f2fd}
+.zone-parse .drop.dragover{border-color:var(--purple);border-style:solid;background:#efeafc}
+
+/* 图标 */
+.ico{width:15px;height:15px;flex:0 0 auto;display:block}
+.ico.spark{color:var(--purple)}
+.ico.paperclip{color:#8a94a6}
+
+/* ---------- 已选文件 ---------- */
+.files{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.file{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid #e8edf3;
+  border-radius:9px;padding:7px 10px}
+.file-ico{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;
+  font-size:9.5px;font-weight:700;flex:0 0 auto;letter-spacing:.3px}
+.file-ico.pdf{background:#fdeceb;color:#a32d2d}
+.file-ico.xls{background:#e9f5ee;color:#39745b}
+.file-ico.doc{background:#e9f0fa;color:#315f94}
+.file-ico.md{background:#f0eefb;color:#534AB7}
+.file-ico.json{background:#fdf4e6;color:#a96c1d}
+.file-ico.png{background:#f0f4f8;color:#5d6f86}
+.file-name{flex:1;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-size{font-size:11px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.file-x{border:0;background:transparent;color:#9aa8b8;cursor:pointer;font-size:15px;
+  line-height:1;padding:2px 5px;border-radius:6px}
+.file-x:hover{background:#f0f3f7;color:var(--red)}
+
+/* 解析缩略图 */
+.shot{display:flex;gap:10px;background:#fff;border:1px solid #e6e2f4;border-radius:9px;padding:9px;margin-top:10px}
+.shot-thumb{width:58px;height:58px;border-radius:8px;flex:0 0 auto;overflow:hidden;background:#eef1f5;position:relative}
+.shot-meta{flex:1;min-width:0}
+.shot-name{font-size:12.5px;font-weight:600;margin-bottom:3px}
+.shot-state{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.spin{width:11px;height:11px;border:2px solid #d8d3ee;border-top-color:var(--purple);
+  border-radius:50%;animation:sp .7s linear infinite;flex:0 0 auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+.state-ok{color:var(--green);font-weight:600}
+.state-err{color:var(--red);font-weight:600}
+.shot-acts{display:flex;gap:5px;margin-top:7px}
+
+/* 假聊天截图（纯 CSS 画，用于示意） */
+.fake-chat{padding:4px;display:flex;flex-direction:column;gap:3px;background:#eceff4;height:100%}
+.fake-chat i{display:block;height:6px;border-radius:3px}
+.fake-chat i.l{width:70%;background:#c9d2dd}
+.fake-chat i.r{width:58%;background:#b7cfe8;margin-left:auto}
+
+/* ---------- 提交区 ---------- */
+.submit-bar{display:flex;align-items:center;gap:10px;margin-top:14px;padding-top:13px;border-top:1px solid var(--border)}
+.submit-note{flex:1;font-size:11.5px;color:var(--muted);line-height:1.5}
+.submit-note.wait{color:var(--amber);font-weight:600}
+.submit-note.err{color:var(--red);font-weight:600}
+
+/* 解析结果卡 */
+.result{margin-top:11px;border:1px solid #e6e2f4;background:#faf9fd;border-radius:11px;padding:12px}
+.result-head{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:#3f3877;margin-bottom:9px}
+.ritem{background:#fff;border:1px solid #e8edf3;border-radius:9px;padding:9px 11px;margin-bottom:7px}
+.ritem-top{display:flex;align-items:center;gap:7px;margin-bottom:4px}
+.tagcat{font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 6px}
+.tagcat.task{background:#e9f0fa;color:#315f94}
+.tagcat.schedule{background:#f0eefb;color:#534AB7}
+.tagcat.memo{background:#fdf4e6;color:#a96c1d}
+.rfield{font-size:12px;color:#39424f;margin-top:3px}
+.rfield span.k{color:var(--muted)}
+.quote{margin-top:5px;padding:5px 8px;border-left:2px solid #c9bfe8;background:#f7f5fd;
+  font-size:11.5px;color:#5b5480;border-radius:0 6px 6px 0}
+.src{font-size:10.5px;border-radius:99px;padding:0 6px;margin-left:5px}
+.src.extracted{background:#e9f5ee;color:#39745b}
+.src.inferred{background:#fdf4e6;color:#a96c1d}
+.src.missing{background:#f0f3f7;color:#8a94a6}
+
+/* ---------- 右侧说明 ---------- */
+.side h3{font-size:13px;margin:0 0 9px;color:#2e4d70}
+.side p{margin:0 0 9px;font-size:12px;color:var(--muted);line-height:1.65}
+.side ol{margin:0;padding-left:17px;font-size:12px;color:var(--muted);line-height:1.7}
+.side li{margin-bottom:5px}
+.side code{background:#eef2f7;border-radius:4px;padding:1px 5px;font-size:11px;color:#42505f}
+.cmp{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:11px}
+.cmp th,.cmp td{border:1px solid var(--border);padding:5px 7px;text-align:left}
+.cmp th{background:#f7f9fc;color:var(--muted);font-weight:600}
+.cmp td.a{color:#42505f}
+.cmp td.b{color:#3f3877}
+.pill{display:inline-block;font-size:10.5px;border-radius:99px;padding:1px 7px;font-weight:600}
+.pill.gray{background:#eceff4;color:#7d8899}
+.pill.purple{background:#efeafc;color:var(--purple)}
+
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:11.5px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend i{width:10px;height:10px;border-radius:3px;display:block}
+
+@media(max-width:980px){
+  .layout{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  .row2{grid-template-columns:1fr}
+  .app{padding:10px}
+  .top .rule{gap:10px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="top">
+    <h1>上传区交互确认</h1>
+    <p>把「传个文件」和「让 AI 读图」拆成两个独立入口 —— 前者立刻能创建，后者必须等解析完。</p>
+    <div class="rule">
+      <div><b>附件区</b> · 不做解析 · 不阻塞创建 · 可下载</div>
+      <div><b>解析图片区</b> · 多模态识别 · 阻塞创建 · 结果可回填</div>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="inbox" class="active">收录</button>
+    <button data-tab="task">任务</button>
+    <button data-tab="event">日程</button>
+    <button data-tab="memo">备忘</button>
+  </nav>
+
+  <div class="layout">
+    <main>
+
+      <!-- ================= 收录 ================= -->
+      <section class="card panel" data-panel="inbox">
+        <div class="card-head">收录页 · 收集箱</div>
+        <div class="row2" style="grid-template-columns:minmax(0,1fr) auto">
+          <input type="text" placeholder="一句话记录，回车即收录并整理">
+          <button class="btn primary" style="min-width:84px">收录</button>
+        </div>
+
+        <div class="zone zone-attach" style="margin-top:12px">
+          <div class="zone-head">
+            <svg class="ico paperclip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            <span class="zone-title">附件</span>
+            <span class="zone-badge">不解析 · 可下载</span>
+          </div>
+          <div class="drop" data-drop="attach">
+            <span class="drop-main">拖入文件，或点击选择</span>
+            <span class="drop-sub">pdf · word · excel · md · json · txt · 图片</span>
+          </div>
+          <p class="zone-hint">原样保存为这条记录的附件，不做任何识别。</p>
+          <div class="files" data-files="attach"></div>
+        </div>
+
+        <div class="zone zone-parse">
+          <div class="zone-head">
+            <svg class="ico spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>
+            <span class="zone-title">解析图片</span>
+            <span class="zone-badge">AI 识别</span>
+          </div>
+          <div class="drop" data-drop="parse">
+            <span class="drop-main">拖入截图，或点击选择</span>
+            <span class="drop-sub">邮件 · 微信聊天 · 通知栏 · 会议邀请</span>
+          </div>
+          <p class="zone-hint">识别图中的事项，生成下面待确认的条目。只支持图片。</p>
+          <div data-shots="parse"></div>
+          <div class="result" data-result style="display:none"></div>
+        </div>
+
+        <div class="submit-bar">
+          <span class="submit-note" data-note>可以直接收录</span>
+          <button class="btn primary" data-submit>收录</button>
+        </div>
+      </section>
+
+      <!-- ================= 任务 ================= -->
+      <section class="card panel" data-panel="task" hidden>
+        <div class="card-head">任务页 · 新建任务</div>
+        <label class="field"><span class="label">标题</span>
+          <input type="text" data-fill="taskTitle" placeholder="要做什么"></label>
+        <div class="row2">
+          <label class="field"><span class="label">优先级</span>
+            <select><option>P2</option><option>P1</option><option>P0</option><option>P3</option></select></label>
+          <label class="field"><span class="label">截止日期</span>
+            <input type="text" data-fill="taskDue" placeholder="YYYY-MM-DD"></label>
+        </div>
+        <label class="field"><span class="label">备注</span>
+          <textarea rows="2" data-fill="taskNote" placeholder="补充说明"></textarea></label>
+
+        <div class="zone zone-attach">
+          <div class="zone-head">
+            <svg class="ico paperclip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            <span class="zone-title">附件</span>
+            <span class="zone-badge">不解析 · 可下载</span>
+          </div>
+          <div class="drop" data-drop="attach">
+            <span class="drop-main">拖入文件，或点击选择</span>
+            <span class="drop-sub">pdf · word · excel · md · json · txt · 图片</span>
+          </div>
+          <p class="zone-hint">随任务保存，创建后可从任务详情里下载。</p>
+          <div class="files" data-files="attach"></div>
+        </div>
+
+        <div class="zone zone-parse">
+          <div class="zone-head">
+            <svg class="ico spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>
+            <span class="zone-title">解析图片</span>
+            <span class="zone-badge">AI 识别</span>
+          </div>
+          <div class="drop" data-drop="parse">
+            <span class="drop-main">拖入截图，或点击选择</span>
+            <span class="drop-sub">比如一封要求你交数据的邮件</span>
+          </div>
+          <p class="zone-hint">识别出标题、截止时间、对方后自动填入上方字段，已填的内容不会被覆盖。</p>
+          <div data-shots="parse"></div>
+        </div>
+
+        <div class="submit-bar">
+          <span class="submit-note" data-note>可以直接创建</span>
+          <button class="btn primary" data-submit>新建任务</button>
+        </div>
+      </section>
+
+      <!-- ================= 日程 ================= -->
+      <section class="card panel" data-panel="event" hidden>
+        <div class="card-head">日程页 · 新建日程</div>
+        <label class="field"><span class="label">标题</span>
+          <input type="text" data-fill="evTitle" placeholder="日程标题"></label>
+        <div class="row2">
+          <label class="field"><span class="label">日期</span>
+            <input type="text" data-fill="evDate" placeholder="YYYY-MM-DD"></label>
+          <label class="field"><span class="label">类型</span>
+            <select><option>会议</option><option>深度块</option><option>其他</option></select></label>
+        </div>
+        <div class="row2">
+          <label class="field"><span class="label">开始</span>
+            <input type="text" data-fill="evStart" placeholder="HH:mm"></label>
+          <label class="field"><span class="label">结束</span>
+            <input type="text" data-fill="evEnd" placeholder="HH:mm"></label>
+        </div>
+
+        <div class="zone zone-attach">
+          <div class="zone-head">
+            <svg class="ico paperclip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            <span class="zone-title">附件</span>
+            <span class="zone-badge">不解析 · 可下载</span>
+          </div>
+          <div class="drop" data-drop="attach">
+            <span class="drop-main">拖入文件，或点击选择</span>
+            <span class="drop-sub">会议纪要 · 议程 · 相关文档</span>
+          </div>
+          <p class="zone-hint">随日程保存，比如把会议议程挂在日程上。</p>
+          <div class="files" data-files="attach"></div>
+        </div>
+
+        <div class="zone zone-parse">
+          <div class="zone-head">
+            <svg class="ico spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>
+            <span class="zone-title">解析图片</span>
+            <span class="zone-badge">AI 识别</span>
+          </div>
+          <div class="drop" data-drop="parse">
+            <span class="drop-main">拖入截图，或点击选择</span>
+            <span class="drop-sub">比如一张会议邀请或日程通知</span>
+          </div>
+          <p class="zone-hint">识别时间、地点、参与人，自动填入上方字段。</p>
+          <div data-shots="parse"></div>
+        </div>
+
+        <div class="submit-bar">
+          <span class="submit-note" data-note>可以直接创建</span>
+          <button class="btn primary" data-submit>新建日程</button>
+        </div>
+      </section>
+
+      <!-- ================= 备忘 ================= -->
+      <section class="card panel" data-panel="memo" hidden>
+        <div class="card-head">备忘页 · 新建备忘</div>
+        <label class="field"><span class="label">标题</span>
+          <input type="text" data-fill="memoTitle" placeholder="标题（可空）"></label>
+        <label class="field"><span class="label">正文</span>
+          <textarea rows="3" data-fill="memoContent" placeholder="正文（与标题至少写一项）"></textarea></label>
+        <div class="row2">
+          <label class="field"><span class="label">标签</span>
+            <input type="text" placeholder="逗号分隔"></label>
+          <label class="field"><span class="label">空间</span>
+            <select><option>自动</option><option>工作</option><option>生活</option></select></label>
+        </div>
+
+        <div class="zone zone-attach">
+          <div class="zone-head">
+            <svg class="ico paperclip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            <span class="zone-title">附件</span>
+            <span class="zone-badge">不解析 · 可下载</span>
+          </div>
+          <div class="drop" data-drop="attach">
+            <span class="drop-main">拖入文件，或点击选择</span>
+            <span class="drop-sub">pdf · word · excel · md · json · txt · 图片</span>
+          </div>
+          <p class="zone-hint">随备忘保存。</p>
+          <div class="files" data-files="attach"></div>
+        </div>
+
+        <div class="zone zone-parse">
+          <div class="zone-head">
+            <svg class="ico spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>
+            <span class="zone-title">解析图片</span>
+            <span class="zone-badge">AI 识别</span>
+          </div>
+          <div class="drop" data-drop="parse">
+            <span class="drop-main">拖入截图，或点击选择</span>
+            <span class="drop-sub">比如一段聊天记录或一张便签</span>
+          </div>
+          <p class="zone-hint">把图中的文字识别出来填进正文，你可以在上面直接改。</p>
+          <div data-shots="parse"></div>
+        </div>
+
+        <div class="submit-bar">
+          <span class="submit-note" data-note>可以直接创建</span>
+          <button class="btn primary" data-submit>新建备忘</button>
+        </div>
+      </section>
+
+      <div class="legend">
+        <span><i style="background:#f7f9fc;border:1px solid #e6edf5"></i> 附件区（中性灰，不解析）</span>
+        <span><i style="background:#faf9fd;border:1px solid #e6e2f4"></i> 解析图片区（紫色，AI）</span>
+        <span><i style="background:#efeafc"></i> 来自图片的字段</span>
+      </div>
+    </main>
+
+    <aside class="side">
+      <div class="card">
+        <h3>两个区的职责</h3>
+        <table class="cmp">
+          <tr><th></th><th>附件</th><th>解析图片</th></tr>
+          <tr><td>类型</td><td class="a">pdf/word/excel/md/json/图片…</td><td class="b">仅图片</td></tr>
+          <tr><td>AI</td><td class="a">不调用</td><td class="b">多模态识别</td></tr>
+          <tr><td>提交</td><td class="a">立即</td><td class="b">等解析完</td></tr>
+          <tr><td>失败</td><td class="a">不影响创建</td><td class="b">需处理</td></tr>
+          <tr><td>下载</td><td class="a">支持</td><td class="b">也支持</td></tr>
+        </table>
+        <p>解析图片本身就是一张图，所以它同样能下载 —— 但它的主职责是「被读懂」。</p>
+      </div>
+
+      <div class="card">
+        <h3>提交按钮的状态机</h3>
+        <ol>
+          <li><span class="pill gray">就绪</span> 无解析任务 → 可点</li>
+          <li><span class="pill purple">解析中</span> 置灰，文案「解析中…」</li>
+          <li><span class="pill gray">完成</span> 恢复可点</li>
+          <li><span class="pill gray">失败</span> 仍可点，按普通附件保存</li>
+        </ol>
+        <p style="margin-top:10px"><b>为什么失败也允许提交</b>：图已经上传成功了，因为模型超时就让你整个表单白填，是更糟的体验。</p>
+      </div>
+
+      <div class="card">
+        <h3>点一下试试</h3>
+        <p>两个区的虚线框都能点：</p>
+        <ol>
+          <li>点<b>附件区</b> → 加两个文件，按钮不受影响</li>
+          <li>点<b>解析图片区</b> → 加一张图并自动开始解析</li>
+          <li>看按钮从「解析中…」回到可点，字段被回填</li>
+        </ol>
+        <button class="btn sm" id="reset" style="margin-top:8px">重置演示</button>
+      </div>
+
+      <div class="card">
+        <h3>直接看某个状态</h3>
+        <p>地址栏加参数即可跳到指定状态：</p>
+        <ol>
+          <li><code>?demo=attach</code> 只加附件，按钮照常</li>
+          <li><code>?demo=parsing</code> 解析中，按钮置灰</li>
+          <li><code>?demo=failed</code> 解析失败，仍可提交</li>
+          <li><code>?demo=done</code> 解析完成，字段回填</li>
+          <li><code>?tab=task&amp;demo=done</code> 任务表单的回填效果</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <h3>待你确认</h3>
+        <ol>
+          <li>两个区的<b>视觉区分</b>够不够明显？</li>
+          <li>解析中<b>禁用按钮</b>能不能接受？</li>
+          <li>回填要<b>标记来源</b>吗（紫色「来自图片」小标签）？</li>
+          <li>解析<b>失败</b>时允许按附件提交，对吗？</li>
+        </ol>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function () {
+  var ATTACH_SAMPLES = [
+    { name: '2026Q3销售数据.xlsx', size: '284 KB', kind: 'xls', tag: 'XLS' },
+    { name: '产品需求文档.pdf',    size: '1.2 MB', kind: 'pdf', tag: 'PDF' }
+  ];
+  var attachCursor = 0;
+
+  function el(html) {
+    var d = document.createElement('div');
+    d.innerHTML = html.trim();
+    return d.firstChild;
+  }
+
+  /* ---------- 附件区：加文件 ---------- */
+  function addAttach(panel) {
+    var box = panel.querySelector('[data-files="attach"]');
+    var sample = ATTACH_SAMPLES[attachCursor % ATTACH_SAMPLES.length];
+    attachCursor++;
+    var node = el(
+      '<div class="file">' +
+        '<span class="file-ico ' + sample.kind + '">' + sample.tag + '</span>' +
+        '<span class="file-name">' + sample.name + '</span>' +
+        '<span class="file-size">' + sample.size + '</span>' +
+        '<button class="file-x" title="移除">&times;</button>' +
+      '</div>');
+    node.querySelector('.file-x').addEventListener('click', function () { node.remove(); });
+    box.appendChild(node);
+    flash(panel, '已添加附件：' + sample.name);
+  }
+
+  /* ---------- 解析区：加图 + 走解析流程 ---------- */
+  /* mode: 省略=正常（2.2s 后完成） | 'instant'=立即完成 | 'freeze'=停在「解析中」 */
+  function addShot(panel, mode) {
+    var box = panel.querySelector('[data-shots="parse"]');
+    if (box.querySelector('.shot')) { flash(panel, '这个演示只放一张解析图片'); return; }
+
+    var node = el(
+      '<div class="shot">' +
+        '<span class="shot-thumb"><span class="fake-chat"><i class="l"></i><i class="r"></i><i class="l"></i><i class="r"></i></span></span>' +
+        '<span class="shot-meta">' +
+          '<span class="shot-name">微信聊天记录.png</span>' +
+          '<span class="shot-state" data-state><span class="spin"></span>正在解析…</span>' +
+        '</span>' +
+      '</div>');
+    node.querySelector('.shot-name').innerHTML += '<span class="file-size" style="margin-left:6px">412 KB</span>';
+    box.appendChild(node);
+
+    if (mode === 'freeze') {
+      setSubmit(panel, 'wait');
+      setNote(panel, '正在解析图片，请稍候（约 3–10 秒）…', 'wait');
+      return;
+    }
+
+    if (mode === 'failed') {
+      var st0 = node.querySelector('[data-state]');
+      st0.className = 'shot-state state-err';
+      st0.textContent = '解析失败 · 识别服务超时';
+      node.querySelector('.shot-meta').appendChild(el(
+        '<span class="shot-acts">' +
+          '<button class="btn sm" type="button">重试</button>' +
+          '<button class="btn sm" type="button">移除</button>' +
+        '</span>'));
+      /* 失败也允许提交：图已上传成功，不该让整个表单白填 */
+      setSubmit(panel, 'ready');
+      setNote(panel, '解析失败，图片仍会作为附件保存', 'err');
+      return;
+    }
+
+    /* 解析中：按钮置灰 */
+    setSubmit(panel, 'wait');
+    setNote(panel, '正在解析图片，请稍候（约 3–10 秒）…', 'wait');
+
+    var done = function () {
+      fillResult(panel);
+      var st = node.querySelector('[data-state]');
+      st.className = 'shot-state state-ok';
+      st.textContent = '解析完成 · 识别为微信聊天记录';
+      setSubmit(panel, 'ready');
+      setNote(panel, panel.dataset.panel === 'inbox' ? '解析完成，请确认下方条目' : '解析完成，已填入上方字段', '');
+    };
+    if (mode === 'instant') done();
+    else setTimeout(done, 2200);
+  }
+
+  /* ---------- 解析结果：回填 / 确认卡 ---------- */
+  function fillResult(panel) {
+    var tab = panel.dataset.panel;
+
+    if (tab === 'inbox') {
+      var box = panel.querySelector('[data-result]');
+      box.style.display = '';
+      box.innerHTML =
+        '<div class="result-head">' +
+          '<svg class="ico spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>' +
+          '识别为微信聊天记录 · 共 2 条，已勾选 1 条</div>' +
+        '<div class="ritem">' +
+          '<div class="ritem-top"><input type="checkbox" checked><span class="tagcat task">任务</span>' +
+            '<b style="font-size:12.5px">给老王发销售数据</b></div>' +
+          '<div class="rfield"><span class="k">对方：</span>老王</div>' +
+          '<div class="rfield"><span class="k">截止：</span>2026-09-16' +
+            '<span class="src inferred">根据「明天下午」推算</span></div>' +
+          '<div class="quote">「我：明天下午发你」</div>' +
+        '</div>' +
+        '<div class="ritem" style="opacity:.62">' +
+          '<div class="ritem-top"><input type="checkbox"><span class="tagcat memo">备忘</span>' +
+            '<b style="font-size:12.5px">销售数据相关讨论</b></div>' +
+          '<div class="rfield"><span class="k">原文：</span>那个销售数据你看下</div>' +
+          '<div class="quote">「老王：那个销售数据你看下」</div>' +
+        '</div>';
+      return;
+    }
+
+    /* 表单入口：回填，只填空字段 */
+    var map = {
+      task:  { taskTitle: '给老王发销售数据', taskDue: '2026-09-16', taskNote: '老王催销售数据，答应明天下午发他' },
+      event: { evTitle: '与老王对齐销售数据', evDate: '2026-09-16', evStart: '14:00', evEnd: '14:30' },
+      memo:  { memoContent: '老王：那个销售数据你什么时候给我\n我：明天下午发你' }
+    }[tab];
+
+    Object.keys(map).forEach(function (key) {
+      var input = panel.querySelector('[data-fill="' + key + '"]');
+      if (!input) return;
+      if (input.value.trim() !== '') return;   /* 只填空字段，不覆盖 */
+      input.value = map[key];
+      markFromImage(input, key + '-badge');
+    });
+  }
+
+  function markFromImage(input, id) {
+    if (input.parentNode.querySelector('[data-badge="' + id + '"]')) return;
+    var badge = el('<span class="from-img" data-badge="' + id + '">来自图片</span>');
+    var label = input.parentNode.querySelector('.label');
+    if (label) label.appendChild(badge);
+    input.addEventListener('input', function handler() {
+      var b = input.parentNode.querySelector('[data-badge="' + id + '"]');
+      if (b) b.remove();
+      input.removeEventListener('input', handler);
+    });
+  }
+
+  /* ---------- 提交区状态 ---------- */
+  function setSubmit(panel, state) {
+    var btn = panel.querySelector('[data-submit]');
+    var label = btn.dataset.label || btn.textContent;
+    btn.dataset.label = label;
+    btn.disabled = state === 'wait';
+    btn.textContent = state === 'wait' ? '解析中…' : label;
+  }
+  function setNote(panel, text, cls) {
+    var note = panel.querySelector('[data-note]');
+    note.textContent = text;
+    note.className = 'submit-note' + (cls ? ' ' + cls : '');
+  }
+  function flash(panel, text) {
+    setNote(panel, text, '');
+  }
+
+  /* ---------- 供重置用：记录初始文案 ---------- */
+  document.querySelectorAll('[data-submit]').forEach(function (b) { b.dataset.label = b.textContent; });
+  document.querySelectorAll('.submit-note').forEach(function (n) { n.dataset.initial = n.textContent; });
+  document.querySelectorAll('.panel').forEach(function (p) { p.dataset.initialNote = p.querySelector('[data-note]').textContent; });
+
+  /* ---------- Tab 切换 ---------- */
+  document.getElementById('tabs').addEventListener('click', function (e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    document.querySelectorAll('#tabs button').forEach(function (b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    document.querySelectorAll('.panel').forEach(function (p) {
+      p.hidden = p.dataset.panel !== btn.dataset.tab;
+    });
+  });
+
+  /* ---------- 拖拽 / 点击 ---------- */
+  document.addEventListener('click', function (e) {
+    var drop = e.target.closest('.drop');
+    if (!drop) return;
+    var panel = drop.closest('.panel');
+    if (drop.dataset.drop === 'attach') addAttach(panel);
+    else addShot(panel);
+  });
+
+  document.querySelectorAll('.drop').forEach(function (drop) {
+    drop.addEventListener('dragover', function (e) { e.preventDefault(); drop.classList.add('dragover'); });
+    drop.addEventListener('dragleave', function () { drop.classList.remove('dragover'); });
+    drop.addEventListener('drop', function (e) {
+      e.preventDefault();
+      drop.classList.remove('dragover');
+      var panel = drop.closest('.panel');
+      if (drop.dataset.drop === 'attach') addAttach(panel);
+      else addShot(panel);
+    });
+  });
+
+  /* ---------- 重置 ---------- */
+  document.getElementById('reset').addEventListener('click', function () {
+    attachCursor = 0;
+    document.querySelectorAll('.panel').forEach(function (p) {
+      p.querySelectorAll('[data-files="attach"] .file').forEach(function (f) { f.remove(); });
+      p.querySelectorAll('[data-shots="parse"] .shot').forEach(function (s) { s.remove(); });
+      var r = p.querySelector('[data-result]'); if (r) { r.innerHTML = ''; r.style.display = 'none'; }
+      p.querySelectorAll('[data-fill]').forEach(function (i) { i.value = ''; });
+      p.querySelectorAll('[data-badge]').forEach(function (b) { b.remove(); });
+      setSubmit(p, 'ready');
+      setNote(p, p.dataset.initialNote, '');
+    });
+  });
+
+  /* ---------- URL 参数驱动：?tab=task&demo=done 可直接看到指定状态 -------------- */
+  (function bootDemo() {
+    var q = new URLSearchParams(location.search);
+    var tab = q.get('tab') || 'inbox';
+    var demo = q.get('demo');
+    if (tab !== 'inbox') {
+      var btn = document.querySelector('#tabs button[data-tab="' + tab + '"]');
+      if (btn) btn.click();
+    }
+    if (!demo) return;
+    var panel = document.querySelector('.panel[data-panel="' + tab + '"]');
+    if (!panel) return;
+    if (demo === 'attach' || demo === 'both') { addAttach(panel); addAttach(panel); }
+    if (demo === 'parsing') addShot(panel, 'freeze');
+    if (demo === 'failed') addShot(panel, 'failed');
+    if (demo === 'done' || demo === 'both') addShot(panel, 'instant');
+  })();
+})();
+</script>
+</body>
+</html>

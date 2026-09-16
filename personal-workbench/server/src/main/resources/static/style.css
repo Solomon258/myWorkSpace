@@ -1,4 +1,4 @@
-:root{--bg:#f3f6fa;--surface:#fff;--surface2:#edf3f9;--border:#dfe7ef;--text:#263142;--muted:#63748a;--blue:#4f79a9;--blue-dark:#315f94;--red:#a32d2d;--amber:#a96c1d;--green:#39745b;--purple:#534AB7;--r:13px}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Microsoft YaHei",sans-serif}.app{max-width:1120px;margin:auto;padding:18px}.top,.tabs,.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r)}.top{display:flex;justify-content:space-between;align-items:center;padding:14px 18px}.top h1{font-size:18px;margin:0;color:#2e4d70}.user,.row{display:flex;align-items:center;gap:10px}.user{color:var(--muted);font-size:13px}.btn{min-height:44px;border:1px solid #cbd8e6;border-radius:9px;background:#fff;color:#52657b;padding:8px 14px;cursor:pointer}.btn:hover{background:var(--surface2)}.btn.primary{background:var(--blue-dark);border-color:var(--blue-dark);color:#fff}.btn.danger{color:var(--red)}.btn.sm{min-height:34px;padding:5px 10px;font-size:12px}.btn.ghost{border-color:transparent;background:transparent;color:#8a94a6;min-height:30px;padding:4px 9px}.btn.ghost:hover{background:#f0f3f7;color:#42505f}.btn.ghost.danger:hover{background:#faeaea;color:var(--red)}.gear-btn{min-width:44px;min-height:44px;width:44px;height:44px;border:1px solid transparent;border-radius:50%;background:transparent;font-size:19px;line-height:1;color:#63748a;cursor:pointer;display:grid;place-items:center;padding:0;transition:background .18s,color .18s,transform .3s}.gear-btn:hover{background:#eef3f9;color:var(--blue-dark);transform:rotate(40deg)}.gear-btn.active{background:#e9f1fa;color:var(--blue-dark);border-color:#c9d9eb}.tabs{display:flex;gap:3px;margin:10px 0 20px;padding:5px;overflow:auto}.tabs button{min-height:44px;white-space:nowrap;border:0;background:transparent;color:var(--muted);border-radius:9px;padding:8px 14px;cursor:pointer}.tabs button.active{background:#e9f1fa;color:var(--blue-dark)}.view{display:none}.view.active{display:block}.hero{background:#e9f1fa;border:1px solid #c9d9eb;border-radius:16px;padding:20px;margin-bottom:14px}.hero h2{font-size:18px;margin:0 0 5px}.hero p{margin:0;color:var(--muted);font-size:13px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}.card{padding:16px;margin-bottom:14px}.card h3{font-size:15px;margin:0 0 12px}.metric strong{display:block;font-size:26px;color:var(--blue-dark);margin-top:8px}.metric span,.muted{font-size:12px;color:var(--muted)}.form-grid{display:grid;grid-template-columns:2fr .8fr 1fr auto;gap:9px}input,select,textarea{width:100%;min-height:44px;border:1px solid #ccd8e5;border-radius:9px;background:#fff;color:var(--text);padding:9px 11px;font:inherit;font-size:16px}textarea{min-height:72px;resize:vertical}.checks{display:flex;gap:16px;margin-top:10px}.checks input{width:auto;min-height:auto}.list-item{display:flex;align-items:flex-start;gap:10px;padding:13px 0;border-bottom:1px solid #edf1f5}.list-item:last-child{border-bottom:0}.grow{flex:1;min-width:0}.task-title{font-weight:600;line-height:1.5}.task-meta{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.6}.actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px}.pill{display:inline-block;border-radius:99px;padding:3px 8px;font-size:11px;background:#edf1f5;color:#66768a;margin-left:5px}.pill.red{background:#f8e7e7;color:var(--red)}.pill.amber{background:#f8eedc;color:var(--amber)}.pill.blue{background:#e7f0fa;color:var(--blue-dark)}.pill.green{background:#e6f2ec;color:var(--green)}.pill.coral{background:#fbede6;color:#b0562f}.status-button{width:32px;height:32px;flex:0 0 auto;border:1px solid #bfcddd;border-radius:50%;background:#fff;color:var(--blue-dark);cursor:pointer}.status-button.doing{background:#e7f0fa}.status-button.done{background:#e6f2ec;color:var(--green)}.strike{text-decoration:line-through;color:#8996a7}.overdue-text{color:var(--red)}.edit-panel{display:none;margin-top:10px;padding:12px;background:#f7f9fc;border-radius:10px}.edit-panel.open{display:block}.empty{padding:25px;text-align:center;color:var(--muted);font-size:13px}.brief{padding:14px 16px;border-left:4px solid var(--blue);background:#fff;border-radius:0 10px 10px 0;margin:14px 0;color:#52657b;font-size:13px}.top-card{position:relative;padding-left:42px}.top-index{position:absolute;left:0;top:13px;width:28px;height:28px;display:grid;place-items:center;background:#e9f1fa;color:var(--blue-dark);border-radius:9px;font-weight:700}.reason{font-size:12px;color:var(--blue-dark);margin-top:5px}.badge{display:inline-block;min-width:20px;padding:1px 6px;border-radius:99px;background:#f8e7e7;color:var(--red);font-size:11px;text-align:center}.inbox-compose{display:grid;grid-template-columns:1fr auto;gap:9px}.classify-form{display:grid;grid-template-columns:1fr 1.5fr 1fr .8fr .9fr auto;gap:8px;margin-top:10px}.event-compose{display:grid;grid-template-columns:1.6fr .8fr .7fr .7fr .9fr auto;gap:8px}/* 备忘录入区（2026-09-11 加标题输入框）：原来是一行四列（正文/标签/分组/保存），
+:root{--bg:#f3f6fa;--surface:#fff;--surface2:#edf3f9;--border:#dfe7ef;--text:#263142;--muted:#63748a;--blue:#4f79a9;--blue-dark:#315f94;--red:#a32d2d;--amber:#a96c1d;--green:#39745b;--purple:#534AB7;--r:13px}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Microsoft YaHei",sans-serif}.app{max-width:1120px;margin:auto;padding:18px}.top,.tabs,.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r)}.top{display:flex;justify-content:space-between;align-items:center;padding:14px 18px}.top h1{font-size:18px;margin:0;color:#2e4d70}.user,.row{display:flex;align-items:center;gap:10px}.user{color:var(--muted);font-size:13px}.btn{min-height:44px;border:1px solid #cbd8e6;border-radius:9px;background:#fff;color:#52657b;padding:8px 14px;cursor:pointer}.btn:hover{background:var(--surface2)}.btn.primary{background:var(--blue-dark);border-color:var(--blue-dark);color:#fff}.btn.danger{color:var(--red)}.btn.sm{min-height:34px;padding:5px 10px;font-size:12px}.btn.ghost{border-color:transparent;background:transparent;color:#8a94a6;min-height:30px;padding:4px 9px}.btn.ghost:hover{background:#f0f3f7;color:#42505f}.btn.ghost.danger:hover{background:#faeaea;color:var(--red)}.gear-btn{min-width:44px;min-height:44px;width:44px;height:44px;border:1px solid transparent;border-radius:50%;background:transparent;font-size:19px;line-height:1;color:#63748a;cursor:pointer;display:grid;place-items:center;padding:0;transition:background .18s,color .18s,transform .3s}.gear-btn:hover{background:#eef3f9;color:var(--blue-dark);transform:rotate(40deg)}.gear-btn.active{background:#e9f1fa;color:var(--blue-dark);border-color:#c9d9eb}.tabs{display:flex;gap:3px;margin:10px 0 20px;padding:5px;overflow:auto}.tabs button{min-height:44px;white-space:nowrap;border:0;background:transparent;color:var(--muted);border-radius:9px;padding:8px 14px;cursor:pointer}.tabs button.active{background:#e9f1fa;color:var(--blue-dark)}.view{display:none}.view.active{display:block}.hero{background:#e9f1fa;border:1px solid #c9d9eb;border-radius:16px;padding:20px;margin-bottom:14px}.hero h2{font-size:18px;margin:0 0 5px}.hero p{margin:0;color:var(--muted);font-size:13px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}.card{padding:16px;margin-bottom:14px}.card h3{font-size:15px;margin:0 0 12px}.metric strong{display:block;font-size:26px;color:var(--blue-dark);margin-top:8px}.metric span,.muted{font-size:12px;color:var(--muted)}.form-grid{display:grid;grid-template-columns:2fr .8fr 1fr auto;gap:9px}input,select,textarea{width:100%;min-height:44px;border:1px solid #ccd8e5;border-radius:9px;background:#fff;color:var(--text);padding:9px 11px;font:inherit;font-size:16px}textarea{min-height:72px;resize:vertical}.checks{display:flex;gap:16px;margin-top:10px}.checks input{width:auto;min-height:auto}.list-item{display:flex;align-items:flex-start;gap:10px;padding:13px 0;border-bottom:1px solid #edf1f5}.list-item:last-child{border-bottom:0}.grow{flex:1;min-width:0}.task-title{font-weight:600;line-height:1.5}.task-meta{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.6}.actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px}.pill{display:inline-block;border-radius:99px;padding:3px 8px;font-size:11px;background:#edf1f5;color:#66768a;margin-left:5px}.pill.red{background:#f8e7e7;color:var(--red)}.pill.amber{background:#f8eedc;color:var(--amber)}.pill.blue{background:#e7f0fa;color:var(--blue-dark)}.pill.green{background:#e6f2ec;color:var(--green)}.pill.coral{background:#fbede6;color:#b0562f}.status-button{width:32px;height:32px;flex:0 0 auto;border:1px solid #bfcddd;border-radius:50%;background:#fff;color:var(--blue-dark);cursor:pointer}.status-button.doing{background:#e7f0fa}.status-button.done{background:#e6f2ec;color:var(--green)}.strike{text-decoration:line-through;color:#8996a7}.overdue-text{color:var(--red)}.edit-panel{display:none;margin-top:10px;padding:12px;background:#f7f9fc;border-radius:10px}.edit-panel.open{display:block}.empty{padding:25px;text-align:center;color:var(--muted);font-size:13px}.brief{padding:14px 16px;border-left:4px solid var(--blue);background:#fff;border-radius:0 10px 10px 0;margin:14px 0;color:#52657b;font-size:13px}.top-card{position:relative;padding-left:42px}.top-index{position:absolute;left:0;top:13px;width:28px;height:28px;display:grid;place-items:center;background:#e9f1fa;color:var(--blue-dark);border-radius:9px;font-weight:700}.reason{font-size:12px;color:var(--blue-dark);margin-top:5px}.badge{display:inline-block;min-width:20px;padding:1px 6px;border-radius:99px;background:#f8e7e7;color:var(--red);font-size:11px;text-align:center}.inbox-compose{display:grid;gap:9px}.classify-form{display:grid;grid-template-columns:1fr 1.5fr 1fr .8fr .9fr auto;gap:8px;margin-top:10px}.event-compose{display:grid;grid-template-columns:1.6fr .8fr .7fr .7fr .9fr auto;gap:8px}/* 备忘录入区（2026-09-11 加标题输入框）：原来是一行四列（正文/标签/分组/保存），
    正文只有单行。现在标题与正文各占一行，标签 + 分组 + 保存收到第三行。
    正文改成 textarea 后回车是换行，保存改用 Ctrl/Cmd + Enter —— 页面下方有一行说明，
    否则用户按回车没反应会以为坏了（本项目最忌讳的「静默无反应」）。 */
@@ -268,6 +268,21 @@
 /* 优先级钉在卡片右上角：不参与标题的换行，也就不会出现「P2」孤零零占一行的情况。
    margin-left 必须归零 —— .pill 自带 5px 左边距，那是给「跟在标题后面」的标签用的。 */
 .task-prio{flex:0 0 auto;margin-left:0;font-weight:600;letter-spacing:.3px}
+/* 分组徽标（2026-09-14）：钉在优先级左边、同属卡片右上角一列。
+   它是**唯一一个可点的 .pill**（点一下在工作 / 生活之间切换），所以要单独把
+   按钮的默认样式压平：.pill 本来是 span 用的，直接用在 button 上会带着
+   font-family / 边框 / 内边距等浏览器默认值，写在这里一次压掉。
+   工作=绿、生活=橙，与备忘页 .memo-card.cat-work / .cat-life 的左边框色同源，
+   两个页签对同一件事用同一套颜色，用户不用重新学一遍。 */
+.task-grp{flex:0 0 auto;margin-left:0;font:inherit;font-size:10.5px;line-height:1;cursor:pointer;
+  background:#eaf3ed;color:#3d6b52;border:1px solid #c8dfd2;padding:3px 7px}
+.task-grp:hover{background:#dfece4;border-color:#6c9d81}
+.task-grp.life{background:#fbede6;color:#9c5233;border-color:#efd5c9}
+.task-grp.life:hover{background:#f5e2d9;border-color:#d98267}
+/* 任务页的分组切换器：复用备忘页 .memo-switch 那一套样式（同类控件不必各写一份），
+   只补一下外边距 —— 备忘页那排下面紧跟的是空间容器，任务页紧跟的是「新建 / 搜索」卡片，
+   间距按后者调。 */
+.task-switch-wrap{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 /* 卡片只有约 300~350px 宽，操作按钮 5 个一排**本来就卡在临界点上**：保持右对齐与全站 .actions
    一致，而「移至」浮层本来就是向左弹的，从右边缘弹开时正好落在卡片内部，不会被泳道裁掉。
    gap 用 3px 而不是全站的 5px，是因为量过：1040px 视口时卡片内容宽约 271px，5 个按钮约 214px +
@@ -356,6 +371,87 @@ button.card{font:inherit;text-align:left;color:inherit;cursor:pointer}
 .composer-body .c-check{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--muted);cursor:pointer;white-space:nowrap}
 .composer-body .c-check input{width:auto;min-height:auto;margin:0}
 .composer-body .c-hint,.composer-body .mc-hint{margin:0;font-size:11.5px;color:#96a3b4;line-height:1.5}
+
+/* ===== 图片区：解析图片（＋AI）与附件（2026-09-16） =====
+   两个入口共用一条底栏 —— 左侧「＋」负责「让 AI 读图」，右侧「附件」负责「带个文件」，
+   提交按钮仍在最右。区分二者的不是位置而是职责：前者会调用模型且**阻塞提交**，后者不解析。
+   整个容器（.composer-body / .inbox-compose）是拖拽落点：拖图片走解析，拖其它文件进附件。 */
+.media-strip{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.media-strip:empty{display:none}
+.media-row{display:flex;align-items:center;gap:7px;width:100%}
+.media-gap{flex:1;min-width:0}
+.media-row .btn{flex-shrink:0}
+
+/* 「＋」= 解析图片。AI 角标贴右上角，1.5px 白描边让它从按钮上「浮」起来而不是印在上面。 */
+.media-add{position:relative;width:34px;height:34px;flex:0 0 auto;display:grid;place-items:center;
+  padding:0;border:1px solid #ddd5f0;border-radius:10px;background:#f8f6fd;color:var(--purple);
+  cursor:pointer;transition:background .16s,border-color .16s}
+.media-add:hover{background:#efeafc;border-color:var(--purple)}
+.media-add:disabled{opacity:.5;cursor:not-allowed}
+.media-add .media-ai{position:absolute;top:-5px;right:-6px;padding:1px 3px;border-radius:4px;
+  background:var(--purple);color:#fff;font-size:9px;font-weight:700;letter-spacing:.3px;
+  line-height:1.15;border:1.5px solid #fff;box-shadow:0 1px 3px rgba(83,74,183,.28);
+  pointer-events:none}
+
+.media-attach{display:inline-flex;align-items:center;gap:5px;min-height:34px;padding:0 11px;
+  flex:0 0 auto;border:1px solid #cbd8e6;border-radius:10px;background:#fff;color:#52657b;
+  font:inherit;font-size:12.5px;cursor:pointer;transition:background .16s,color .16s}
+.media-attach:hover{background:var(--surface2);color:var(--blue-dark)}
+.media-cnt{min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 4px;
+  background:#e9f1fa;color:var(--blue-dark);border-radius:99px;font-size:10.5px;font-weight:700}
+/* 不要写 `.media-cnt[hidden]{display:none}` —— JS 侧用的是 `classList.toggle("hidden")`，
+   即**类**不是**属性**，属性选择器匹配不到，那行是死代码。真正起作用的是全局
+   `.hidden{display:none!important}`（见本节开头）。留着属性版只会让后来人误判机制。 */
+
+/* 拖拽落点高亮：用 outline 而不是 border —— border 会改变盒模型，拖进拖出时整块高度跳一下。 */
+.media-dragover{outline:2px dashed var(--purple);outline-offset:3px;background:#faf9ff;border-radius:10px}
+
+/* 缩略图 46×46：左上角编号（多张时对得上结果里的「图N」）、右上角删除、
+   右下角状态（转圈遮罩 / 绿勾 / 红叹号）。 */
+.media-shot{position:relative;width:46px;height:46px;flex:0 0 auto;border-radius:10px;
+  overflow:hidden;border:1px solid #e0daf3;background:#eef1f5}
+.media-shot img{width:100%;height:100%;object-fit:cover;display:block}
+.media-shot .ms-no{position:absolute;top:0;left:0;padding:0 5px;background:rgba(38,49,66,.78);
+  color:#fff;font-size:10px;font-weight:600;line-height:15px;
+  border-bottom-right-radius:7px;pointer-events:none}
+.media-shot .ms-x{position:absolute;top:0;right:0;width:16px;height:16px;border:0;padding:0;
+  background:rgba(38,49,66,.62);color:#fff;font-size:11px;line-height:16px;cursor:pointer;
+  border-bottom-left-radius:6px}
+.media-shot .ms-x:hover{background:var(--red)}
+.media-shot .ms-mask{position:absolute;top:0;right:0;bottom:0;left:0;display:grid;place-items:center;
+  background:rgba(255,255,255,.75)}
+.media-shot .ms-ok{position:absolute;bottom:0;right:0;width:15px;height:15px;background:var(--green);
+  color:#fff;font-size:10px;line-height:15px;text-align:center;border-top-left-radius:6px}
+.media-shot.is-err{border-color:#e8b4b4}
+.media-shot .ms-err{position:absolute;bottom:0;right:0;width:15px;height:15px;background:var(--red);
+  color:#fff;font-size:10px;line-height:15px;text-align:center;border-top-left-radius:6px}
+@keyframes mediaSpin{to{transform:rotate(360deg)}}
+.media-spin{width:13px;height:13px;border:2px solid #d8d3ee;border-top-color:var(--purple);
+  border-radius:50%;animation:mediaSpin .7s linear infinite}
+
+/* 附件芯片：文件名是用户区分附件的唯一依据，必须留得住（超出省略但 hover 有 title）。 */
+.media-file{display:inline-flex;align-items:center;gap:7px;height:46px;max-width:220px;
+  padding:0 8px 0 9px;flex:0 0 auto;border:1px solid #e6edf5;border-radius:10px;background:#f7f9fc}
+.media-file .mf-k{font-size:9px;font-weight:700;border-radius:4px;padding:2px 4px;flex:0 0 auto;letter-spacing:.3px}
+.media-file .mf-k.pdf{background:#fdeceb;color:#a32d2d}
+.media-file .mf-k.xls{background:#e9f5ee;color:#39745b}
+.media-file .mf-k.doc{background:#e9f0fa;color:#315f94}
+.media-file .mf-k.md{background:#f0eefb;color:#534AB7}
+.media-file .mf-k.json{background:#fdf4e6;color:#a96c1d}
+.media-file .mf-k.other{background:#eef1f5;color:#63748a}
+.media-file .mf-n{font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.media-file .mf-s{font-size:10.5px;color:#96a3b4;flex:0 0 auto}
+.media-file .mf-x{border:0;background:transparent;color:#9aa8b8;cursor:pointer;font-size:14px;
+  line-height:1;padding:0 2px;flex:0 0 auto}
+.media-file .mf-x:hover{color:var(--red)}
+
+/* 解析进度条。只在「有图在跑」或「有图失败」时出现 —— 正常跑完还挂个「0 条失败」
+   就是纯噪音，用户会开始无视它。 */
+.parse-status{display:flex;align-items:center;gap:8px;margin:10px 0 0;padding:8px 11px;
+  border-radius:9px;font-size:12.5px;line-height:1.5}
+.parse-status.is-running{background:#f3f0fd;border:1px solid #e0d8f7;color:#534AB7}
+.parse-status.is-failed{background:#fdf1f0;border:1px solid #f2d5d2;color:#a33a33}
+
 @media(max-width:640px){.composer-body .c-row .grow{min-width:100%}.composer-toggle .c-sub{display:none}}
 
 /* 备忘空间选择：三张占位大卡片（各 56px 高、整块带图标）压成一行分段控件。
@@ -372,6 +468,48 @@ button.card{font:inherit;text-align:left;color:inherit;cursor:pointer}
 .memo-switch .memo-choice.all.active,.memo-switch .memo-choice.work.active,.memo-switch .memo-choice.life.active{
   background:#fff;color:var(--blue-dark);box-shadow:0 1px 3px rgba(38,49,66,.14);font-weight:600}
 .memo-switch .memo-choice small{display:none}
+/* ===== 页签栏最右侧的图标按钮（回收站，2026-09-14）=====
+   用户定的形态：回收站以一枚**只有图标**的按钮待在页签栏最右边（不是顶栏、也不是文字页签）。
+
+   为什么是「图标 + 位置仍在 .tabs 内」而不是「再塞一个文字页签」：
+   ① 页签本来是六个平级文字项，混进第七个文字项等于把垃圾桶摆在书桌上（用户最初的抱怨）；
+   ② 留在 .tabs 内部是**有意的**：setTab 里那句 `querySelectorAll(".tabs button")`
+     一把梭就能照旧维护它的选中态，不必再单开一段「顶栏按钮的 active 维护」——
+      多一处就多一处会漏。
+   ③ 尺寸用 38×38 而不是 44：页签行有 5px 内边距、页签本身 44px 高，
+      44×44 的方按钮会把整行撑到 44，而 38 加上内边距刚好落在同一行高里，
+      视觉上与文字页签齐平（窄屏同一档会把它压到 36）。
+
+   锚点：.tab-icon 紧跟在 .tabs-spacer 之后。改动这一节前先量一次行高，
+   「图标比文字页签高一截」这类问题控制台不报、渲染脚本也查不出。
+
+   ⚠️ 选择器必须写成 `.tabs .tab-icon`，不能只写 `.tab-icon`。第 1 行那条老规则
+   （`.tabs button{min-height:44px;…;color:var(--muted);…}`）与只写 `.tab-icon` 时特异性相同
+   （都是 0,2,0），而老规则在前，它就会**按顺序压住**这里的 width / height / color ——
+   实测表现是「图标按钮 38 宽却 44 高（被拉成竖长条）」「颜色不是页签色」。
+   这类同特异性竞争**控制台一个字都不报**，只有量几何 / 比计算样式才看得见。 */
+.tabs-spacer{flex:1 1 auto;min-width:0}
+.tabs .tab-icon{position:relative;flex:0 0 auto;width:38px;height:38px;min-width:38px;min-height:38px;
+  align-self:center;display:grid;place-items:center;padding:0;border:1px solid transparent;
+  border-radius:9px;background:transparent;color:var(--muted);cursor:pointer;
+  transition:background .18s,color .18s,border-color .18s}
+.tabs .tab-icon svg{display:block;width:18px;height:18px}
+/* 悬停 / 选中态**对齐文字页签**（同底色、同文字色），不另起一套配色 ——
+   两套配色一旦漂开，图标按钮就会看起来像一个「放错地方的控件」。
+
+   顺带补上文字页签的悬停底色（2026-09-14）：原来六个文字页签**只有 .active、没有 :hover**。
+   图标一旦带悬停反馈而它们不带，同一个控件族里就出现了两种行为（也是「外来控件」观感的来源）。
+   两条 hover 的底色必须写成同一个值，别各写各的。 */
+.tabs button:hover:not(.active){background:#eef3f9;color:var(--blue-dark)}
+.tabs .tab-icon:hover{background:#eef3f9;color:var(--blue-dark)}
+.tabs .tab-icon.active{background:#e9f1fa;color:var(--blue-dark);border-color:#c9d9eb}
+.tabs .tab-icon:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+/* 角标贴在按钮内边缘（top / right 各 1.5px = 描边宽）。
+   别让它溢到按钮外：.tabs 有 overflow:auto，溢出的部分会被裁掉（而且是静默裁掉）。 */
+.tabs .tab-icon .badge{position:absolute;top:1.5px;right:1.5px;min-width:16px;padding:0 4px;
+  font-size:10px;line-height:14px;border:1.5px solid #fff;border-radius:99px}
+@media(max-width:768px){.tabs .tab-icon{width:36px;height:36px;min-width:36px;min-height:36px}}
+
 /* ===== 全局搜索（2026-09-12，docs/全文搜索功能设计.md）=====
    顶栏常驻输入框 + 覆盖式结果面板（左列表 / 右预览）。
    层级：toast(70) > 番茄钟遮罩(60) > 本面板(40) > 「移至」菜单(30) > 卡片(6)。

@@ -94,6 +94,17 @@ public class KnowledgeRepository {
         jdbcTemplate.update("UPDATE knowledge_note SET deleted=1, deleted_at=?, updated_at=? WHERE id=? AND deleted=0", now, now, id);
     }
 
+    /**
+     * 该 Vault 文件是否已经有（未删除的）知识记录。
+     * 存量导入靠它保证幂等 —— 用户多点几次「导入」不会长出重复条目。
+     */
+    public boolean existsByVaultPath(String vaultPath) {
+        if (vaultPath == null) return false;
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM knowledge_note WHERE vault_path=? AND deleted=0", Integer.class, vaultPath);
+        return count != null && count > 0;
+    }
+
     public void insertActivity(String content, String now) {
         jdbcTemplate.update("INSERT INTO activity_log(log_type, category, content, created_at, is_demo) VALUES ('knowledge',NULL,?,?,0)",
                 content, now);

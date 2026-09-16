@@ -8,6 +8,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.icecode.workbench.attachment.AttachmentService;
 import com.icecode.workbench.auth.AppConfigRepository;
 import com.icecode.workbench.auth.AuthConstants;
 import com.icecode.workbench.common.BizException;
@@ -22,10 +23,13 @@ public class EventService {
 
     private final EventRepository eventRepository;
     private final AppConfigRepository configRepository;
+    private final AttachmentService attachmentService;
 
-    public EventService(EventRepository eventRepository, AppConfigRepository configRepository) {
+    public EventService(EventRepository eventRepository, AppConfigRepository configRepository,
+                        AttachmentService attachmentService) {
         this.eventRepository = eventRepository;
         this.configRepository = configRepository;
+        this.attachmentService = attachmentService;
     }
 
     public List<EventVO> list(String date) {
@@ -97,6 +101,9 @@ public class EventService {
         // 逐期检测只会把同一条警告重复 N 遍，反而盖住真正的新信息。
         List<String> warnings = findConflicts(null, date, start, end);
         long id = eventRepository.insertRepeating(title, type, date, start, end, now, false, null, weeks);
+        // 附件只挂到**首期**：重复日程的每一期都是独立记录，把同一批附件复制 N 份
+        // 会让「删掉其中一期」时不知道该不该删文件，引用计数也失去意义。
+        attachmentService.bindAll(request.getAttachmentIds(), "schedule_event", id);
         eventRepository.insertActivity("task",
                 "新增日程「" + title + "」" + describeWhen(date, start) + (weeks > 1 ? "（每周，共 " + weeks + " 期）" : ""),
                 now);

@@ -46,13 +46,15 @@ public class DemoDataInitializer {
         insertInbox("看到一篇讲团队技术债治理的文章，思路值得记录一下", "web", now);
         insertInbox("充电桩电费发票报销", "web", now);
 
-        jdbcTemplate.update("INSERT INTO task(title, priority, status, due_date, is_deep_work, is_blocking, created_at, updated_at, is_demo) VALUES (?,?,?,?,?,?,?,?,1)",
+        // 示例任务全部是职场事项，分组显式写 'work'：演示数据的价值在于「打开就知道这产品长什么样」，
+        // 让它们靠关键词碰运气判定，可能有一条落进「生活」而在默认视图里看不见。
+        jdbcTemplate.update("INSERT INTO task(title, priority, status, due_date, is_deep_work, is_blocking, grp, created_at, updated_at, is_demo) VALUES (?,?,?,?,?,?,'work',?,?,1)",
                 "限流方案定稿（明天评审）", "P0", "doing", tomorrow, 1, 0, now, now);
-        jdbcTemplate.update("INSERT INTO task(title, priority, status, due_date, is_deep_work, is_blocking, created_at, updated_at, is_demo) VALUES (?,?,?,?,?,?,?,?,1)",
+        jdbcTemplate.update("INSERT INTO task(title, priority, status, due_date, is_deep_work, is_blocking, grp, created_at, updated_at, is_demo) VALUES (?,?,?,?,?,?,'work',?,?,1)",
                 "回复业务方日配额口径疑问", "P1", "todo", today, 0, 1, now, now);
-        jdbcTemplate.update("INSERT INTO task(title, priority, status, due_date, is_deep_work, is_blocking, created_at, updated_at, is_demo) VALUES (?,?,?,?,?,?,?,?,1)",
+        jdbcTemplate.update("INSERT INTO task(title, priority, status, due_date, is_deep_work, is_blocking, grp, created_at, updated_at, is_demo) VALUES (?,?,?,?,?,?,'work',?,?,1)",
                 "支付网关 MR 代码评审", "P2", "todo", yesterday, 0, 0, now, now);
-        jdbcTemplate.update("INSERT INTO task(title, priority, status, due_date, is_deep_work, is_blocking, created_at, updated_at, is_demo) VALUES (?,?,?,?,?,?,?,?,1)",
+        jdbcTemplate.update("INSERT INTO task(title, priority, status, due_date, is_deep_work, is_blocking, grp, created_at, updated_at, is_demo) VALUES (?,?,?,?,?,?,'work',?,?,1)",
                 "整理本周团队 1on1 纪要", "P3", "todo", plusThreeDays, 0, 0, now, now);
 
         insertEvent("团队站会", "meeting", today, "09:30", "10:00", now);

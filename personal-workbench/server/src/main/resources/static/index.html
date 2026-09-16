@@ -21,7 +21,14 @@
     <div class="gs-foot"><span><kbd>↑</kbd><kbd>↓</kbd> 选择结果</span><span><kbd>Tab</kbd> 收起 / 展开预览</span><span><kbd>Enter</kbd> 打开并定位</span><span><kbd>Esc</kbd> 关闭</span><span class="gs-foot-hint">回收站里的结果会跳到回收站页</span></div>
   </div>
   <nav class="tabs" aria-label="工作台导航">
-    <button class="active" data-tab="dashboard">驾驶舱</button><button data-tab="inbox">收录 <span class="badge" id="inboxBadge" style="display:none"></span></button><button data-tab="tasks">任务</button><button data-tab="schedule">日程</button><button data-tab="memos">备忘</button><button data-tab="timeline">时间线</button><button data-tab="knowledge">知识</button><button data-tab="trash">回收站 <span class="badge" id="trashBadge" style="display:none"></span></button>
+    <button class="active" data-tab="dashboard">驾驶舱</button><button data-tab="inbox">收录 <span class="badge" id="inboxBadge" style="display:none"></span></button><button data-tab="tasks">任务</button><button data-tab="schedule">日程</button><button data-tab="memos">备忘</button><button data-tab="timeline">时间线</button><button data-tab="knowledge">知识</button>
+    <!-- 「回收站」放在页签栏**最右边**，而且是一枚只带图标的按钮（2026-09-14，用户定的形态）。
+         .tabs-spacer 是把它顶到右边的那根弹簧：写 margin-left:auto 也行，但那样
+         「右侧留白」和「左侧间距」会耦合在一起，窄屏想单独收紧就没得调。
+         注意它仍然是 .tabs 的直接子元素 —— setTab 里那句 .tabs button 一把梭因此照旧管得到它，
+         不需要额外维护 active。 -->
+    <span class="tabs-spacer" aria-hidden="true"></span>
+    <button class="tab-icon" id="trashButton" data-tab="trash" title="回收站" aria-label="回收站"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h11" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M6.2 4.5V3.3c0-.5.4-.9.9-.9h1.8c.5 0 .9.4.9.9v1.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M4.1 4.5l.62 8.2c.04.5.46.9.97.9h4.62c.51 0 .93-.4.97-.9l.62-8.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.6 7.1v3.8M9.4 7.1v3.8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg><span class="badge" id="trashBadge" style="display:none"></span></button>
   </nav>
 
   <section class="view active" id="view-dashboard">
@@ -47,6 +54,20 @@
   </section>
 
   <section class="view" id="view-tasks">
+    <!-- 工作 / 生活分组切换（2026-09-14）。形态照抄备忘页的「空间」：同一套 .memo-switch
+         样式，视觉上两眼就知道是同一件事（备忘页叫空间，这里叫分组，但取值与配色都一致）。
+         **默认选中「工作」**（用户明确要求）：任务页打开的第一屏就是工作事项，
+         生活事项点一下就出来，不需要每次自己筛。
+         ⚠️ 三个按钮的 active 初值必须与 app.js 里 state.taskGrp 的初值一致 ——
+         两边写不一致的话，首帧会先亮错一个再被 renderTasks 纠正，看起来像闪了一下。 -->
+    <div class="task-switch-wrap">
+      <span class="memo-switch-title">分组</span>
+      <div class="memo-switch task-switch" role="tablist" aria-label="任务分组">
+        <button class="memo-choice work active" data-task-grp="work" title="工作事项：方案、评审、值班、客户与项目">工作</button>
+        <button class="memo-choice life" data-task-grp="life" title="生活事项：家庭采买、通勤、缴费与日常">生活</button>
+        <button class="memo-choice all" data-task-grp="all" title="不分分组，统一查看全部任务">全部</button>
+      </div>
+    </div>
     <!-- 搜索框放在筛选提示条**上面**：提示条要说明的是「你现在看到的是搜索结果/筛选结果」，
          所以它必须紧跟在触发它的那个入口下面，否则用户读到「当前只显示…」时会先去找是哪里触发的。 -->
     <!-- 「新建」和搜索同一行（2026-09-12 改版）：收起态只有「＋新建任务」占满整行 + 一个放大镜方按钮；
@@ -60,7 +81,7 @@
             <span class="c-plus" aria-hidden="true">＋</span><span>新建任务</span>
             <span class="c-sub">回车快速创建</span><span class="c-caret" aria-hidden="true">▾</span>
           </button>
-          <div class="composer-body" id="composerBodyTask">
+          <div class="composer-body" id="composerBodyTask" data-media-scope="task">
             <input id="taskTitle" class="c-title" maxlength="200" placeholder="任务标题，按回车保存">
             <div class="c-row">
               <select id="taskPriority"><option>P0</option><option>P1</option><option selected>P2</option><option>P3</option></select>
@@ -68,6 +89,19 @@
               <input id="taskNote" class="grow" maxlength="1000" placeholder="备注（可选）">
               <label class="c-check"><input type="checkbox" id="taskDeep">深度工作</label>
               <label class="c-check"><input type="checkbox" id="taskBlocking">阻塞他人</label>
+            </div>
+            <div class="media-strip" data-media-strip></div>
+            <div class="media-row">
+              <button class="media-add" type="button" data-media-parse title="解析图片（AI 识别图中内容）">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+                <span class="media-ai" aria-hidden="true">AI</span>
+              </button>
+              <span class="media-gap"></span>
+              <button class="media-attach" type="button" data-media-attach>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                附件<span class="media-cnt hidden" data-media-count></span>
+              </button>
+              <button class="btn" type="button" data-media-extract data-scope="task" data-category="task" title="用 AI 读出图中内容并填进上面的表单（不会直接建任务）">识别填表</button>
               <button class="btn primary" id="createTaskButton">新建任务</button>
             </div>
           </div>
@@ -114,14 +148,32 @@
     <article class="card collect-compose">
       <h3>先丢进来，不需要想分类</h3>
       <p class="muted">点「收录」会立刻完成收录并自动整理，结果显示在下面「待确认」里；核对分类和日期后点「确认生成」。日期默认填今天，可以改；把日期清空就表示这件事「时间待定」。</p>
-      <div class="inbox-compose"><input id="inboxInput" maxlength="4000" placeholder="一句话记录，回车即收录并整理"><button class="btn primary" id="inboxAddButton">收录</button></div>
+      <!-- 单容器形态：输入框 + 底部一排「＋AI / 附件 / 收录」。
+           整个容器是拖拽落点 —— 拖图片进来走解析，拖其它文件进附件。 -->
+      <div class="inbox-compose" data-media-scope="inbox">
+        <div class="media-strip" data-media-strip></div>
+        <input id="inboxInput" maxlength="4000" placeholder="一句话记录，回车即收录并整理；图片可直接拖进来">
+        <div class="media-row">
+          <button class="media-add" type="button" data-media-parse title="解析图片（AI 识别图中内容）">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+            <span class="media-ai" aria-hidden="true">AI</span>
+          </button>
+          <span class="media-gap"></span>
+          <button class="media-attach" type="button" data-media-attach>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+            附件<span class="media-cnt hidden" data-media-count></span>
+          </button>
+          <button class="btn primary" id="inboxAddButton">收录</button>
+        </div>
+      </div>
     </article>
     <article class="card" id="classifyCard">
       <div class="card-head">
         <h3>待确认 <span class="muted" id="classifyCount"></span></h3>
         <button class="btn sm" id="confirmHighConfidenceButton">一键确认高置信度</button>
       </div>
-      <p class="muted">整理器会先给出建议。置信度低于 70% 的条目<strong>不参与「一键确认」</strong>，需要你逐条核对后点「确认生成」——但沿用建议的类别直接确认也可以，不会拦着你。确认后原始收录记录会归档。</p>
+      <p class="muted">整理器会先给出建议。置信度低于 70% 的条目<strong>不参与「一键确认」</strong>，需要你逐条核对后点「确认生成」——但沿用建议的类别直接确认也可以，不会拦着你。确认后原始收录记录会归档。<strong>图片解析出来的条目一律需要你逐条确认</strong>，不参与一键批量确认。</p>
+      <div class="parse-status hidden" id="parseStatus"></div>
       <div id="classifyList"></div>
     </article>
     <article class="card" id="pendingCard">
@@ -141,7 +193,7 @@
             <span class="c-plus" aria-hidden="true">＋</span><span>加入日程</span>
             <span class="c-sub">回车快速加入</span><span class="c-caret" aria-hidden="true">▾</span>
           </button>
-          <div class="composer-body" id="composerBodyEvent">
+          <div class="composer-body" id="composerBodyEvent" data-media-scope="event">
             <input id="eventTitle" class="c-title" maxlength="200" placeholder="日程标题，回车加入">
             <div class="c-row">
               <select id="eventType"><option value="meeting">会议</option><option value="deep_block">深度块</option><option value="other">其他</option></select>
@@ -154,6 +206,19 @@
                 <option value="1">不重复</option>
                 <option value="4">每周 · 连续 4 周</option>
               </select>
+            </div>
+            <div class="media-strip" data-media-strip></div>
+            <div class="media-row">
+              <button class="media-add" type="button" data-media-parse title="解析图片（AI 识别图中内容）">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+                <span class="media-ai" aria-hidden="true">AI</span>
+              </button>
+              <span class="media-gap"></span>
+              <button class="media-attach" type="button" data-media-attach>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                附件<span class="media-cnt hidden" data-media-count></span>
+              </button>
+              <button class="btn" type="button" data-media-extract data-scope="event" data-category="schedule" title="用 AI 读出图中内容并填进上面的表单（不会直接建日程）">识别填表</button>
               <button class="btn primary" id="eventAddButton">加入</button>
             </div>
             <p class="c-hint">日期默认填今天（与此刻正在看哪一周无关，免得在别的周里误建）；清空日期则生成待定日程，它会落到下面的「待定时间」区。选了「连续 4 周」会一次生成 4 期，每一期都是独立日程，改其中一期不影响其余几期。结束早于开始会提示不支持跨日；时间重叠只提醒、不阻止保存。</p>
@@ -196,12 +261,25 @@
             <span class="c-plus" aria-hidden="true">＋</span><span>新建备忘</span>
             <span class="c-sub">Ctrl + Enter 保存</span><span class="c-caret" aria-hidden="true">▾</span>
           </button>
-          <div class="composer-body" id="composerBodyMemo">
+          <div class="composer-body" id="composerBodyMemo" data-media-scope="memo">
             <input id="memoTitle" class="c-title" maxlength="200" placeholder="标题（可留空，会自动取正文前 24 字）">
             <textarea id="memoContent" maxlength="4000" rows="3" placeholder="正文（可留空）：链接、家里要买的东西、班车时刻…"></textarea>
             <div class="c-row">
               <input id="memoTags" class="grow" maxlength="500" placeholder="标签（逗号分隔，留空自动归类）">
               <select id="memoGrp"><option value="auto">分组：自动</option><option value="work">工作</option><option value="life">生活</option></select>
+            </div>
+            <div class="media-strip" data-media-strip></div>
+            <div class="media-row">
+              <button class="media-add" type="button" data-media-parse title="解析图片（AI 识别图中内容）">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+                <span class="media-ai" aria-hidden="true">AI</span>
+              </button>
+              <span class="media-gap"></span>
+              <button class="media-attach" type="button" data-media-attach>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                附件<span class="media-cnt hidden" data-media-count></span>
+              </button>
+              <button class="btn" type="button" data-media-extract data-scope="memo" data-category="memo" title="用 AI 读出图中内容并填进上面的表单（不会直接存备忘）">识别填表</button>
               <button class="btn primary" id="memoAddButton">保存备忘</button>
             </div>
             <p class="mc-hint">标题和正文至少写一项（只有标题的「速查信息」也能存）；正文里回车是换行，按 Ctrl + Enter 保存，标题留空时自动用正文前 24 字。</p>
@@ -230,6 +308,14 @@
     <div id="timelineList"></div>
   </section>
   <section class="view" id="view-knowledge">
+    <article class="card">
+      <h3>收藏文章</h3>
+      <p class="muted">把得到的分享链接（或微信里整段分享文案）粘进来，会自动抓出标题、作者和正文，按课程归档到 Obsidian，并录入下面的知识库。<strong>重复收藏不会覆盖</strong>，会另存一个新文件。</p>
+      <div class="kb-chat-row">
+        <input type="text" id="collectInput" maxlength="2000" placeholder="粘贴得到分享链接，或微信里的整段分享文案">
+        <button class="btn primary" id="collectButton">收藏</button>
+      </div>
+    </article>
     <article class="card kb-chat-card">
       <h3>知识库问答 <span class="muted" id="kbIndexInfo"></span></h3>
       <div class="chat-box" id="kbChatBox"></div>
@@ -240,7 +326,11 @@
     </article>
     <article class="card">
       <h3>知识笔记 <span class="muted" id="kbNoteCount"></span></h3>
-      <p class="muted">整理确认时归类为「知识」的条目会写入 Vault 的 00-Inbox 目录；删除只移除这里的记录，Vault 文件保留。</p>
+      <p class="muted">整理确认时归类为「知识」的条目会写入 Vault 的 00-Inbox 目录；删除只移除这里的记录，Vault 文件保留。你<b>早就存在 Vault 里</b>的笔记可以用下面这个入口一次性补进来（重复点不会产生重复条目，文件不会被移动或改动）。</p>
+      <div class="kb-chat-row" style="margin-bottom:12px">
+        <input type="text" id="importDirInput" maxlength="200" value="知识体系/得到" placeholder="Vault 子目录，留空则导入整个 Vault">
+        <button class="btn" id="importVaultButton">从 Vault 导入</button>
+      </div>
       <div id="kbNoteList"></div>
     </article>
   </section>
@@ -271,9 +361,15 @@
       </article>
       <article class="set-card">
         <div class="set-card-head"><div class="set-ico" style="background:#efeafa;color:#534AB7">AI</div><div><h3>AI 增强（整理分类 + 知识问答）</h3><p>兼容任意 OpenAI 接口（DeepSeek 等），失败自动回退本地规则，密钥仅保存在本机数据库</p></div></div>
-        <div class="checks" style="margin:0 0 14px"><label><input type="checkbox" id="setAiEnabled"> 启用外部 LLM 整理</label></div>
+        <div class="checks" style="margin:0 0 14px"><label><input type="checkbox" id="setAiEnabled"> 启用外部 LLM（整理 / 问答 / 搜索扩展 / 图片解析共用此开关）</label></div>
+        <p class="set-note">这个开关是<strong>总开关</strong>：关着的时候上面四个功能<strong>全部</strong>不可用，包括图片解析 —— 图片解析报「模型不支持」时，先看这里有没有勾上。</p>
         <div class="set-field"><label for="setAiBaseUrl">接口地址</label><input id="setAiBaseUrl" maxlength="200" placeholder="如 https://api.deepseek.com 或 https://api.example.com/v1"></div>
-        <div class="set-field"><label for="setAiModel">模型名</label><input id="setAiModel" maxlength="100" placeholder="如 deepseek-chat / deepseek-reasoner"></div>
+        <div class="set-field"><label for="setAiModel">模型名</label><input id="setAiModel" maxlength="100" placeholder="如 deepseek-flash / deepseek-reasoner"></div>
+        <div class="set-field"><label for="setAiVisionModel">视觉模型名（图片解析）</label><input id="setAiVisionModel" maxlength="100" placeholder="如 deepseek-flash / qwen-vl-max / gpt-4o-mini"></div>
+        <p class="set-note">留空则关闭图片解析（「＋AI」会提示未配置）。图片会以 base64 发给上面这个接口地址，长边压到 1600px、转成 JPEG 后再发。</p>
+        <p class="set-note">⚠️ 要填的是 <strong>API 模型名</strong>，不是产品名。例如 DeepSeek 的多模态模型要填 <code>deepseek-flash</code>，填成 <code>deepseek-V4.1-Flash</code> 会被服务端拒绝（400 模型不存在）。拿不准时查服务商的「模型列表」接口。</p>
+        <div class="checks" style="margin:0 0 14px"><label><input type="checkbox" id="setAiVisionLocalOnly"> 图片仅本地处理，不发给外部模型</label></div>
+        <p class="set-note">勾上它 <strong>不表示</strong>「本地也能解析」——本项目没有内置视觉模型，勾上只是让图片解析整体停用，保证截图不出本机。它与上面的「视觉模型名」互斥。</p>
         <div class="set-field"><label for="setAiKey">API Key</label><div class="set-row2"><input type="password" id="setAiKey" maxlength="200" placeholder="留空保持不变"><button class="btn primary" id="saveAiButton">保存 AI 配置</button></div><p class="set-note" id="aiKeyHint">未配置 API Key 时始终使用本地规则整理。</p></div>
       </article>
       <article class="set-card">

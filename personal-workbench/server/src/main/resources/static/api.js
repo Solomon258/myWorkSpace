@@ -1,6 +1,13 @@
 (function(global){
   async function request(path, options){
-    const config=Object.assign({headers:{"Content-Type":"application/json"}},options||{});
+    const opts=options||{};
+    const headers=Object.assign({},opts.headers||{});
+    // rawBody：上传 multipart 时**绝不能**手写 Content-Type —— boundary 由浏览器生成，
+    // 写死成 "multipart/form-data" 就不带 boundary，后端解析必然失败（400）。
+    // 保留这个开关而不是全局放开，是为了让既有的 11 个 JSON 接口行为一个字都不变。
+    if(!opts.rawBody)headers["Content-Type"]="application/json";
+    const config=Object.assign({},opts,{headers:headers});
+    delete config.rawBody;
     let response;
     try{response=await fetch(path,config)}catch(error){throw new Error("暂时无法连接工作台，请确认程序正在运行")}
     // 只有本项目契约（ApiResponse）的响应才带 code。带不出 code 时说明请求**压根没进业务代码**：
@@ -32,17 +39,28 @@
     updateTask:function(id,data){return request("/api/v1/tasks/"+id,{method:"PATCH",body:JSON.stringify(data)})},
     changeTaskStatus:function(id,status){return request("/api/v1/tasks/"+id+"/status",{method:"POST",body:JSON.stringify({status:status})})},
     postponeTask:function(id){return request("/api/v1/tasks/"+id+"/postpone",{method:"POST"})},
+    // 只改工作 / 生活分组：卡片上的分组徽标是一键切换，走 updateTask 会把标题 / 优先级 /
+    // 日期 / 备注全部回传一遍，并发场景下会把别处刚做的修改覆盖掉（丢失更新）。
+    changeTaskGroup:function(id,grp){return request("/api/v1/tasks/"+id+"/group",{method:"POST",body:JSON.stringify({grp:grp})})},
     deleteTask:function(id){return request("/api/v1/tasks/"+id,{method:"DELETE"})},
     // 把一条记录从任务 / 日程 / 备忘中的一个菜单搬到另一个（后端一个事务里完成：
     // 目标菜单新建 + 源记录进回收站 + 记一条流水）。
     transfer:function(data){return request("/api/v1/transfers",{method:"POST",body:JSON.stringify(data)})},
     inbox:function(status){return request("/api/v1/inbox"+(status?"?status="+encodeURIComponent(status):""))},
-    createInbox:function(raw){return request("/api/v1/inbox",{method:"POST",body:JSON.stringify({raw:raw})})},
+    // attachmentIds：先在 POST /api/v1/attachments 上传拿到 id，收录时一次性绑定
+    // （留空 = 没有附件，与加这个参数之前的行为一致）。
+    createInbox:function(raw,attachmentIds){return request("/api/v1/inbox",{method:"POST",body:JSON.stringify({raw:raw,attachmentIds:attachmentIds||[]})})},
     classifyInbox:function(){return request("/api/v1/inbox/classify",{method:"POST"})},
     classifyJob:function(jobId){return request("/api/v1/inbox/jobs/"+jobId)}, // 前端不使用：整理是同步完成的，前端不需要轮询；此接口保留给后端审计与排障
     reclassifyInbox:function(id){return request("/api/v1/inbox/"+id+"/reclassify",{method:"POST"})},
     confirmInbox:function(id,data){return request("/api/v1/inbox/"+id+"/confirm",{method:"POST",body:JSON.stringify(data)})},
+    // 一次确认多条：图片解析一张图常出 2–3 条，逐条点「确认生成」时列表每次重排、很容易点错。
+    // items = [{inboxId, confirm:{category,title,due,priority,start,end,eventType}}]
+    confirmInboxItems:function(items){return request("/api/v1/inbox/confirm-items",{method:"POST",body:JSON.stringify({items:items})})},
     confirmHighConfidence:function(){return request("/api/v1/inbox/confirm-high-confidence",{method:"POST"})},
+    // 图片解析：立刻返回（解析要 3–10 秒，同步等会把整页卡住），进度靠 parseStatus 轮询。
+    parseImages:function(attachmentIds,source){return request("/api/v1/inbox/parse-images",{method:"POST",body:JSON.stringify({attachmentIds:attachmentIds,source:source||"web"})})},
+    parseStatus:function(){return request("/api/v1/inbox/parse-status")},
     deleteInbox:function(id){return request("/api/v1/inbox/"+id,{method:"DELETE"})},
     // 日程列表有三个形态，收成一个 params 对象（与 tasks / memos 的写法一致）：
     //   {q}       → 全文检索，命中**全部日期**（含待定区）
@@ -84,6 +102,10 @@
     deleteKnowledge:function(id){return request("/api/v1/knowledge/notes/"+id,{method:"DELETE"})},
     knowledgeIndex:function(){return request("/api/v1/knowledge/index")},
     knowledgeAsk:function(question){return request("/api/v1/knowledge/ask",{method:"POST",body:JSON.stringify({question:question})})},
+    // 收藏文章：把得到的分享链接（或一整段分享文案）交给后端解析、按课程归档到 Vault、并录入知识库。
+    collectArticle:function(content){return request("/api/v1/collect/article",{method:"POST",body:JSON.stringify({content:content})})},
+    // 存量回填：把 Vault 里已有的笔记导入知识库。幂等，重复调用不会产生重复条目。
+    importVault:function(dir){return request("/api/v1/knowledge/import",{method:"POST",body:JSON.stringify({dir:dir})})},
     // 全局搜索（跨 收录 / 任务 / 日程 / 备忘 / 时间线 + 回收站）。
     // 这是**独立通道**：一次输入只打这一个接口，绝不触发 refreshAll 那 11 个请求。
     // options 用来透传 AbortController 的 signal（取消上一次未完成的搜索）。
@@ -93,6 +115,20 @@
     expandSearch:function(q){return request("/api/v1/search/expand",{method:"POST",body:JSON.stringify({q:q})})},
     // 回收站（US-1.5）。type 是后端约定的实体名：inbox / task / event / memo / knowledge。
     trash:function(){return request("/api/v1/trash")},
-    restoreTrash:function(type,id){return request("/api/v1/trash/"+encodeURIComponent(type)+"/"+id+"/restore",{method:"POST"})}
+    restoreTrash:function(type,id){return request("/api/v1/trash/"+encodeURIComponent(type)+"/"+id+"/restore",{method:"POST"})},
+    // 上传单个附件。多选时前端**循环调用**：每张图各自有进度、可单独重试，
+    // 一张失败不拖垮其余几张（后端也只为单文件设计）。
+    // owner 可省略（先上传、提交表单时再绑定），传了就当场归属。
+    uploadAttachment:function(file,owner){
+      const form=new FormData();
+      form.append("file",file);
+      if(owner&&owner.ownerType){
+        form.append("ownerType",owner.ownerType);
+        form.append("ownerId",String(owner.ownerId));
+      }
+      return request("/api/v1/attachments",{method:"POST",body:form,rawBody:true});
+    },
+    // 移除缩略图时删掉刚上传的附件（软删，30 天内可恢复）。
+    deleteAttachment:function(id){return request("/api/v1/attachments/"+id,{method:"DELETE"})}
   };
 })(window);

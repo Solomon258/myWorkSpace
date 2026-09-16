@@ -11,10 +11,12 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.icecode.workbench.attachment.AttachmentService;
 import com.icecode.workbench.auth.AppConfigRepository;
 import com.icecode.workbench.auth.AuthConstants;
 import com.icecode.workbench.common.BizException;
 import com.icecode.workbench.common.ErrorCode;
+import com.icecode.workbench.memo.MemoService;
 import com.icecode.workbench.util.TimeUtil;
 
 @Service
@@ -27,23 +29,36 @@ public class TaskService {
 
     private final TaskRepository taskRepository;
     private final AppConfigRepository configRepository;
+    private final MemoService memoService;
+    private final AttachmentService attachmentService;
 
-    public TaskService(TaskRepository taskRepository, AppConfigRepository configRepository) {
+    /**
+     * 工作 / 生活的判定规则复用 {@code MemoService.autoGroup}，**不在这里再写一份关键词表**。
+     *
+     * <p>理由与 {@code TransferService} 复用备忘的标签推导一致：两处各写一份「什么时候算工作」，
+     * 迟早会漂 —— 而漂了不报错，只是同一条内容从任务页进来算工作、从备忘页进来算生活，
+     * 用户永远说不清哪个才是对的。{@code MemoService} 不依赖 task 包，注入不会成环。</p>
+     */
+    public TaskService(TaskRepository taskRepository, AppConfigRepository configRepository,
+                       MemoService memoService, AttachmentService attachmentService) {
         this.taskRepository = taskRepository;
         this.configRepository = configRepository;
+        this.memoService = memoService;
+        this.attachmentService = attachmentService;
     }
 
-    public List<TaskVO> list(String status, String priority, String keyword, String dueFrom,
+    public List<TaskVO> list(String status, String priority, String grp, String keyword, String dueFrom,
                              String dueTo, int page, int size) {
         validateOptionalStatus(status);
         validateOptionalPriority(priority);
+        validateOptionalGroup(grp);
         validateOptionalDate(dueFrom);
         validateOptionalDate(dueTo);
         int safePage = Math.max(1, page);
         int safeSize = Math.min(100, Math.max(1, size));
         LocalDate today = today();
         List<TaskVO> result = new ArrayList<TaskVO>();
-        for (TaskRecord record : taskRepository.find(status, priority, keyword, dueFrom, dueTo, safePage, safeSize)) {
+        for (TaskRecord record : taskRepository.find(status, priority, grp, keyword, dueFrom, dueTo, safePage, safeSize)) {
             result.add(toVO(record, today));
         }
         return result;
@@ -54,8 +69,16 @@ public class TaskService {
         request.setTitle(requireTitle(request.getTitle()));
         request.setPriority(normalizePriority(request.getPriority()));
         request.setDue(normalizeDate(request.getDue()));
+        // 分组：没传 / 传 auto 时按标题 + 描述的关键词判定，与备忘页同一套规则。
+        // 判定放在**服务层**而不是数据库默认值：默认值是死板的 'work'，
+        // 那样「买奶粉」这类生活任务会被静默塞进工作里，用户永远看不到自己漏了什么。
+        request.setGrp(resolveCreateGroup(request.getGrp(), request.getTitle(), request.getDescription()));
         String now = now();
         long id = taskRepository.insert(request, now);
+        // 附件是「先上传拿 id、提交时才绑定」：上传阶段文件已经落盘校验完毕，
+        // 这里只做归属。已挂在别处的附件会被拒（见 AttachmentService.bindAll），
+        // 所以整个方法必须在一个事务里 —— 绑定失败要连带任务一起回滚。
+        attachmentService.bindAll(request.getAttachmentIds(), "task", id);
         taskRepository.insertActivity("task", "新建任务「" + request.getTitle() + "」（" + request.getPriority() + "）", now);
         return get(id);
     }
@@ -69,10 +92,35 @@ public class TaskService {
         if (request.getDue() != null) task.due = normalizeDate(request.getDue());
         if (request.getDeep() != null) task.deep = request.getDeep().booleanValue();
         if (request.getBlocking() != null) task.blocking = request.getBlocking().booleanValue();
+        if (request.getGrp() != null && !request.getGrp().trim().isEmpty()) {
+            task.grp = normalizeGroup(request.getGrp());
+        }
         if (request.getNote() != null) task.note = trimToNull(request.getNote());
         task.updatedAt = now();
         taskRepository.update(task);
         taskRepository.insertActivity("task", "编辑任务「" + task.title + "」", task.updatedAt);
+        return get(id);
+    }
+
+    /**
+     * 只改分组（卡片上那个可点的「工作 / 生活」徽标走这条路）。
+     *
+     * <p>为什么不复用 {@code update()}：那条路是「整体覆盖式」的，前端为了改一个分组
+     * 就得把标题、优先级、日期、备注全部回传一遍 —— 期间用户要是在另一个窗口改了标题，
+     * 这次提交会把旧标题写回去（丢失更新）。改分组就只动分组这一格。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public TaskVO changeGroup(long id, String targetGroup) {
+        TaskRecord task = requireTask(id);
+        String group = normalizeGroup(targetGroup);
+        if (group.equals(task.grp)) {
+            // 幂等：点到自己已经在的那一侧不算错，也不写一条毫无信息量的流水。
+            return toVO(task, today());
+        }
+        task.grp = group;
+        task.updatedAt = now();
+        taskRepository.update(task);
+        taskRepository.insertActivity("task", "任务「" + task.title + "」移到" + groupName(group), task.updatedAt);
         return get(id);
     }
 
@@ -177,6 +225,7 @@ public class TaskService {
         }
         return new TaskVO(record.id, record.title, record.description, record.priority, record.status,
                 record.due, overdue, overdueDays, record.deep, record.blocking, record.note,
+                record.grp == null ? "work" : record.grp,
                 record.postponed, record.sourceInboxId, record.createdAt, record.updatedAt,
                 record.completedAt, record.demo);
     }
@@ -227,6 +276,45 @@ public class TaskService {
         return value;
     }
     private void validateOptionalDate(String value) { if (value != null && !value.isEmpty()) parseDate(value); }
+    private void validateOptionalGroup(String value) { if (value != null && !value.trim().isEmpty()) normalizeGroup(value); }
+    /**
+     * 分组取值收敛到 work / life 两值。
+     *
+     * <p>报错文案必须能指导操作 —— 用户是按界面上的「工作 / 生活」点进来的，
+     * 收到「请求参数不正确」只会一头雾水，所以要写清合法取值。</p>
+     */
+    private String normalizeGroup(String value) {
+        String group = value == null ? "" : value.trim().toLowerCase();
+        if (!("work".equals(group) || "life".equals(group))) {
+            throw new BizException(ErrorCode.INVALID_PARAMETER, "任务分组只能填 work（工作）或 life（生活）");
+        }
+        return group;
+    }
+    /**
+     * 创建时的分组落定：显式传了就用传的，否则交给 {@code MemoService.autoGroup} 判定。
+     *
+     * <p>判定用的文本是「标题 + 描述」：任务的标题常常只有两个字（「报销」「买奶粉」），
+     * 只拿标题判定会漏掉写在描述里的关键线索。</p>
+     */
+    private String resolveCreateGroup(String requested, String title, String description) {
+        if (requested != null && !requested.trim().isEmpty() && !"auto".equalsIgnoreCase(requested.trim())) {
+            return normalizeGroup(requested);
+        }
+        return resolveGroupFor(title, description);
+    }
+    private String groupName(String group) { return "life".equals(group) ? "生活" : "工作"; }
+
+    /**
+     * 给「不是从任务页进来的」任务写入路径判定分组（收录确认是唯一一处）。
+     *
+     * <p>{@code public} 的理由与 {@code MemoService.autoGroup} 一样：判断规则只能有一份实现。
+     * 收录确认那条路用的是裸 SQL INSERT（不走 Repository），如果它在自己那边也拼一套关键词，
+     * 同一个「买奶粉」从收录进来算工作、从任务页建就算生活 —— 而这种差异界面上看不出来。</p>
+     */
+    public String resolveGroupFor(String title, String description) {
+        String text = (title == null ? "" : title) + " " + (description == null ? "" : description);
+        return normalizeGroup(memoService.autoGroup(text));
+    }
     private String normalizeDate(String value) { return value == null || value.trim().isEmpty() ? null : TimeUtil.format(parseDate(value.trim())); }
     private LocalDate parseDate(String value) {
         try { return LocalDate.parse(value); }

@@ -17,7 +17,19 @@ public enum ErrorCode {
     BACKUP_FAILED(3004, "备份失败，请稍后重试"),
     RESTORE_INVALID(3005, "备份文件无效或与本应用版本不兼容"),
     CONFIRM_REQUIRED(3006, "该操作有风险，需要显式确认"),
-    VAULT_NOT_CONFIGURED(3007, "尚未配置 Obsidian Vault，请到「设置 → Obsidian」填写库路径");
+    VAULT_NOT_CONFIGURED(3007, "尚未配置 Obsidian Vault，请到「设置 → Obsidian」填写库路径"),
+    ARTICLE_PARSE_FAILED(3008, "没能从这个链接里读出文章信息，请确认它能在浏览器里正常打开"),
+    UNSUPPORTED_LINK(3009, "暂不支持这个来源的链接，目前支持得到的分享链接"),
+    // 附件相关：类型 / 大小 / 数量 / 占用 四个约束在不同入口都复用同一套码，
+    // 具体原因（哪个文件、超了多少）由 BizException 的第二参数透传。
+    ATTACHMENT_INVALID(3010, "附件不合法，请检查文件类型与大小"),
+    ATTACHMENT_NOT_FOUND(3011, "附件不存在或已被删除"),
+    ATTACHMENT_OCCUPIED(3012, "该附件已经挂在其他记录上"),
+    ATTACHMENT_TOO_LARGE(3013, "上传的文件超过了大小上限"),
+    ATTACHMENT_OVER_LIMIT(3014, "附件数量超过了上限"),
+    // 视觉解析
+    VISION_UNSUPPORTED(3015, "当前配置的模型不支持图片解析，请在设置里填写视觉模型"),
+    VISION_FAILED(3016, "图片识别失败，可稍后重试");
 
     private final int code;
     private final String message;

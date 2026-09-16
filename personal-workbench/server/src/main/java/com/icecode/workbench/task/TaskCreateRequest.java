@@ -1,5 +1,7 @@
 package com.icecode.workbench.task;
 
+import java.util.List;
+
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Pattern;
 import javax.validation.constraints.Size;
@@ -22,8 +24,22 @@ public class TaskCreateRequest {
     private boolean deep;
     private boolean blocking;
 
+    /**
+     * 工作 / 生活分组。留空或填 {@code auto} 时由后端按关键词自动判定
+     * （复用 {@code MemoService.autoGroup} 的规则），与备忘页的「空间」是同一套语义。
+     */
+    @Pattern(regexp = "^(auto|work|life)?$", message = "分组只能填 work / life / auto，留空表示自动判定")
+    private String grp;
+
     @Size(max = 1000, message = "备注不能超过 1000 字")
     private String note;
+
+    /**
+     * 要挂到这条任务上的附件 id（先在 {@code POST /api/v1/attachments} 上传拿到 id）。
+     * 留空或 null = 没有附件，行为与加这个字段之前**完全一致**。
+     */
+    @Size(max = 9, message = "一条记录最多带 9 个附件")
+    private List<Long> attachmentIds;
 
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
@@ -37,6 +53,10 @@ public class TaskCreateRequest {
     public void setDeep(boolean deep) { this.deep = deep; }
     public boolean isBlocking() { return blocking; }
     public void setBlocking(boolean blocking) { this.blocking = blocking; }
+    public String getGrp() { return grp; }
+    public void setGrp(String grp) { this.grp = grp; }
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }
+    public List<Long> getAttachmentIds() { return attachmentIds; }
+    public void setAttachmentIds(List<Long> attachmentIds) { this.attachmentIds = attachmentIds; }
 }

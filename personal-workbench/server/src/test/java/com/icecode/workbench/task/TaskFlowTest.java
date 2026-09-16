@@ -166,9 +166,158 @@ class TaskFlowTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(1));
     }
 
+    /**
+     * 工作 / 生活分组（2026-09-14）。用户的诉求是「能筛选工作和生活，默认选择工作」。
+     *
+     * <p>这里守两件事：① {@code ?grp=} 真的在**取数层**过滤；② 不传 grp 时返回全部 ——
+     * 后者是给「全部」视图用的，不能被哪个默认值悄悄收窄。</p>
+     */
+    @Test
+    void filtersTasksByWorkAndLifeGroup() throws Exception {
+        insertTask("写限流方案", "todo", null, "P0", 0, 0, 0, "work");
+        insertTask("评审 MR", "todo", null, "P1", 0, 0, 0, "work");
+        insertTask("买奶粉", "todo", null, "P2", 0, 0, 0, "life");
+
+        mockMvc.perform(get("/api/v1/tasks").param("grp", "work").session(session))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(2));
+        mockMvc.perform(get("/api/v1/tasks").param("grp", "life").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].title").value("买奶粉"))
+                .andExpect(jsonPath("$.data[0].grp").value("life"));
+        // 不传 grp = 全部（「全部」分组视图走这条路）
+        mockMvc.perform(get("/api/v1/tasks").session(session))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(3));
+    }
+
+    /**
+     * 分组与检索是**两个独立条件**，必须一起生效。
+     *
+     * <p>这条是有针对性的：任务检索与分组都收在 {@code TaskService.list} 里下传给 SQL，
+     * 一旦哪次重构把它俩写成一个 OR（或后者覆盖前者），用户就会在「工作」里搜出生活任务，
+     * 而界面上的提示条还写着「在工作分组里搜索」，自相矛盾却看不出是谁错了。</p>
+     */
+    @Test
+    void combinesGroupFilterWithKeywordSearch() throws Exception {
+        insertTask("方案定稿", "todo", null, "P0", 0, 0, 0, "work");
+        insertTask("家里的方案（装修）", "todo", null, "P2", 0, 0, 0, "life");
+
+        mockMvc.perform(get("/api/v1/tasks").param("grp", "work").param("keyword", "方案").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].title").value("方案定稿"));
+    }
+
+    @Test
+    void rejectsUnknownTaskGroup() throws Exception {
+        mockMvc.perform(get("/api/v1/tasks").param("grp", "family").session(session))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1002))
+                // 报错必须能指导操作：说清合法取值，而不是笼统的「参数不正确」
+                .andExpect(jsonPath("$.message").value("任务分组只能填 work（工作）或 life（生活）"));
+    }
+
+    /**
+     * 创建时留空 → 按关键词自动判定；显式传 life → 用传进来的值。
+     *
+     * <p>判定复用 {@code MemoService.autoGroup}（工作关键词命中判 work，否则 life），
+     * 也就是**判定规则只有一份实现**。这里两条例子里，「买奶粉」是生活、
+     * 「评审方案」命中工作关键词 —— 如果哪天把判定抄成第二份，这两条会先红。</p>
+     */
+    @Test
+    void autoDetectsGroupOnCreateButHonoursExplicitValue() throws Exception {
+        mockMvc.perform(post("/api/v1/tasks").session(session)
+                        .contentType("application/json").content("{\"title\":\"买奶粉和湿巾\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.grp").value("life"));
+
+        mockMvc.perform(post("/api/v1/tasks").session(session)
+                        .contentType("application/json").content("{\"title\":\"评审一遍限流方案\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.grp").value("work"));
+
+        // 显式传值优先于判定：标题看着像生活，但用户就是要归到工作
+        mockMvc.perform(post("/api/v1/tasks").session(session)
+                        .contentType("application/json").content("{\"title\":\"买奶粉顺路问下客户\",\"grp\":\"work\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.grp").value("work"));
+
+        // auto 与留空同义
+        mockMvc.perform(post("/api/v1/tasks").session(session)
+                        .contentType("application/json").content("{\"title\":\"取快递\",\"grp\":\"auto\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.grp").value("life"));
+    }
+
+    /**
+     * 卡片上的分组徽标走 {@code POST /{id}/group}：一键切换、幂等、且只动分组这一格。
+     *
+     * <p>幂等那条是有意写的：徽标是「点一下切到另一侧」，用户点到已经在的那一侧不该报错，
+     * 也不该留下一条毫无信息量的流水。</p>
+     */
+    @Test
+    void movesTaskBetweenGroupsWithoutTouchingOtherFields() throws Exception {
+        long id = insertTask("报销发票", "todo", tomorrow(), "P1", 1, 0, 2, "work");
+        String beforeUpdated = jdbcTemplate.queryForObject("SELECT updated_at FROM task WHERE id=?", String.class, id);
+
+        mockMvc.perform(post("/api/v1/tasks/{id}/group", id).session(session)
+                        .contentType("application/json").content("{\"grp\":\"life\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.grp").value("life"))
+                // 其余字段一个都不能被顺手改掉
+                .andExpect(jsonPath("$.data.title").value("报销发票"))
+                .andExpect(jsonPath("$.data.priority").value("P1"))
+                .andExpect(jsonPath("$.data.due").value(tomorrow()))
+                .andExpect(jsonPath("$.data.deep").value(true))
+                .andExpect(jsonPath("$.data.postponed").value(2));
+
+        assertThat(jdbcTemplate.queryForObject("SELECT grp FROM task WHERE id=?", String.class, id)).isEqualTo("life");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM activity_log WHERE log_type='task' AND content LIKE '%报销发票%移到生活%'",
+                Integer.class)).isEqualTo(1);
+
+        // 幂等：再切到同一侧不算错，也不重复记流水
+        mockMvc.perform(post("/api/v1/tasks/{id}/group", id).session(session)
+                        .contentType("application/json").content("{\"grp\":\"life\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.grp").value("life"));
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM activity_log WHERE log_type='task' AND content LIKE '%报销发票%移到生活%'",
+                Integer.class)).isEqualTo(1);
+
+        // 非法取值：400 + 中文原因
+        mockMvc.perform(post("/api/v1/tasks/{id}/group", id).session(session)
+                        .contentType("application/json").content("{\"grp\":\"family\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value(1002));
+    }
+
+    /**
+     * 编辑任务时可以顺手改分组，且**不改分组时不能把原分组冲掉**。
+     *
+     * <p>第二条是这次最容易踩的坑：{@code TaskUpdateRequest.grp} 是可空的「不改这一项」语义，
+     * 若实现里写成「空值 = 重新判定」或「空值 = 落回 work」，
+     * 那么用户只改一个标题就会把一条生活任务悄悄挪到工作里 —— 而且界面上什么都看不出来。</p>
+     */
+    @Test
+    void updatesGroupOnlyWhenExplicitlyProvided() throws Exception {
+        long lifeId = insertTask("缴物业费", "todo", null, "P2", 0, 0, 0, "life");
+        long workId = insertTask("写方案", "todo", null, "P2", 0, 0, 0, "work");
+
+        // 只改标题：分组必须原样留着
+        mockMvc.perform(patch("/api/v1/tasks/{id}", lifeId).session(session)
+                        .contentType("application/json").content("{\"title\":\"缴物业费和水电\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.grp").value("life"));
+
+        // 显式改分组：生效
+        mockMvc.perform(patch("/api/v1/tasks/{id}", workId).session(session)
+                        .contentType("application/json").content("{\"grp\":\"life\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.grp").value("life"));
+    }
+
     private long insertTask(String title, String status, String due, String priority, int deep, int blocking, int postponed) {
-        jdbcTemplate.update("INSERT INTO task(title,priority,status,due_date,is_deep_work,is_blocking,postponed,created_at,updated_at,is_demo) VALUES (?,?,?,?,?,?,?,?,?,0)",
-                title, priority, status, due, deep, blocking, postponed, nowText(), nowText());
+        // 默认 work：绝大多数既有用例关心的是状态机 / 排序，不是分组，让它们少写一个参数。
+        return insertTask(title, status, due, priority, deep, blocking, postponed, "work");
+    }
+
+    private long insertTask(String title, String status, String due, String priority, int deep, int blocking,
+                            int postponed, String grp) {
+        jdbcTemplate.update("INSERT INTO task(title,priority,status,due_date,is_deep_work,is_blocking,postponed,grp,created_at,updated_at,is_demo) VALUES (?,?,?,?,?,?,?,?,?,?,0)",
+                title, priority, status, due, deep, blocking, postponed, grp, nowText(), nowText());
         return jdbcTemplate.queryForObject("SELECT id FROM task WHERE title=?", Long.class, title).longValue();
     }
 }

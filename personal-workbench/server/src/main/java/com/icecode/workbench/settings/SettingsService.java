@@ -25,6 +25,21 @@ public class SettingsService {
     public static final String KEY_AI_BASE_URL = "ai.base_url";
     public static final String KEY_AI_MODEL = "ai.model";
     public static final String KEY_AI_API_KEY = "ai.api_key";
+    /**
+     * 视觉模型名，与 {@link #KEY_AI_MODEL} 分开配置。
+     *
+     * <p>同一个服务地址下文本模型与视觉模型通常不同名（如 deepseek-chat 与 gpt-4o-mini），
+     * 共用一个键会让「配好文本整理」和「配好图片解析」互相覆盖。</p>
+     */
+    public static final String KEY_AI_VISION_MODEL = "ai.vision_model";
+    /**
+     * 「仅本地解析」开关。
+     *
+     * <p>开启后图片**不会**发给外部模型，解析入口直接报「已关闭云端解析」。
+     * 有些截图（工资条、合同、客户名单）用户就是不希望出本机，
+     * 而这个决定必须由用户自己下，不能由我们默认替他决定。</p>
+     */
+    public static final String KEY_AI_VISION_LOCAL_ONLY = "ai.vision_local_only";
     public static final String KEY_OBSIDIAN_VAULT = "obsidian.vault_path";
 
     private final AppConfigRepository configRepository;
@@ -37,7 +52,8 @@ public class SettingsService {
     public SettingsVO get() {
         Map<String, String> config = configRepository.findValues(
                 AuthConstants.CONFIG_USERNAME,
-                KEY_AI_ENABLED, KEY_AI_BASE_URL, KEY_AI_MODEL, KEY_AI_API_KEY, KEY_OBSIDIAN_VAULT);
+                KEY_AI_ENABLED, KEY_AI_BASE_URL, KEY_AI_MODEL, KEY_AI_API_KEY,
+                KEY_AI_VISION_MODEL, KEY_AI_VISION_LOCAL_ONLY, KEY_OBSIDIAN_VAULT);
         String apiKey = config.get(KEY_AI_API_KEY);
         return new SettingsVO(
                 config.get(AuthConstants.CONFIG_USERNAME),
@@ -46,7 +62,9 @@ public class SettingsService {
                 emptyToNull(config.get(KEY_AI_MODEL)),
                 mask(apiKey),
                 apiKey != null && !apiKey.isEmpty(),
-                emptyToNull(config.get(KEY_OBSIDIAN_VAULT)));
+                emptyToNull(config.get(KEY_OBSIDIAN_VAULT)),
+                emptyToNull(config.get(KEY_AI_VISION_MODEL)),
+                Boolean.parseBoolean(config.get(KEY_AI_VISION_LOCAL_ONLY)));
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -83,10 +101,21 @@ public class SettingsService {
         String baseUrl = trimToNull(request.getBaseUrl());
         String model = trimToNull(request.getModel());
         if (request.isEnabled() && baseUrl == null) throw new BizException(ErrorCode.INVALID_PARAMETER, "要启用 AI 整理，必须先填写服务地址");
+        // 图片解析与「仅本地」是互斥的：用户开了「仅本地」却又去点解析，
+        // 会得到一个「明明是开的却什么都不做」的困惑。所以在保存这一刻就说清楚 ——
+        // 这里不强行关掉开关（用户可能只是暂时不解析），只把矛盾指出来。
+        String visionModel = trimToNull(request.getVisionModel());
+        if (visionModel != null && request.isVisionLocalOnly()) {
+            throw new BizException(ErrorCode.INVALID_PARAMETER,
+                    "「仅本地解析」与「视觉模型」不能同时启用：只用一个就不能调用云端模型。"
+                            + "要保留图片解析请先关掉「仅本地」，要保护隐私请清空视觉模型名");
+        }
         String now = now();
         configRepository.save(KEY_AI_ENABLED, String.valueOf(request.isEnabled()), now);
         configRepository.save(KEY_AI_BASE_URL, baseUrl == null ? "" : baseUrl, now);
         configRepository.save(KEY_AI_MODEL, model == null ? "" : model, now);
+        configRepository.save(KEY_AI_VISION_MODEL, visionModel == null ? "" : visionModel, now);
+        configRepository.save(KEY_AI_VISION_LOCAL_ONLY, String.valueOf(request.isVisionLocalOnly()), now);
         String apiKey = trimToNull(request.getApiKey());
         if (apiKey != null) configRepository.save(KEY_AI_API_KEY, apiKey, now);
         return get();

@@ -11,6 +11,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -27,7 +29,9 @@ public class GlobalExceptionHandler {
             status = HttpStatus.UNAUTHORIZED;
         } else if (errorCode == ErrorCode.INVALID_PASSWORD) {
             status = HttpStatus.FORBIDDEN;
-        } else if (errorCode == ErrorCode.RESOURCE_NOT_FOUND) {
+        } else if (errorCode == ErrorCode.RESOURCE_NOT_FOUND
+                || errorCode == ErrorCode.ATTACHMENT_NOT_FOUND) {
+            // 附件也是资源：取一个不存在的附件应当是 404，与其它资源保持同一语义
             status = HttpStatus.NOT_FOUND;
         } else {
             status = HttpStatus.BAD_REQUEST;
@@ -89,6 +93,30 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest()
                 .body(ApiResponse.<Void>failure(ErrorCode.INVALID_PARAMETER,
                         name + "格式不正确" + expected));
+    }
+
+    /**
+     * 上传的附件超过了 {@code spring.servlet.multipart} 配置的上限。
+     *
+     * <p>这个异常在进入 Controller 之前就抛出了，业务层根本没机会拦。不处理的话会落到
+     * 兜底分支变成 500 —— 用户传了个大文件，却被告知「系统暂时不可用」，
+     * 完全不知道问题出在自己的文件上。</p>
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUploadTooLarge(MaxUploadSizeExceededException exception) {
+        LOGGER.warn("Rejected oversized upload: {}", exception.getMessage());
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.<Void>failure(ErrorCode.ATTACHMENT_TOO_LARGE,
+                        "文件太大：单个文档最大 100 MB，单张图片最大 10 MB"));
+    }
+
+    /** 请求不是合法的 multipart（例如没带 boundary），同样不能落 500。 */
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMultipart(MultipartException exception) {
+        LOGGER.warn("Malformed multipart request: {}", exception.getMessage());
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.<Void>failure(ErrorCode.ATTACHMENT_INVALID,
+                        "上传请求格式不正确，请重新选择文件后再试"));
     }
 
     @ExceptionHandler(Exception.class)
