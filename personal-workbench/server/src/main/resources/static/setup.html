@@ -11,7 +11,15 @@
    fixed 让图钉在视口上；图比视口窄时（窄屏）靠 cover 裁切，色心保持在中部偏下，
    正好落在登录卡片后面。 */
 body.has-login-bg{background-image:url("/assets/backgrounds/login.jpg");background-size:cover;background-position:center 55%;background-repeat:no-repeat;background-attachment:fixed}
-.panel{width:min(92vw,480px);background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:30px;box-shadow:0 14px 40px rgba(49,95,148,.08)}h1{font-size:23px;margin:0 0 8px;color:#2e4d70}.intro{font-size:14px;color:var(--muted);line-height:1.7;margin:0 0 24px}.field{margin:14px 0}.field label{display:block;font-size:13px;margin-bottom:6px;color:#475b72}.field input,.field select{width:100%;min-height:44px;border:1px solid #cbd8e6;border-radius:10px;padding:10px 12px;font-size:16px;color:var(--text);background:#fff}.field input:focus,.field select:focus{outline:2px solid #a9c3df;border-color:transparent}.check{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--muted);margin:18px 0}.check input{margin-top:3px}.btn{width:100%;min-height:46px;border:0;border-radius:10px;background:var(--blue);color:#fff;font-size:15px;cursor:pointer}.btn:hover{background:var(--blue-dark)}.btn:disabled{opacity:.55;cursor:wait}.msg{min-height:22px;margin-top:12px;color:var(--danger);font-size:13px}.hint{margin-top:18px;padding:12px;background:#edf3f9;border-radius:10px;color:var(--muted);font-size:12px;line-height:1.65}.hidden{display:none}
+.panel{width:min(92vw,480px);background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:30px;box-shadow:0 14px 40px rgba(49,95,148,.08)}h1{font-size:23px;margin:0 0 8px;color:#2e4d70}.intro{font-size:14px;color:var(--muted);line-height:1.7;margin:0 0 24px}.field{margin:14px 0}.field label{display:block;font-size:13px;margin-bottom:6px;color:#475b72}.field input,.field select{width:100%;min-height:44px;border:1px solid #cbd8e6;border-radius:10px;padding:10px 12px;font-size:16px;color:var(--text);background:#fff}.field input:focus,.field select:focus{outline:2px solid #a9c3df;border-color:transparent}.check{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--muted);margin:18px 0}.check input{margin-top:3px}.btn{width:100%;min-height:46px;border:0;border-radius:10px;background:var(--blue);color:#fff;font-size:15px;cursor:pointer}.btn:hover{background:var(--blue-dark)}.btn:disabled{opacity:.55;cursor:wait}.msg{min-height:22px;margin-top:12px;color:var(--danger);font-size:13px}
+/* 2026-09-19：底部提示块收成一行后，用户指出「中间空出来了」。
+   元凶是这条空占位：msg 平时没有消息却硬占 22px，加上 .hint 的 18px 上边距，
+   按钮到提示块之间空出 52px。
+   ⚠️ 空态**不能**用 min-height:0 —— 高度为 0 的空盒子会「穿透合并」自己的 margin-top，
+   实测按钮到提示块只剩 18px（比卡片底部 30px 还小，上紧下松）。改用 display:none
+   让空 msg 彻底不参与布局，再把 .hint 上边距提到 30px，与 .panel 底部内边距等距。
+   有消息时 msg 恢复占位，间距仍是 30px（相邻 margin 合并取大），不跳动。 */
+.msg:empty{display:none}.hint{margin-top:30px;padding:12px;background:#edf3f9;border-radius:10px;color:var(--muted);font-size:12px;line-height:1.65}.hidden{display:none}
 /* 移动端：panel 铺满屏幕时如果还留着背景图，卡片与背景之间会出现一圈碎边，
    而且 fixed + cover 在移动端浏览器地址栏收放时会跳。窄屏直接退回纯色。 */
 @media(max-width:520px){.panel{border:0;border-radius:0;min-height:100vh;padding:24px 18px;box-shadow:none}body.has-login-bg{background-image:none}}
@@ -26,7 +34,7 @@ body.has-login-bg{background-image:url("/assets/backgrounds/login.jpg");backgrou
     <p class="intro">只需完成两个基础设置。数据保存在本机，不依赖外部服务。</p>
     <form id="initForm">
       <div class="field"><label for="initUsername">管理员用户名</label><input id="initUsername" maxlength="32" autocomplete="username" required value="admin"></div>
-      <div class="field"><label for="initPassword">管理员密码（至少 8 位）</label><input id="initPassword" type="password" minlength="8" maxlength="72" autocomplete="new-password" required></div>
+      <div class="field"><label for="initPassword">管理员密码（至少 4 位）</label><input id="initPassword" type="password" minlength="4" maxlength="72" autocomplete="new-password" required></div>
       <label class="check"><input id="seedDemo" type="checkbox" checked><span>加入少量示例数据，方便第一次了解工作台；之后可以一键清除。</span></label>
       <button id="initButton" class="btn" type="submit">完成配置</button>
       <div id="initMessage" class="msg" role="alert"></div>
@@ -44,7 +52,7 @@ body.has-login-bg{background-image:url("/assets/backgrounds/login.jpg");backgrou
     </form>
   </section>
 
-  <div class="hint">没有配置 AI 或 Obsidian 也不影响核心功能。后续可以在工作台设置中补充。</div>
+  <div class="hint">未配置 AI 或 Obsidian 不影响核心功能。后续可在工作台设置中补充。</div>
 </main>
 <script>
 async function request(path, options){

@@ -571,10 +571,40 @@ public class ObsidianVaultService {
         final String heading;
         final String content;
 
+        // 小写副本按需生成后缓存。检索要为每个片段做三次不区分大小写的匹配，
+        // 而每次问答都会对全部片段走一遍（2026-09-18 前的实现是每次查询都
+        // `chunk.content.toLowerCase()` 新建一份 1200 字的字符串，3400 个片段就是
+        // 每问一次白造 4MB 垃圾）。中文没有大小写，这里纯粹是给拉丁词用的。
+        private volatile String fileLower;
+        private volatile String headingLower;
+        private volatile String contentLower;
+
         VaultChunk(String file, String heading, String content) {
             this.file = file;
             this.heading = heading;
             this.content = content;
+        }
+
+        String fileLower() {
+            String value = fileLower;
+            if (value == null) fileLower = value = file.toLowerCase();
+            return value;
+        }
+
+        String headingLower() {
+            String value = headingLower;
+            if (value == null) headingLower = value = heading.toLowerCase();
+            return value;
+        }
+
+        String contentLower() {
+            String value = contentLower;
+            if (value == null) contentLower = value = content.toLowerCase();
+            return value;
+        }
+
+        boolean matches(String term) {
+            return contentLower().contains(term) || headingLower().contains(term) || fileLower().contains(term);
         }
     }
 

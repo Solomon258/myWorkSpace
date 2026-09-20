@@ -1,5 +1,9 @@
 package com.icecode.workbench.inbox;
 
+import java.util.List;
+
+import com.icecode.workbench.attachment.AttachmentVO;
+
 public class InboxVO {
     private final long id;
     private final String raw;
@@ -23,11 +27,23 @@ public class InboxVO {
      * 图片条目常一次抽出多条，用户需要知道「我已经确认过哪几条了」。
      */
     private final int entityCount;
+    /**
+     * 这条收录当前持有的附件。
+     *
+     * <p>它与 {@link #sourceAttachmentId} 是两件事，别互相代替：</p>
+     * <ul>
+     *   <li>本字段 = 「这条收录现在挂着哪些文件」，确认生成实体时会**整体转绑走**，</li>
+     *   <li>{@code sourceAttachmentId} = 「当初是哪张图解析出这条文本的」，永久保留、不转绑，
+     *       所以转绑之后「重新解析」照样读得到原图。</li>
+     * </ul>
+     * <p>确认生成之后本字段会变空（附件已归实体所有）—— 那是正常状态，界面上不该再显示缩略图。</p>
+     */
+    private final List<AttachmentVO> attachments;
 
     public InboxVO(long id, String raw, String contentType, String source, String status,
                    String createdAt, String processedAt, ClassifySuggestionVO ai,
                    String origin, String parseStatus, String parseError, boolean rawTruncated,
-                   Long sourceAttachmentId, int entityCount) {
+                   Long sourceAttachmentId, int entityCount, List<AttachmentVO> attachments) {
         this.id = id;
         this.raw = raw;
         this.contentType = contentType;
@@ -42,6 +58,7 @@ public class InboxVO {
         this.rawTruncated = rawTruncated;
         this.sourceAttachmentId = sourceAttachmentId;
         this.entityCount = entityCount;
+        this.attachments = attachments;
     }
 
     public long getId() { return id; }
@@ -58,4 +75,5 @@ public class InboxVO {
     public boolean isRawTruncated() { return rawTruncated; }
     public Long getSourceAttachmentId() { return sourceAttachmentId; }
     public int getEntityCount() { return entityCount; }
+    public List<AttachmentVO> getAttachments() { return attachments; }
 }

@@ -82,7 +82,7 @@ class SettingsFlowTest {
 
         mockMvc.perform(put("/api/v1/settings/profile").session(session)
                         .contentType("application/json")
-                        .content("{\"currentPassword\":\"oldpass123\",\"newPassword\":\"short\"}"))
+                        .content("{\"currentPassword\":\"oldpass123\",\"newPassword\":\"abc\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(1002));
 

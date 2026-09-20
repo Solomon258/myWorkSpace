@@ -5,6 +5,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -95,6 +96,35 @@ public class AttachmentRepository {
                 rowMapper, ownerType, ownerId);
     }
 
+    /**
+     * 一次查出多个归属的全部附件（列表接口专用）。
+     *
+     * <p>为什么必须有这个批量入口：备忘/任务/日程三个列表的卡片都要显示附件，
+     * 若按记录逐条查就是 N+1 —— 一屏 100 条任务会多发 100 次查询，
+     * 而 Hikari 池只有 4 个连接（见项目约定），串行排队会把列表拖慢到肉眼可见。</p>
+     *
+     * <p>返回结果按 {@code owner_id, sort_order, id} 排序，调用方直接顺序分组即可保持展示顺序。</p>
+     */
+    public List<AttachmentRecord> findByOwners(String ownerType, List<Long> ownerIds) {
+        if (ownerIds == null || ownerIds.isEmpty()) {
+            return new ArrayList<AttachmentRecord>();
+        }
+        StringBuilder placeholders = new StringBuilder();
+        List<Object> args = new ArrayList<Object>();
+        args.add(ownerType);
+        for (Long ownerId : ownerIds) {
+            if (placeholders.length() > 0) {
+                placeholders.append(",");
+            }
+            placeholders.append("?");
+            args.add(ownerId);
+        }
+        return jdbcTemplate.query(
+                "SELECT * FROM attachment WHERE deleted=0 AND owner_type=? AND owner_id IN ("
+                        + placeholders + ") ORDER BY owner_id ASC, sort_order ASC, id ASC",
+                rowMapper, args.toArray());
+    }
+
     public AttachmentRecord findById(long id) {
         List<AttachmentRecord> records = jdbcTemplate.query(
                 "SELECT * FROM attachment WHERE id=? AND deleted=0", rowMapper, id);
@@ -128,6 +158,24 @@ public class AttachmentRepository {
                 "UPDATE attachment SET owner_type=?, owner_id=?, sort_order=?, updated_at=?"
                         + " WHERE id=? AND deleted=0 AND owner_id IS NULL",
                 ownerType, ownerId, sortOrder, now, id);
+    }
+
+    /**
+     * 转绑：把某个附件从原归属挪到新归属。
+     *
+     * <p>{@code WHERE} 里带着原归属（{@code fromType/fromId}），这是**刻意的二次校验**：
+     * 调用方先按原归属查出了这批附件，但查与改之间可能被别的请求挪走 ——
+     * 条件不匹配就更新 0 行，绝不会把一个已经属于别人的附件抢过来。</p>
+     *
+     * <p>不能用 {@link #bindOwner} 代替：那个方法要求 {@code owner_id IS NULL}，
+     * 而转绑的源记录是**有归属的**（收录条目本来持有这些附件）。</p>
+     */
+    public int moveOwner(long id, String fromType, long fromId, String toType, long toId,
+                         int sortOrder, String now) {
+        return jdbcTemplate.update(
+                "UPDATE attachment SET owner_type=?, owner_id=?, sort_order=?, updated_at=?"
+                        + " WHERE id=? AND deleted=0 AND owner_type=? AND owner_id=?",
+                toType, toId, sortOrder, now, id, fromType, fromId);
     }
 
     /** 软删必须同时写 deleted_at：回收站靠它算 30 天窗口（V7 的约定）。 */

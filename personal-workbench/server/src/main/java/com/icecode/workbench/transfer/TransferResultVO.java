@@ -20,9 +20,17 @@ public class TransferResultVO {
     private final long id;
     private final String title;
     private final List<String> warnings;
+    /**
+     * 跟着搬过去的附件条数（0 = 源记录本来就没有附件）。
+     *
+     * <p>单独报出来而不是混进 {@code warnings}：附件**跟着走了**是件好事、不是损失，
+     * 而 warnings 在界面上会被拼成「注意：…」。但也不能不报 ——
+     * 用户移完之后附件在哪里、还在不在，只有这句话能告诉他。</p>
+     */
+    private final int movedAttachments;
 
     public TransferResultVO(String fromType, String toType, String fromLabel, String toLabel,
-                            long id, String title, List<String> warnings) {
+                            long id, String title, List<String> warnings, int movedAttachments) {
         this.fromType = fromType;
         this.toType = toType;
         this.fromLabel = fromLabel;
@@ -30,6 +38,7 @@ public class TransferResultVO {
         this.id = id;
         this.title = title;
         this.warnings = warnings;
+        this.movedAttachments = movedAttachments;
     }
 
     public String getFromType() { return fromType; }
@@ -39,4 +48,5 @@ public class TransferResultVO {
     public long getId() { return id; }
     public String getTitle() { return title; }
     public List<String> getWarnings() { return warnings; }
+    public int getMovedAttachments() { return movedAttachments; }
 }

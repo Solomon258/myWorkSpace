@@ -606,7 +606,7 @@ public class DataSourceConfig {
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/v1/tasks?status=&priority=&keyword=&page=1&size=50` | 列表 |
+| GET | `/api/v1/tasks?status=&priority=&keyword=&sort=&page=1&size=50` | 列表。`sort` 省略或 `due` = 按截止时间（默认），`updated` = 按最后修改时间；其它取值报 400/1002 |
 | POST | `/api/v1/tasks` | 新建 |
 | PATCH | `/api/v1/tasks/{id}` | 编辑（标题/优先级/截止/备注/标记） |
 | POST | `/api/v1/tasks/{id}/status` | 状态流转 |

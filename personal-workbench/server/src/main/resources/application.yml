@@ -61,5 +61,16 @@ spring:
   config:
     activate:
       on-profile: dev
+  # 开发档：静态资源只发 Last-Modified、不发 Cache-Control 时，浏览器会按启发式规则
+  # （大致是「距今时长 × 10%」）自己判定新鲜度。样式文件几天没动过，这个窗口就能长到几小时
+  # —— 于是出现「改了 style.css、重启了容器、浏览器里却没变化」，而服务端其实已经是新文件
+  # （curl 抓一遍就能确认，2026-09-17 就这么排查了一轮）。
+  # 加 no-cache 后每次加载都带 If-Modified-Since 回来问一次：没变 304，变了立刻生效。
+  # 只加在 dev 档，不影响打包运行时的表现。
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          no-cache: true
 server:
   address: 0.0.0.0

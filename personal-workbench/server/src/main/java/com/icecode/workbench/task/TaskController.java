@@ -26,6 +26,16 @@ public class TaskController {
         this.taskService = taskService;
     }
 
+    /**
+     * 任务列表。{@code sort} 是 2026-09-20 新增的排序口径，只有两个合法取值：
+     * {@code due}（按截止时间，默认）与 {@code updated}（按最后修改时间）。
+     *
+     * <p>排序放在服务端而不是前端本地重排，理由与 {@code keyword} 必须在服务端过滤一样：
+     * 任务页一次只加载 100 条，本地排序只能在这 100 条里做 ——
+     * 选「按最后修改时间」的用户想看的恰恰是**最近改过的那一批**，
+     * 而它们完全可能不在「按截止时间排出来的前 100 条」里。
+     * 本地排会把这件事静默做错（用户看到的是「最近改的任务一条都没有」）。</p>
+     */
     @GetMapping
     public ApiResponse<List<TaskVO>> list(
             @RequestParam(required = false) String status,
@@ -34,9 +44,10 @@ public class TaskController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String dueFrom,
             @RequestParam(required = false) String dueTo,
+            @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "50") int size) {
-        return ApiResponse.success(taskService.list(status, priority, grp, keyword, dueFrom, dueTo, page, size));
+        return ApiResponse.success(taskService.list(status, priority, grp, keyword, dueFrom, dueTo, sort, page, size));
     }
 
     @PostMapping

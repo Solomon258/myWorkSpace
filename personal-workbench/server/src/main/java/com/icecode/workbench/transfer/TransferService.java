@@ -40,6 +40,9 @@ import com.icecode.workbench.util.TimeUtil;
  *       用户以为「移过去东西还在」，过几天找不到，才是真正的数据损失。</li>
  *   <li><b>示例数据标记要跟着走</b>（{@code is_demo}）。否则「清空示例数据」之后，
  *       从示例记录移过来的那一条会留在库里：用户看到「清空完成」却还剩一条，只会怀疑功能坏了。</li>
+ *   <li><b>附件也要跟着走</b>（2026-09-19 补）。附件是挂在源记录上的，不搬就等于
+ *       「移过去之后附件没了，回收站里那条也看不到它」—— 两边都没有，用户完全无从找起。
+ *       顺序上必须在源记录软删**之前**搬，理由见 transfer 方法里的注释。</li>
  * </ol>
  *
  * <p>字段留空在这里同样是显式语义：任务的截止日期为空 → 移到日程就是**待定时间**（US-4.2），
@@ -68,10 +71,13 @@ public class TransferService {
     private final EventRepository eventRepository;
     private final MemoRepository memoRepository;
     private final AppConfigRepository configRepository;
+    /** 移动时把附件一起搬过去 —— 附件不该因为换了菜单就消失。 */
+    private final com.icecode.workbench.attachment.AttachmentService attachmentService;
 
     public TransferService(TaskService taskService, EventService eventService, MemoService memoService,
                            TaskRepository taskRepository, EventRepository eventRepository,
-                           MemoRepository memoRepository, AppConfigRepository configRepository) {
+                           MemoRepository memoRepository, AppConfigRepository configRepository,
+                           com.icecode.workbench.attachment.AttachmentService attachmentService) {
         this.taskService = taskService;
         this.eventService = eventService;
         this.memoService = memoService;
@@ -79,6 +85,7 @@ public class TransferService {
         this.eventRepository = eventRepository;
         this.memoRepository = memoRepository;
         this.configRepository = configRepository;
+        this.attachmentService = attachmentService;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -98,21 +105,42 @@ public class TransferService {
             title = task.getTitle();
             newId = "event".equals(to) ? createEventFromTask(task, warnings, now)
                     : createMemoFromTask(task, warnings, now);
-            taskRepository.softDelete(request.getId(), now);
         } else if ("event".equals(from)) {
             EventVO event = eventService.get(request.getId());
             title = event.getTitle();
             newId = "task".equals(to) ? createTaskFromEvent(event, warnings, now)
                     : createMemoFromEvent(event, warnings, now);
-            eventRepository.softDelete(request.getId(), now);
         } else {
             MemoVO memo = memoService.get(request.getId());
             title = memo.getTitle();
             newId = "task".equals(to) ? createTaskFromMemo(memo, warnings, now)
                     : createEventFromMemo(memo, warnings, now);
+        }
+        // 附件跟着走（2026-09-19）。
+        // ⚠️ **必须排在源记录的软删之前**：softDeleteByOwner 会把源记录名下的附件一起软删，
+        // 而 transferOwner 查的是 deleted=0 —— 顺序反了就是「一条都没搬走」，而且不会报任何错。
+        // 顺序反了这个 bug 属于最难发现的那一类：移动动作看起来完全成功，附件quietly留在原地，
+        // 而原地那条记录已经在回收站里 —— 用户在两边都看不到它。
+        int movedAttachments = attachmentService.transferOwner(ownerTypeOf(from), request.getId(),
+                ownerTypeOf(to), newId);
+        // 源记录软删放到最后：它是「已经搬完了」的宣告。
+        if ("task".equals(from)) {
+            taskRepository.softDelete(request.getId(), now);
+        } else if ("event".equals(from)) {
+            eventRepository.softDelete(request.getId(), now);
+        } else {
             memoRepository.softDelete(request.getId(), now);
         }
-        return new TransferResultVO(from, to, label(from), label(to), newId, title, warnings);
+        return new TransferResultVO(from, to, label(from), label(to), newId, title, warnings,
+                movedAttachments);
+    }
+
+    /** 「移至」用的类型名 → {@code attachment.owner_type}。日程在附件表里叫 schedule_event（见 V10 的 CHECK）。 */
+    private String ownerTypeOf(String type) {
+        if ("task".equals(type)) {
+            return "task";
+        }
+        return "event".equals(type) ? "schedule_event" : "memo";
     }
 
     // ---------- 任务 → 日程 / 备忘 ----------

@@ -2,6 +2,7 @@ package com.icecode.workbench.trash;
 
 import java.util.List;
 
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,5 +45,31 @@ public class TrashController {
     @PostMapping("/{type}/{id}/restore")
     public ApiResponse<TrashRestoreVO> restore(@PathVariable String type, @PathVariable long id) {
         return ApiResponse.success(trashService.restore(type, id));
+    }
+
+    /**
+     * 彻底删除一条（物理删除，无法恢复）。
+     *
+     * <p>这里用 DELETE 而不是 POST：删掉的**就是一个资源**（回收站里的那条记录），语义与 REST
+     * 完全对应；而 restore 是「把状态翻转回去」，是命令不是资源删除，所以它才是 POST。
+     * 两条路径同形、只差最后那段动词，调用方一眼能看出它们作用在同一条记录上。</p>
+     *
+     * <p>要提醒的是它**不是**「把条目从回收站里挪走」这种可逆动作 —— 删的是原始记录本身。
+     * 所以前端必须二次确认，文案必须写「无法恢复」（静态检查守着这条分界线）。</p>
+     */
+    @DeleteMapping("/{type}/{id}")
+    public ApiResponse<TrashPurgeVO> purge(@PathVariable String type, @PathVariable long id) {
+        return ApiResponse.success(trashService.purge(type, id));
+    }
+
+    /**
+     * 清空回收站：把列表里看得见的那些一次性彻底删除。
+     *
+     * <p>没有 body 也没有查询参数 —— 作用范围由「回收站里现在有什么」决定，
+     * 让前端传一份 id 清单反而会引入「清单和实际不一致」这种没必要的失败模式。</p>
+     */
+    @DeleteMapping
+    public ApiResponse<TrashPurgeAllVO> purgeAll() {
+        return ApiResponse.success(trashService.purgeAll());
     }
 }

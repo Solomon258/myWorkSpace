@@ -246,10 +246,15 @@ class TaskFlowTest {
     }
 
     /**
-     * 卡片上的分组徽标走 {@code POST /{id}/group}：一键切换、幂等、且只动分组这一格。
+     * {@code POST /{id}/group}：一键切换、幂等、且只动分组这一格。
      *
-     * <p>幂等那条是有意写的：徽标是「点一下切到另一侧」，用户点到已经在的那一侧不该报错，
+     * <p>幂等那条是有意写的：分组是「点一下切到另一侧」，用户点到已经在的那一侧不该报错，
      * 也不该留下一条毫无信息量的流水。</p>
+     *
+     * <p>⚠️ 2026-09-17 起**前端已经没有这个入口了**：任务页的分组切换器、卡片上的分组徽标、
+     * 编辑表单里的分组下拉全部移除（用户要求），{@code api.js} 里的 changeTaskGroup 也标成了
+     * 「前端不使用」。这个接口本身**保留不动**（任务的 grp 字段还在、后端仍按关键词自动判定），
+     * 所以这条用例继续有意义 —— 别因为它「界面上点不到」就把接口或用例删掉。</p>
      */
     @Test
     void movesTaskBetweenGroupsWithoutTouchingOtherFields() throws Exception {
@@ -307,6 +312,51 @@ class TaskFlowTest {
         mockMvc.perform(patch("/api/v1/tasks/{id}", workId).session(session)
                         .contentType("application/json").content("{\"grp\":\"life\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.grp").value("life"));
+    }
+
+    /**
+     * 两个排序口径（2026-09-20 用户要求「任务菜单的所有任务应该提供两个排序，按截止时间（默认）、
+     * 按最后修改时间」）。
+     *
+     * <p>夹具刻意让「截止时间」与「最后修改时间」的先后**互为相反**：早截止的那条很久没动过、
+     * 晚截止的那条刚改过。若两条顺序恰好一致，那么「排序整段没生效」时测试照样全绿 ——
+     * 那种断言没有区分力（本项目把「不可能变红的断言」看得比没有断言更糟）。</p>
+     */
+    @Test
+    void sortsByDeadlineByDefaultAndByLastModifiedOnDemand() throws Exception {
+        long earlyDue = insertTask("早截止但很久没改", "todo", "2026-01-05", "P2", 0, 0, 0);
+        long lateDue = insertTask("晚截止但刚改过", "todo", "2026-12-25", "P2", 0, 0, 0);
+        long legacy = insertTask("历史遗留没有修改时间", "todo", null, "P2", 0, 0, 0);
+        jdbcTemplate.update("UPDATE task SET updated_at=? WHERE id=?", "2026-01-01 09:00:00", earlyDue);
+        jdbcTemplate.update("UPDATE task SET updated_at=? WHERE id=?", "2026-02-02 09:00:00", lateDue);
+        // updated_at 在 V1 里是可空列：老数据用 created_at 兜底，不许被静默踢到列表最后。
+        jdbcTemplate.update("UPDATE task SET updated_at=NULL, created_at=? WHERE id=?", "2026-03-03 09:00:00", legacy);
+
+        // 不传 sort = 按截止时间（默认）。无截止日期的那条排在最后，与既有口径一致。
+        mockMvc.perform(get("/api/v1/tasks").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].title").value("早截止但很久没改"))
+                .andExpect(jsonPath("$.data[1].title").value("晚截止但刚改过"))
+                .andExpect(jsonPath("$.data[2].title").value("历史遗留没有修改时间"));
+        // 显式写 due 与默认完全一致（默认档不是「另一种排序」）
+        mockMvc.perform(get("/api/v1/tasks?sort=due").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].title").value("早截止但很久没改"));
+
+        // 按最后修改时间：刚改过的在最前，且 created_at 兜底的历史数据排在第二，
+        // 而不是因为 updated_at 为 NULL 沉到最后。
+        mockMvc.perform(get("/api/v1/tasks?sort=updated").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].title").value("历史遗留没有修改时间"))
+                .andExpect(jsonPath("$.data[1].title").value("晚截止但刚改过"))
+                .andExpect(jsonPath("$.data[2].title").value("早截止但很久没改"));
+
+        // 非法取值必须报错并给出合法取值，**不能悄悄回退成默认排序** ——
+        // 那样用户以为切过去了，实际看到的还是旧顺序，属于静默失效。
+        mockMvc.perform(get("/api/v1/tasks?sort=update").session(session))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1002))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("按最后修改时间")));
     }
 
     private long insertTask(String title, String status, String due, String priority, int deep, int blocking, int postponed) {

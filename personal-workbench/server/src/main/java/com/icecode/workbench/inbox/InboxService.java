@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.icecode.workbench.attachment.AttachmentService;
+import com.icecode.workbench.attachment.AttachmentVO;
 import com.icecode.workbench.auth.AppConfigRepository;
 import com.icecode.workbench.auth.AuthConstants;
 import com.icecode.workbench.common.BizException;
@@ -62,8 +63,13 @@ public class InboxService {
 
     public List<InboxVO> list(String status) {
         validateOptionalStatus(status);
+        List<InboxRecord> records = inboxRepository.findByStatus(status);
+        // 附件走一次批量查询再分组：收录页一次会把待整理 + 待确认两栏都拉回来（N+1 见 AttachmentService）。
+        List<Long> ids = new ArrayList<Long>(records.size());
+        for (InboxRecord record : records) ids.add(Long.valueOf(record.id));
+        Map<Long, List<AttachmentVO>> attachments = attachmentService.mapByOwner("inbox_item", ids);
         List<InboxVO> result = new ArrayList<InboxVO>();
-        for (InboxRecord record : inboxRepository.findByStatus(status)) result.add(toVO(record));
+        for (InboxRecord record : records) result.add(toVO(record, attachments.get(Long.valueOf(record.id))));
         return result;
     }
 
@@ -138,19 +144,40 @@ public class InboxService {
         String due = normalizeDate(request.getDue());
         String now = now();
         long entityId;
+        // 附件转绑到哪一类实体；null = 这一类不接收附件（见下面的注释）。
+        String attachmentOwnerType;
         if ("task".equals(request.getCategory())) {
             entityId = createTask(id, title, normalizePriority(request.getPriority(), record), due, now);
+            attachmentOwnerType = "task";
         } else if ("schedule".equals(request.getCategory())) {
             entityId = createEvent(id, title, request, due, now);
+            attachmentOwnerType = "schedule_event";
         } else if ("knowledge".equals(request.getCategory())) {
             entityId = knowledgeService.create(Long.valueOf(id), title, record.raw).getId();
+            // 知识笔记不接收附件：它是写进 Obsidian 的 Markdown，附件没有可挂的地方
+            // （knowledge_note 虽然在 attachment 的合法 owner 里，但知识页不渲染附件）。
+            // 转过去只会让文件从**任何界面**都找不到；留在收录条目上，至少「重新解析」还读得到原图。
+            attachmentOwnerType = null;
         } else {
             entityId = createMemo(id, title, record.raw, now);
+            attachmentOwnerType = "memo";
+        }
+        // 附件在确认的**同一个事务里**交到新实体手上。
+        // 少了这一步，收录带附件生成的备忘/任务/日程会一个附件都没有 —— 而用户在界面上
+        // 完全看不出少了什么（2026-09-19 用户报的就是这个）。转绑失败就整体回滚：
+        // 留下「确认成功但附件丢了」的记录，比确认失败难查得多。
+        int movedAttachments = 0;
+        if (attachmentOwnerType != null) {
+            movedAttachments = attachmentService.transferOwner("inbox_item", id, attachmentOwnerType, entityId);
         }
         inboxRepository.markArchived(id, request.getCategory(), now);
         // 时间待定的日程落到待定区，流水里要说清楚，否则用户会以为日期丢了。
         String pendingNote = "schedule".equals(request.getCategory()) && due == null ? "（时间待定，可在日程页补全）" : "";
-        inboxRepository.insertActivity("task", "整理确认：生成「" + categoryName(request.getCategory()) + "」" + title + pendingNote, now);
+        // 转走的附件条数也要留痕：用户在实体卡片上看到缩略图却想不起是哪儿来的时，
+        // 时间线这句话就是唯一的解释。
+        String attachNote = movedAttachments > 0 ? "，连同 " + movedAttachments + " 个附件" : "";
+        inboxRepository.insertActivity("task",
+                "整理确认：生成「" + categoryName(request.getCategory()) + "」" + title + pendingNote + attachNote, now);
         return new ConfirmResultVO(id, request.getCategory(), entityId, false);
     }
 
@@ -304,7 +331,12 @@ public class InboxService {
         return jdbcTemplate.queryForObject("SELECT id FROM memo WHERE source_inbox_id=? ORDER BY id DESC LIMIT 1", Long.class, inboxId).longValue();
     }
 
+    /** 单条路径：附件按这一条查一次就够（列表路径走 {@code mapByOwner} 批量，见 list）。 */
     private InboxVO toVO(InboxRecord record) {
+        return toVO(record, attachmentService.listByOwner("inbox_item", record.id));
+    }
+
+    private InboxVO toVO(InboxRecord record, List<AttachmentVO> attachments) {
         ClassifySuggestionVO ai = null;
         if (record.aiCategory != null && record.aiConfidence != null) {
             ClassifyPayload payload = readPayload(record.aiPayload);
@@ -318,7 +350,8 @@ public class InboxService {
                 record.createdAt, record.processedAt, ai,
                 record.origin == null ? "text" : record.origin,
                 record.parseStatus, record.parseError, record.rawTruncated,
-                record.sourceAttachmentId, countEntities(record.id));
+                record.sourceAttachmentId, countEntities(record.id),
+                attachments == null ? new ArrayList<AttachmentVO>() : attachments);
     }
 
     /**

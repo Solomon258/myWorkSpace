@@ -1,5 +1,9 @@
 package com.icecode.workbench.task;
 
+import java.util.List;
+
+import com.icecode.workbench.attachment.AttachmentVO;
+
 public class TaskVO {
 
     private final long id;
@@ -20,11 +24,13 @@ public class TaskVO {
     private final String updatedAt;
     private final String completedAt;
     private final boolean demo;
+    /** 这条任务的附件（deleted=0）。列表接口一并带上，理由见 MemoVO 上的同一段注释。 */
+    private final List<AttachmentVO> attachments;
 
     public TaskVO(long id, String title, String description, String priority, String status, String due,
                   boolean overdue, int overdueDays, boolean deep, boolean blocking, String note,
                   String grp, int postponed, Long sourceInboxId, String createdAt, String updatedAt,
-                  String completedAt, boolean demo) {
+                  String completedAt, boolean demo, List<AttachmentVO> attachments) {
         this.id = id;
         this.title = title;
         this.description = description;
@@ -43,6 +49,7 @@ public class TaskVO {
         this.updatedAt = updatedAt;
         this.completedAt = completedAt;
         this.demo = demo;
+        this.attachments = attachments;
     }
 
     public long getId() { return id; }
@@ -63,4 +70,5 @@ public class TaskVO {
     public String getUpdatedAt() { return updatedAt; }
     public String getCompletedAt() { return completedAt; }
     public boolean isDemo() { return demo; }
+    public List<AttachmentVO> getAttachments() { return attachments; }
 }

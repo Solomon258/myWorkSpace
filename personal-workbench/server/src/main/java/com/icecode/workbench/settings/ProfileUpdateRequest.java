@@ -9,7 +9,7 @@ public class ProfileUpdateRequest {
 
     private String currentPassword;
 
-    @Size(min = 8, max = 72, message = "新密码长度需要在 8-72 之间")
+    @Size(min = 4, max = 72, message = "新密码长度需要在 4-72 之间")
     private String newPassword;
 
     public String getUsername() { return username; }

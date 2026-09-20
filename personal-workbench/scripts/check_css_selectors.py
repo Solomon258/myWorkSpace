@@ -19,9 +19,13 @@ CSS 里注释等价于空白。若注释被夹在两个选择器片段之间：
 
 用法
 ----
-    python scripts/check_css_selectors.py [css 文件路径]
+    python scripts/check_css_selectors.py [css 或 html 文件路径]
 
 不带参数时默认检查 server/src/main/resources/static/style.css。
+传 .html（如 setup.html —— 这个页面样式**内联**、不走 style.css）时只扫其中的
+`<style>` 块，其余内容/标签替换成等量空行，报出的行号仍是原文件行号。
+（2026-09-19 补：不做抽取的话，`<!doctype html> <html ...>` 会被当成一个超长
+「选择器」，长度体检误报 1 处、退出码 1，看着像样式坏了。）
 """
 
 from __future__ import print_function
@@ -83,14 +87,38 @@ def scan(src):
     return hits
 
 
+def extract_style_blocks(src):
+    """HTML 页面先抽出 <style> 块再扫。
+
+    setup.html 这类页面样式内联，直接整页扫会把 `<!doctype html> <html ...>` 当成
+    选择器（长度体检误报）。这里把非 <style> 部分替换成**等量空行**，
+    于是报出的行号与开发者在本文件里看到的行号一致。
+    返回 (可扫描文本, 是否抽取过)。
+    """
+    if "<style" not in src.lower():
+        return src, False
+    out = []
+    pos = 0
+    for match in re.finditer(r"<style[^>]*>(.*?)</style>", src, flags=re.S | re.I):
+        out.append(re.sub(r"[^\n]", " ", src[pos:match.start(1)]))
+        out.append(match.group(1))
+        pos = match.end(1)
+    out.append(re.sub(r"[^\n]", " ", src[pos:]))
+    return "".join(out), True
+
+
 def main():
     path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_CSS
     if not os.path.isfile(path):
-        print("找不到 CSS 文件：%s" % path)
+        print("找不到文件：%s" % path)
         return 2
 
-    src = io.open(path, encoding="utf-8").read()
-    print("检查文件：%s" % path)
+    raw = io.open(path, encoding="utf-8").read()
+    src, from_html = extract_style_blocks(raw)
+    if from_html and not src.strip():
+        print("检查文件：%s（HTML 里没有可扫描的 <style> 块）" % path)
+        return 0
+    print("检查文件：%s%s" % (path, "（HTML：仅扫 <style> 块）" if from_html else ""))
 
     print("\n== 扫描「注释夹在选择器中间」的病变点 ==\n")
     hits = scan(src)

@@ -85,9 +85,9 @@ public class SettingsService {
                 throw new BizException(ErrorCode.INVALID_PASSWORD);
             }
             String newPassword = request.getNewPassword();
-            if (newPassword.length() < 8
+            if (newPassword.length() < 4
                     || newPassword.getBytes(StandardCharsets.UTF_8).length > 72) {
-                throw new BizException(ErrorCode.INVALID_PARAMETER, "新密码至少 8 位，且 UTF-8 编码后不能超过 72 字节");
+                throw new BizException(ErrorCode.INVALID_PARAMETER, "新密码至少 4 位，且 UTF-8 编码后不能超过 72 字节");
             }
             configRepository.save(AuthConstants.CONFIG_PASSWORD_HASH, passwordEncoder.encode(newPassword), now);
             changed = true;

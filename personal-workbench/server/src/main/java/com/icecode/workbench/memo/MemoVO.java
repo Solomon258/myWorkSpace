@@ -2,6 +2,8 @@ package com.icecode.workbench.memo;
 
 import java.util.List;
 
+import com.icecode.workbench.attachment.AttachmentVO;
+
 public class MemoVO {
     private final long id;
     private final String title;
@@ -15,10 +17,18 @@ public class MemoVO {
     private final String createdAt;
     private final String updatedAt;
     private final boolean demo;
+    /**
+     * 这条备忘的附件（deleted=0，按 sort_order 排好）。
+     *
+     * <p>列表接口**直接带上**而不是让前端逐条再查一次：一屏几十张卡片各发一个请求就是 N+1，
+     * 而 Hikari 池只有 4 个连接。列表里只显示前几张，但整份都返回 ——
+     * 编辑弹层打开时正好复用同一份数据，不必再为它单独发一次请求。</p>
+     */
+    private final List<AttachmentVO> attachments;
 
     public MemoVO(long id, String title, String content, String url, List<String> tags, String grp,
                   boolean pinned, String status, Long sourceInboxId, String createdAt, String updatedAt,
-                  boolean demo) {
+                  boolean demo, List<AttachmentVO> attachments) {
         this.id = id;
         this.title = title;
         this.content = content;
@@ -31,6 +41,7 @@ public class MemoVO {
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.demo = demo;
+        this.attachments = attachments;
     }
 
     public long getId() { return id; }
@@ -46,4 +57,5 @@ public class MemoVO {
     public String getCreatedAt() { return createdAt; }
     public String getUpdatedAt() { return updatedAt; }
     public boolean isDemo() { return demo; }
+    public List<AttachmentVO> getAttachments() { return attachments; }
 }

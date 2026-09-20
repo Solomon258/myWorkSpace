@@ -11,9 +11,11 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
@@ -226,15 +228,81 @@ public class AttachmentService {
     }
 
     public List<AttachmentVO> listByOwner(String ownerType, long ownerId) {
-        if (!VALID_OWNER_TYPES.contains(ownerType)) {
-            throw new BizException(ErrorCode.INVALID_PARAMETER,
-                    "ownerType 只能填 task / schedule_event / memo / knowledge_note / inbox_item");
-        }
+        requireOwnerType(ownerType);
         List<AttachmentVO> result = new ArrayList<AttachmentVO>();
         for (AttachmentRecord record : attachmentRepository.findByOwner(ownerType, ownerId)) {
             result.add(toVO(record, false));
         }
         return result;
+    }
+
+    /**
+     * 批量版：一次查出多个归属的附件，按 ownerId 分组（列表接口专用，避免 N+1）。
+     *
+     * <p>没有附件的归属**不会出现在返回的 Map 里**，调用方用 {@code get()} 拿到 null 时按空列表处理即可 ——
+     * 与其给每个 key 塞一个空 List（内存里凭空多出上百个对象），不如让「没有」就是没有。</p>
+     */
+    public Map<Long, List<AttachmentVO>> mapByOwner(String ownerType, List<Long> ownerIds) {
+        Map<Long, List<AttachmentVO>> result = new HashMap<Long, List<AttachmentVO>>();
+        if (ownerIds == null || ownerIds.isEmpty()) {
+            return result;
+        }
+        requireOwnerType(ownerType);
+        for (AttachmentRecord record : attachmentRepository.findByOwners(ownerType, ownerIds)) {
+            Long key = record.ownerId;
+            if (key == null) {
+                continue;   // 理论不可达（查询按 owner_id IN 过滤），防御性跳过
+            }
+            List<AttachmentVO> list = result.get(key);
+            if (list == null) {
+                list = new ArrayList<AttachmentVO>();
+                result.put(key, list);
+            }
+            list.add(toVO(record, false));
+        }
+        return result;
+    }
+
+    /**
+     * 把 {@code fromType/fromId} 名下的附件整体转绑到 {@code toType/toId}。
+     *
+     * <p>唯一调用方是「收录条目确认生成实体」：附件在上传时挂在收录条目上，
+     * 确认成备忘 / 任务 / 日程之后要跟着走 —— 否则收录带附件生成的记录**一个附件都没有**，
+     * 而用户在界面上完全看不出来（2026-09-19 修的就是这个）。</p>
+     *
+     * <p><b>为什么不复制一份给目标：</b>附件是「同一份文件只有一条记录、靠引用计数决定何时回收」，
+     * 复制会让同一次上传变成两条记录、删一处另一处还指着同一份盘上文件。
+     * 转绑之后收录条目自己不再持有附件 —— 这是对的：它已经归档，附件归实体所有。
+     * 收录条目的 {@code source_attachment_id}（解析原图）**不跟着走**，所以
+     * 「重新解析」在转绑后仍然读得到原图（该字段只用来定位文件，不参与归属判断）。</p>
+     *
+     * @return 实际转绑的条数（0 = 原本就没有附件）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int transferOwner(String fromType, long fromId, String toType, long toId) {
+        requireOwnerType(fromType);
+        requireOwnerType(toType);
+        List<AttachmentRecord> records = attachmentRepository.findByOwner(fromType, fromId);
+        if (records.isEmpty()) {
+            return 0;
+        }
+        String now = now();
+        // 从目标归属的现有最大排序位往后接：目标已经有附件时，搬过来的排在后面，
+        // 而不是从 0 开始把已有的挤乱。
+        int sortOrder = attachmentRepository.nextSortOrder(toType, toId);
+        int moved = 0;
+        for (AttachmentRecord record : records) {
+            moved += attachmentRepository.moveOwner(record.id, fromType, fromId, toType, toId, sortOrder, now);
+            sortOrder++;
+        }
+        return moved;
+    }
+
+    private void requireOwnerType(String ownerType) {
+        if (!VALID_OWNER_TYPES.contains(ownerType)) {
+            throw new BizException(ErrorCode.INVALID_PARAMETER,
+                    "ownerType 只能填 task / schedule_event / memo / knowledge_note / inbox_item");
+        }
     }
 
     // ------------------------------------------------------------------ 绑定与删除

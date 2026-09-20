@@ -58,6 +58,8 @@ class TransferFlowTest {
         jdbcTemplate.update("DELETE FROM daily_plan_item");
         jdbcTemplate.update("DELETE FROM pomodoro");
         jdbcTemplate.update("DELETE FROM activity_log");
+        // 附件先清：它挂在小表上，留着会让「移动是否把附件带走了」这类断言读到上一条用例的残留
+        jdbcTemplate.update("DELETE FROM attachment");
         jdbcTemplate.update("DELETE FROM task");
         jdbcTemplate.update("DELETE FROM schedule_event");
         jdbcTemplate.update("DELETE FROM memo");
@@ -306,5 +308,72 @@ class TransferFlowTest {
 
         // 示例标记必须跟着走：否则「清空示例数据」清不掉它，用户会看到「已清空」却还剩一条
         assertThat(flag("SELECT is_demo FROM schedule_event WHERE title='示例任务' AND deleted=0")).isEqualTo(1);
+    }
+
+    /**
+     * 附件要跟着记录一起搬（2026-09-19 补）。
+     *
+     * <p>不搬的话附件留在源记录名下，而源记录马上进回收站 —— 结果是**两边都看不到**：
+     * 新记录上没有，回收站里那条也不显示附件。这类静默失效最难查：移动动作本身完全成功，
+     * 接口返回 200、没有任何报错，用户只是过几天发现附件不见了。</p>
+     */
+    @Test
+    void movesAttachmentsTogetherWithTheRecord() throws Exception {
+        createMemo("带附件的备忘", "正文");
+        long memoId = idOf("memo", "带附件的备忘");
+        long attachmentId = insertAttachment("memo", memoId);
+
+        mockMvc.perform(post("/api/v1/transfers").session(session)
+                        .contentType("application/json")
+                        .content("{\"fromType\":\"memo\",\"toType\":\"task\",\"id\":" + memoId + "}"))
+                .andExpect(status().isOk())
+                // 搬了几条也要如实回报：界面上那句话是用户唯一能确认「附件没丢」的地方
+                .andExpect(jsonPath("$.data.movedAttachments").value(1));
+
+        long newTaskId = idOf("task", "带附件的备忘");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT owner_type FROM attachment WHERE id=?", String.class, Long.valueOf(attachmentId)))
+                .isEqualTo("task");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT owner_id FROM attachment WHERE id=?", Long.class, Long.valueOf(attachmentId)))
+                .isEqualTo(newTaskId);
+
+        // 源记录已经在回收站里，它名下不该再留着这个附件（attachment 的 deleted 也没被连带软删 ——
+        // 它是「搬走了」，不是「删掉了」）
+        mockMvc.perform(get("/api/v1/attachments").param("ownerType", "memo")
+                        .param("ownerId", String.valueOf(memoId)).session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(0));
+        assertThat(flag("SELECT deleted FROM attachment WHERE id=?", Long.valueOf(attachmentId))).isZero();
+    }
+
+    /** 没有附件的记录移动后不该凭空多出附件，movedAttachments 也应当是 0（而不是漏字段）。 */
+    @Test
+    void movingARecordWithoutAttachmentsReportsZero() throws Exception {
+        createMemo("光杆备忘", "正文");
+        long memoId = idOf("memo", "光杆备忘");
+
+        mockMvc.perform(post("/api/v1/transfers").session(session)
+                        .contentType("application/json")
+                        .content("{\"fromType\":\"memo\",\"toType\":\"task\",\"id\":" + memoId + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.movedAttachments").value(0));
+    }
+
+    /**
+     * 直接插一行附件。
+     *
+     * <p>本用例验的是**转绑**，不需要真的走一遍上传 —— 落盘、魔数、大小那些校验已经由
+     * {@code AttachmentFlowTest} 覆盖，这里再跑一遍只是让这条用例变慢变脆。</p>
+     */
+    private long insertAttachment(String ownerType, long ownerId) {
+        jdbcTemplate.update("INSERT INTO attachment(owner_type, owner_id, file_name, original_name,"
+                        + " mime_type, byte_size, sha256, sort_order, created_at, updated_at, deleted, is_demo)"
+                        + " VALUES (?,?,?,?,?,?,?,0,?,?,0,0)",
+                ownerType, Long.valueOf(ownerId), "abcdef0123456789.png", "费用截图.png",
+                "image/png", Long.valueOf(1234L), "abcdef0123456789abcdef",
+                "2026-09-19 12:00:00", "2026-09-19 12:00:00");
+        return jdbcTemplate.queryForObject("SELECT id FROM attachment WHERE file_name=?",
+                Long.class, "abcdef0123456789.png").longValue();
     }
 }

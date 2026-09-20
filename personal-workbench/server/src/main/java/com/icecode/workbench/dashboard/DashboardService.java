@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.icecode.workbench.auth.AppConfigRepository;
 import com.icecode.workbench.auth.AuthConstants;
@@ -23,17 +22,15 @@ public class DashboardService {
     private final AppConfigRepository configRepository;
     private final InboxRepository inboxRepository;
     private final PomodoroService pomodoroService;
-    private final DailyPlanRepository dailyPlanRepository;
 
     public DashboardService(TaskService taskService, EventService eventService,
                             AppConfigRepository configRepository, InboxRepository inboxRepository,
-                            PomodoroService pomodoroService, DailyPlanRepository dailyPlanRepository) {
+                            PomodoroService pomodoroService) {
         this.taskService = taskService;
         this.eventService = eventService;
         this.configRepository = configRepository;
         this.inboxRepository = inboxRepository;
         this.pomodoroService = pomodoroService;
-        this.dailyPlanRepository = dailyPlanRepository;
     }
 
     public DashboardTodayVO today() {
@@ -56,21 +53,9 @@ public class DashboardService {
         int pomoToday = pomodoroService.today().getCount();
         DashboardMetricsVO metrics = new DashboardMetricsVO(done, total, open, overdue, eventCount,
                 inboxPending, pomoToday);
-        String theme = dailyPlanRepository.findTheme(today);
         String brief = buildBrief(overdue, inboxPending);
-        return new DashboardTodayVO(today, theme, metrics, brief, topTasks, todayTasks,
+        return new DashboardTodayVO(today, metrics, brief, topTasks, todayTasks,
                 eventService.todayEvents());
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public String saveTheme(String theme) {
-        String timezone = timezone();
-        String today = TimeUtil.today(timezone);
-        String now = TimeUtil.now(timezone);
-        String trimmed = theme.trim();
-        dailyPlanRepository.saveTheme(today, trimmed, now);
-        dailyPlanRepository.insertActivity("plan", "设定今日主题：" + trimmed, now);
-        return trimmed;
     }
 
     private String buildBrief(int overdue, int inboxPending) {

@@ -2,6 +2,7 @@ package com.icecode.workbench.memo;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -11,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.icecode.workbench.attachment.AttachmentService;
+import com.icecode.workbench.attachment.AttachmentVO;
 import com.icecode.workbench.auth.AppConfigRepository;
 import com.icecode.workbench.auth.AuthConstants;
 import com.icecode.workbench.common.BizException;
@@ -42,9 +44,18 @@ public class MemoService {
         if (grp != null && !grp.trim().isEmpty() && !"work".equals(grp) && !"life".equals(grp)) {
             throw new BizException(ErrorCode.INVALID_PARAMETER, "分组筛选只能填 work / life");
         }
+        List<MemoRecord> records = memoRepository.find(emptyToNull(grp), keyword, includeArchived);
+        // 附件走**一次批量查询**再按 ownerId 分组，不是每条 memo 各查一次（N+1，见 AttachmentService）。
+        Map<Long, List<AttachmentVO>> attachments = attachmentService.mapByOwner("memo", idsOf(records));
         List<MemoVO> result = new ArrayList<MemoVO>();
-        for (MemoRecord record : memoRepository.find(emptyToNull(grp), keyword, includeArchived)) result.add(toVO(record));
+        for (MemoRecord record : records) result.add(toVO(record, attachments.get(Long.valueOf(record.id))));
         return result;
+    }
+
+    private List<Long> idsOf(List<MemoRecord> records) {
+        List<Long> ids = new ArrayList<Long>(records.size());
+        for (MemoRecord record : records) ids.add(Long.valueOf(record.id));
+        return ids;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -114,10 +125,16 @@ public class MemoService {
 
     public int countActive(String grp) { return memoRepository.countByGroup(grp, false); }
 
+    /** 单条路径：附件按这一条查一次就够（列表路径必须走 {@code mapByOwner} 批量，见 list）。 */
     private MemoVO toVO(MemoRecord record) {
+        return toVO(record, attachmentService.listByOwner("memo", record.id));
+    }
+
+    private MemoVO toVO(MemoRecord record, List<AttachmentVO> attachments) {
         return new MemoVO(record.id, record.title, record.content, record.url, readTags(record.tags),
                 record.grp, record.pinned, record.status, record.sourceInboxId, record.createdAt,
-                record.updatedAt, record.demo);
+                record.updatedAt, record.demo,
+                attachments == null ? new ArrayList<AttachmentVO>() : attachments);
     }
 
     private MemoRecord requireMemo(long id) {

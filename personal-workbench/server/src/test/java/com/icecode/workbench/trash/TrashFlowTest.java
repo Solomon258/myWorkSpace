@@ -1,7 +1,10 @@
 package com.icecode.workbench.trash;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -224,6 +227,176 @@ class TrashFlowTest {
         mockMvc.perform(post("/api/v1/trash/task/1/restore"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(2002));
+        // 彻底删除比恢复更不能匿名调用：恢复最多是多一条记录，彻底删除是不可逆的
+        mockMvc.perform(delete("/api/v1/trash/task/1"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(2002));
+        mockMvc.perform(delete("/api/v1/trash"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(2002));
+    }
+
+    // ---------- 彻底删除与清空（2026-09-18）----------
+    //
+    // 回收站原来只有「恢复」一个出口：误删一条记录后，用户要么把它恢复回来（可它本来就是想删的），
+    // 要么干等满 30 天。这一组守的是**新增的那条出路必须真的不可逆、且不会误伤在用的数据**。
+
+    /** 彻底删除 = 物理删除：行没了、列表里也没了、恢复接口再也找不到它。 */
+    @Test
+    void purgeRemovesTheRowForGood() throws Exception {
+        long id = insertDeletedTask("确认不要了的任务");
+
+        mockMvc.perform(delete("/api/v1/trash/task/{id}", id).session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.type").value("task"))
+                .andExpect(jsonPath("$.data.id").value(id))
+                .andExpect(jsonPath("$.data.title").value("确认不要了的任务"));
+
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM task WHERE id=?", Integer.class, id)).isZero();
+        mockMvc.perform(get("/api/v1/trash").session(session))
+                .andExpect(jsonPath("$.data.length()").value(0));
+        // 不能出现「列表里没有、按 id 却还能恢复」这种半吊子状态
+        mockMvc.perform(post("/api/v1/trash/task/{id}/restore", id).session(session))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(1001));
+        // 彻底删除也是操作流水的一部分
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM activity_log WHERE content LIKE '%从回收站彻底删除「确认不要了的任务」%'",
+                Integer.class)).isEqualTo(1);
+    }
+
+    /**
+     * 唯一的安全阀：{@code id} 是从前端传回来的，类型与 id 一旦对不上（把活着的任务 id 填进来），
+     * 少了这道校验就是一次**直接删掉在用的数据**的事故 —— 而且不可逆。
+     */
+    @Test
+    void purgeRefusesToTouchARecordThatWasNeverDeleted() throws Exception {
+        long alive = insertAliveTask("还在用着的任务");
+
+        mockMvc.perform(delete("/api/v1/trash/task/{id}", alive).session(session))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1002))
+                .andExpect(jsonPath("$.message").value(containsString("没有被删除")));
+
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM task WHERE id=?", Integer.class, alive))
+                .isEqualTo(1);
+    }
+
+    /** 「找不到」和「类型写错」是两种不同的原因，用户要做的事也不同（刷新 / 改接口参数）。 */
+    @Test
+    void purgeTellsApartMissingRecordAndUnknownType() throws Exception {
+        mockMvc.perform(delete("/api/v1/trash/task/999999").session(session))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(1001))
+                .andExpect(jsonPath("$.message").value(containsString("回收站里没有这条记录")));
+
+        mockMvc.perform(delete("/api/v1/trash/note/1").session(session))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1002))
+                .andExpect(jsonPath("$.message").value(allOf(containsString("note"), containsString("inbox"))));
+    }
+
+    /**
+     * 删一条任务时，两张子表要**区别对待** —— 这是 V1 的列属性决定的，不是风格问题：
+     * {@code pomodoro.task_id} 可空（置 NULL、保住那条记录），
+     * {@code daily_plan_item.task_id} 是 NOT NULL（置空会直接撞约束，只能删行）。
+     * 少处理任何一张，DELETE 都会以 {@code FOREIGN KEY constraint failed} 收场 → 兜底成
+     * 500「系统暂时不可用」，而用户完全猜不到原因是「这条任务计过番茄钟 / 进过某天的计划」。
+     */
+    @Test
+    void purgingATaskKeepsPomodoroButDropsThePlanItemThatPointedAtIt() throws Exception {
+        long id = insertDeletedTask("计过番茄钟、也进过计划的任务");
+        String now = TimeUtil.now(TZ);
+        jdbcTemplate.update("INSERT INTO pomodoro(task_id, minutes, ended_at, created_at) VALUES (?, 25, ?, ?)",
+                id, now, now);
+        jdbcTemplate.update("INSERT INTO daily_plan(plan_date, created_at) VALUES ('2026-09-20', ?)", now);
+        long planId = jdbcTemplate.queryForObject(
+                "SELECT id FROM daily_plan WHERE plan_date='2026-09-20'", Long.class);
+        jdbcTemplate.update("INSERT INTO daily_plan_item(plan_id, task_id) VALUES (?, ?)", planId, id);
+
+        mockMvc.perform(delete("/api/v1/trash/task/{id}", id).session(session))
+                .andExpect(status().isOk());
+
+        // 番茄钟留下来了（已经发生过的投入），只是不再指向那条任务
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM pomodoro", Integer.class)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("SELECT task_id FROM pomodoro", Long.class)).isNull();
+        // 计划项删掉了（它表达的就是「做这个任务」，任务没了它就没有意义）
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM daily_plan_item", Integer.class)).isZero();
+        // 但计划本身不该被连带删掉——那是属于某一天的，不是属于这条任务的
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM daily_plan", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void clearingTrashWipesEverythingVisibleInOneShot() throws Exception {
+        long task = insertDeletedTask("清空的任务");
+        insertDeletedEvent("清空的日程");
+        insertDeletedMemo("清空的备忘");
+        insertDeletedKnowledge("清空的知识");
+        insertDeletedInbox("清空的收录");
+        String now = TimeUtil.now(TZ);
+        jdbcTemplate.update("INSERT INTO pomodoro(task_id, minutes, ended_at, created_at) VALUES (?, 25, ?, ?)",
+                task, now, now);
+
+        mockMvc.perform(delete("/api/v1/trash").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.count").value(5))
+                .andExpect(jsonPath("$.data.byType.task").value(1))
+                .andExpect(jsonPath("$.data.byType.knowledge").value(1));
+
+        mockMvc.perform(get("/api/v1/trash").session(session))
+                .andExpect(jsonPath("$.data.length()").value(0));
+        // 批量路径同样要解掉外键引用（这里就是「不处理会 500」的那个场景）
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM pomodoro", Integer.class)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("SELECT task_id FROM pomodoro", Long.class)).isNull();
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM task", Integer.class)).isZero();
+    }
+
+    /**
+     * 口径与列表严格一致：界面上显示 1 条，就说删掉了 1 条。
+     * 超期那条本来就既看不到、也恢复不了，不属于这次动作的范围 —— 顺手清掉的话，
+     * toast 里的数字会比用户看到的条数大，而用户无从知道多出来的是哪几条。
+     */
+    @Test
+    void clearingTrashLeavesExpiredRowsAloneSoTheCountMatchesWhatTheUserSaw() throws Exception {
+        insertDeletedTask("还能恢复的");
+        long expired = insertDeletedTask("早就超期的", TimeUtil.daysAgo(TZ, 31));
+
+        mockMvc.perform(get("/api/v1/trash").session(session))
+                .andExpect(jsonPath("$.data.length()").value(1));
+
+        mockMvc.perform(delete("/api/v1/trash").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.count").value(1));
+
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM task WHERE id=?", Integer.class, expired))
+                .isEqualTo(1);
+    }
+
+    /** 空回收站点「清空」不该报错，也不该往时间线上留一条「删除了 0 条」的记录。 */
+    @Test
+    void clearingAnEmptyTrashReportsZeroInsteadOfFailing() throws Exception {
+        mockMvc.perform(delete("/api/v1/trash").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.count").value(0))
+                .andExpect(jsonPath("$.data.byType").isEmpty());
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM activity_log WHERE content LIKE '%清空回收站%'", Integer.class)).isZero();
+    }
+
+    /** 清空之后保留期内再没有可恢复的东西：这是「彻底」两个字的含义。 */
+    @Test
+    void clearingTrashAlsoRemovesTheRestorePath() throws Exception {
+        insertDeletedEvent("清空之后不能再恢复的日程");
+        long id = jdbcTemplate.queryForObject(
+                "SELECT id FROM schedule_event WHERE title='清空之后不能再恢复的日程'", Long.class);
+
+        mockMvc.perform(delete("/api/v1/trash").session(session)).andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/trash/event/{id}/restore", id).session(session))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(1001));
     }
 
     // ---------- helpers ----------

@@ -276,6 +276,107 @@ class AttachmentFlowTest {
         }
     }
 
+    // -------------------------------------------------- 转绑 / 列表带附件（2026-09-19）
+
+    /**
+     * 收录条目确认生成备忘时，附件必须跟着走。
+     *
+     * <p>用户报的原始问题是「收录（或网页）加了附件之后，在备忘列表里看不到它」。查下来有**两层**原因，
+     * 这一条守的是更底下那层：附件当时压根没转绑 —— 生成的备忘一个附件都没有，
+     * 所以只改前端也还是看不到。</p>
+     */
+    @Test
+    void transfersAttachmentsFromInboxItemToTheEntityItBecomes() throws Exception {
+        long attachmentId = upload(pngFile("费用截图.png"), null, null);
+        long inboxId = createInboxItem("腾讯云费用 -198 元", attachmentId);
+
+        confirmInboxAsMemo(inboxId);
+
+        long memoId = jdbcTemplate.queryForObject(
+                "SELECT id FROM memo WHERE source_inbox_id=?", Long.class, Long.valueOf(inboxId)).longValue();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT owner_type FROM attachment WHERE id=?", String.class, Long.valueOf(attachmentId)))
+                .isEqualTo("memo");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT owner_id FROM attachment WHERE id=?", Long.class, Long.valueOf(attachmentId)))
+                .isEqualTo(memoId);
+
+        // 转绑是「搬走」而不是「再挂一份」：收录条目自己不再持有它。
+        // 若不校验这一条，「复制一份」的实现也能让上面两行全绿，而结果是同一个附件
+        // 在两个实体下同时出现、删一处另一处还指着同一份盘上文件。
+        mockMvc.perform(get("/api/v1/attachments").param("ownerType", "inbox_item")
+                        .param("ownerId", String.valueOf(inboxId)).session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(0));
+
+        // 转绑之后「重新解析」仍然要读得到原图：source_attachment_id 不跟着走，
+        // 而读取只按 id 查、不校验归属。
+        mockMvc.perform(get("/api/v1/attachments/{id}/raw", attachmentId).session(session))
+                .andExpect(status().isOk());
+    }
+
+    /**
+     * 列表接口必须**自己带上**附件，而不是让前端逐条再查一次。
+     *
+     * <p>一屏 100 条任务按条查就是 100 次查询，而 Hikari 池只有 4 个连接 —— 串行排队会肉眼可见地卡。
+     * 所以这一条钉的是「列表路径的返回里就有 attachments」。</p>
+     */
+    @Test
+    void memoListCarriesItsAttachments() throws Exception {
+        long attachmentId = upload(pngFile("费用截图.png"), null, null);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/api/v1/memos").session(session)
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"独一无二的标题XZQ\",\"content\":\"正文\",\"attachmentIds\":["
+                                + attachmentId + "]}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/memos").param("q", "独一无二的标题XZQ").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].attachments.length()").value(1))
+                .andExpect(jsonPath("$.data[0].attachments[0].name").value("费用截图.png"))
+                .andExpect(jsonPath("$.data[0].attachments[0].image").value(true))
+                .andExpect(jsonPath("$.data[0].attachments[0].url")
+                        .value(org.hamcrest.Matchers.containsString("/raw")));
+    }
+
+    /** 没有附件的记录要下发**空数组**而不是 null：前端按「空数组」写最省事，null 会到处漏判。 */
+    @Test
+    void recordsWithoutAttachmentsCarryAnEmptyArray() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/api/v1/memos").session(session)
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"没有附件ZQW\",\"content\":\"正文\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/memos").param("q", "没有附件ZQW").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].attachments.length()").value(0));
+    }
+
+    /**
+     * 转绑必须**只搬属于来源记录的那些**。
+     *
+     * <p>repository 层的 UPDATE 带着原归属做二次校验，所以「查完被别处挪走」不会变成抢别人的附件。
+     * 这里直接打 service 层：来源记录上没有附件时什么都不该发生。</p>
+     */
+    @Test
+    void transferringFromAnOwnerWithoutAttachmentsIsANoOp() throws Exception {
+        long otherId = upload(pngFile("别人的图.png"), "task", 88L);
+
+        int moved = attachmentService.transferOwner("inbox_item", 12345L, "memo", 777L);
+
+        assertThat(moved).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT owner_type FROM attachment WHERE id=?", String.class, Long.valueOf(otherId)))
+                .isEqualTo("task");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT owner_id FROM attachment WHERE id=?", Long.class, Long.valueOf(otherId)))
+                .isEqualTo(88L);
+    }
+
     // ------------------------------------------------------------------ 删除
 
     @Test
@@ -312,6 +413,33 @@ class AttachmentFlowTest {
     }
 
     // ------------------------------------------------------------------ 夹具
+
+    /** 建一条带附件的收录条目（附件此时归属 inbox_item，确认生成实体时应当转绑走）。 */
+    private long createInboxItem(String raw, long attachmentId) throws Exception {
+        MvcResult result = mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/api/v1/inbox").session(session)
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"raw\":\"" + raw + "\",\"attachmentIds\":[" + attachmentId + "]}"))
+                .andExpect(status().isOk()).andReturn();
+        return readLong(result, "$.data.id");
+    }
+
+    /**
+     * 把收录条目确认成备忘。
+     *
+     * <p>先把状态置成 {@code processed}：新收录的条目是 {@code pending}，而
+     * {@code InboxService.validateConfirm} 只放行 processed / failed。
+     * 这里直接改状态而不是跑一次 AI 整理 —— 本测试要验的是**附件转绑**，
+     * 让整理器的实现细节（以及它要不要联网）掺进来只会让它变得又慢又脆。</p>
+     */
+    private void confirmInboxAsMemo(long inboxId) throws Exception {
+        jdbcTemplate.update("UPDATE inbox_item SET status='processed' WHERE id=?", Long.valueOf(inboxId));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/api/v1/inbox/{id}/confirm", Long.valueOf(inboxId)).session(session)
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"category\":\"memo\",\"title\":\"腾讯云云服务支付 198 元\"}"))
+                .andExpect(status().isOk());
+    }
 
     private MockMultipartFile pngFile(String name) {
         return new MockMultipartFile("file", name, "image/png", pngBytes());

@@ -130,24 +130,12 @@ class PomodoroFlowTest {
     }
 
     @Test
-    void savesThemeIdempotentlyAndShowsFullDashboard() throws Exception {
+    void dashboardSummarizesInboxAndPomodoroWithoutTheme() throws Exception {
+        // 2026-09-20：「今日主题」整体下线（用户反馈没什么用），本用例原先还顺带断言
+        // 主题的写入 / 幂等 / 回显，现在改成只守驾驶舱汇总的口径 + 反向守住接口不再存在。
         mockMvc.perform(post("/api/v1/dashboard/theme").session(session)
-                        .contentType("application/json").content("{\"theme\":\"搞定季度复盘\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data").value("搞定季度复盘"));
-        mockMvc.perform(post("/api/v1/dashboard/theme").session(session)
-                        .contentType("application/json").content("{\"theme\":\"专注输出设计稿\"}"))
-                .andExpect(status().isOk());
-
-        Integer planRows = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM daily_plan WHERE plan_date=?", Integer.class, today());
-        org.assertj.core.api.Assertions.assertThat(planRows.intValue()).isEqualTo(1);
-        String theme = jdbcTemplate.queryForObject(
-                "SELECT theme FROM daily_plan WHERE plan_date=?", String.class, today());
-        org.assertj.core.api.Assertions.assertThat(theme).isEqualTo("专注输出设计稿");
-        Integer planLogs = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM activity_log WHERE log_type='plan'", Integer.class);
-        org.assertj.core.api.Assertions.assertThat(planLogs.intValue()).isEqualTo(2);
+                        .contentType("application/json").content("{\"theme\":\"这不该再能写入\"}"))
+                .andExpect(status().isNotFound());
 
         jdbcTemplate.update("INSERT INTO inbox_item(raw_content, status, created_at) VALUES ('明天下午三点开会','pending',?)",
                 TimeUtil.now("Asia/Shanghai"));
@@ -156,7 +144,7 @@ class PomodoroFlowTest {
 
         mockMvc.perform(get("/api/v1/dashboard/today").session(session))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.theme").value("专注输出设计稿"))
+                .andExpect(jsonPath("$.data.theme").doesNotExist())
                 .andExpect(jsonPath("$.data.metrics.inboxPending").value(1))
                 .andExpect(jsonPath("$.data.metrics.pomoToday").value(1))
                 .andExpect(jsonPath("$.data.brief").value(org.hamcrest.Matchers.containsString("收集箱还有 1 条待整理")));

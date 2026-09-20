@@ -10,7 +10,7 @@ public class InitRequest {
     private String username;
 
     @NotBlank(message = "密码不能为空")
-    @Size(min = 8, max = 72, message = "密码长度需要在 8 到 72 字之间")
+    @Size(min = 4, max = 72, message = "密码长度需要在 4 到 72 字之间")
     private String password;
 
     @NotBlank(message = "时区不能为空")

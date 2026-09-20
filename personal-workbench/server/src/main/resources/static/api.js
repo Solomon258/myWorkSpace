@@ -41,7 +41,12 @@
     postponeTask:function(id){return request("/api/v1/tasks/"+id+"/postpone",{method:"POST"})},
     // 只改工作 / 生活分组：卡片上的分组徽标是一键切换，走 updateTask 会把标题 / 优先级 /
     // 日期 / 备注全部回传一遍，并发场景下会把别处刚做的修改覆盖掉（丢失更新）。
-    changeTaskGroup:function(id,grp){return request("/api/v1/tasks/"+id+"/group",{method:"POST",body:JSON.stringify({grp:grp})})},
+    // 前端不使用（2026-09-17 起）：任务页的分组功能整体移除，卡片上的分组徽标与编辑表单里的
+    // 分组下拉都没了。**后端 POST /tasks/{id}/group 保留不动** —— 任务的 grp 字段还在、
+    // 后端仍在按关键词自动判定，只是前端不再有改它的入口。将来若要恢复分组，从这里接回去。
+    // ⚠️「前端不使用」这五个字必须留在**定义那一行**上：check_frontend_render.js 是逐行扫的
+    //    （`if (line.includes("前端不使用"))`），写在上一行的注释里它扫不到，会误报成死接口。
+    changeTaskGroup:function(id,grp){return request("/api/v1/tasks/"+id+"/group",{method:"POST",body:JSON.stringify({grp:grp})})}, // 前端不使用
     deleteTask:function(id){return request("/api/v1/tasks/"+id,{method:"DELETE"})},
     // 把一条记录从任务 / 日程 / 备忘中的一个菜单搬到另一个（后端一个事务里完成：
     // 目标菜单新建 + 源记录进回收站 + 记一条流水）。
@@ -81,7 +86,6 @@
     pinMemo:function(id){return request("/api/v1/memos/"+id+"/pin",{method:"POST"})},
     archiveMemo:function(id){return request("/api/v1/memos/"+id+"/archive",{method:"POST"})},
     deleteMemo:function(id){return request("/api/v1/memos/"+id,{method:"DELETE"})},
-    saveTheme:function(theme){return request("/api/v1/dashboard/theme",{method:"POST",body:JSON.stringify({theme:theme})})},
     pomoConfig:function(){return request("/api/v1/pomodoros/config")},
     savePomoConfig:function(data){return request("/api/v1/pomodoros/config",{method:"PUT",body:JSON.stringify(data)})},
     pomoToday:function(){return request("/api/v1/pomodoros/today")},
@@ -116,6 +120,10 @@
     // 回收站（US-1.5）。type 是后端约定的实体名：inbox / task / event / memo / knowledge。
     trash:function(){return request("/api/v1/trash")},
     restoreTrash:function(type,id){return request("/api/v1/trash/"+encodeURIComponent(type)+"/"+id+"/restore",{method:"POST"})},
+    // 彻底删除：没有 /restore 那样的动词后缀，DELETE 到记录本身。它删的是原始数据，
+    // 不是「从回收站里挪走」，所以调用方必须先二次确认（app.js 的 delete-trash 分支）。
+    purgeTrash:function(type,id){return request("/api/v1/trash/"+encodeURIComponent(type)+"/"+id,{method:"DELETE"})},
+    clearTrash:function(){return request("/api/v1/trash",{method:"DELETE"})},
     // 上传单个附件。多选时前端**循环调用**：每张图各自有进度、可单独重试，
     // 一张失败不拖垮其余几张（后端也只为单文件设计）。
     // owner 可省略（先上传、提交表单时再绑定），传了就当场归属。

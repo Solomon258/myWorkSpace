@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.icecode.workbench.attachment.AttachmentService;
+import com.icecode.workbench.attachment.AttachmentVO;
 import com.icecode.workbench.auth.AppConfigRepository;
 import com.icecode.workbench.auth.AuthConstants;
 import com.icecode.workbench.common.BizException;
@@ -32,11 +33,24 @@ public class EventService {
         this.attachmentService = attachmentService;
     }
 
+    /**
+     * 把一批日程记录转成 VO，**附件只查一次**再按 ownerId 分组。
+     *
+     * <p>列表路径一律走这里。逐条 {@code toVO(record)} 会变成 N+1：周视图一次取三段周
+     * （最多 21 天）的日程，按条查附件就是几十次查询，而连接池只有 4 个。</p>
+     */
+    private List<EventVO> toVOs(List<EventRecord> records) {
+        List<Long> ids = new ArrayList<Long>(records.size());
+        for (EventRecord record : records) ids.add(Long.valueOf(record.id));
+        java.util.Map<Long, List<AttachmentVO>> attachments = attachmentService.mapByOwner("schedule_event", ids);
+        List<EventVO> result = new ArrayList<EventVO>();
+        for (EventRecord record : records) result.add(toVO(record, attachments.get(Long.valueOf(record.id))));
+        return result;
+    }
+
     public List<EventVO> list(String date) {
         String targetDate = date == null || date.trim().isEmpty() ? TimeUtil.today(timezone()) : normalizeDate(date);
-        List<EventVO> result = new ArrayList<EventVO>();
-        for (EventRecord record : eventRepository.findByDate(targetDate)) result.add(toVO(record));
-        return result;
+        return toVOs(eventRepository.findByDate(targetDate));
     }
 
     /**
@@ -60,16 +74,12 @@ public class EventService {
             throw new BizException(ErrorCode.INVALID_PARAMETER,
                     "开始日期不能晚于结束日期（from=" + start + "，to=" + end + "）");
         }
-        List<EventVO> result = new ArrayList<EventVO>();
-        for (EventRecord record : eventRepository.findByRange(start, end)) result.add(toVO(record));
-        return result;
+        return toVOs(eventRepository.findByRange(start, end));
     }
 
     /** 待定时间区（US-4.2）：日期未定的日程单独成列，供人工补全后归队。 */
     public List<EventVO> listPending() {
-        List<EventVO> result = new ArrayList<EventVO>();
-        for (EventRecord record : eventRepository.findPending()) result.add(toVO(record));
-        return result;
+        return toVOs(eventRepository.findPending());
     }
 
     /**
@@ -79,10 +89,8 @@ public class EventService {
      * 界面上清空搜索框的那一刻会闪出一整库的日程，看起来像搜索坏了。</p>
      */
     public List<EventVO> search(String keyword) {
-        List<EventVO> result = new ArrayList<EventVO>();
-        if (keyword == null || keyword.trim().isEmpty()) return result;
-        for (EventRecord record : eventRepository.search(keyword)) result.add(toVO(record));
-        return result;
+        if (keyword == null || keyword.trim().isEmpty()) return new ArrayList<EventVO>();
+        return toVOs(eventRepository.search(keyword));
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -181,9 +189,15 @@ public class EventService {
         return Integer.parseInt(time.substring(0, 2)) * 60 + Integer.parseInt(time.substring(3, 5));
     }
 
+    /** 单条路径（get / create / update 的返回）：附件按这一条查一次就够。 */
     private EventVO toVO(EventRecord record) {
+        return toVO(record, attachmentService.listByOwner("schedule_event", record.id));
+    }
+
+    private EventVO toVO(EventRecord record, List<AttachmentVO> attachments) {
         return new EventVO(record.id, record.title, record.type, record.date, record.start, record.end,
-                record.sourceInboxId, record.createdAt, record.demo, record.repeatGroup, record.repeatTotal);
+                record.sourceInboxId, record.createdAt, record.demo, record.repeatGroup, record.repeatTotal,
+                attachments == null ? new ArrayList<AttachmentVO>() : attachments);
     }
 
     private EventRecord requireEvent(long id) {

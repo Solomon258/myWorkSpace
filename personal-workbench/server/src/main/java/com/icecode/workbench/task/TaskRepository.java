@@ -44,8 +44,16 @@ public class TaskRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    /**
+     * 任务列表查询。{@code sort} 决定 ORDER BY：
+     * {@code updated} = 按最后修改时间（全局倒序，见下）；其它 / 为空 = 按截止时间（默认口径）。
+     *
+     * <p>排序放在 SQL 里而不是取回来再排：{@code LIMIT} 与 ORDER BY 是一体的 ——
+     * 先按「截止时间」取前 100 条再在前端改成按修改时间排，用户看到的只是
+     * 「那 100 条里改过的」，而他要的是「最近改过的那批」。两者不是一回事。</p>
+     */
     public List<TaskRecord> find(String status, String priority, String grp, String keyword, String dueFrom,
-                                 String dueTo, int page, int size) {
+                                 String dueTo, String sort, int page, int size) {
         StringBuilder sql = new StringBuilder("SELECT * FROM task WHERE deleted = 0");
         List<Object> args = new ArrayList<Object>();
         if (notBlank(status)) {
@@ -76,9 +84,20 @@ public class TaskRepository {
             sql.append(" AND due_date <= ?");
             args.add(dueTo);
         }
-        sql.append(" ORDER BY CASE status WHEN 'doing' THEN 0 WHEN 'todo' THEN 1 WHEN 'done' THEN 2 ELSE 3 END,")
-                .append(" CASE priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END,")
-                .append(" CASE WHEN due_date IS NULL THEN 1 ELSE 0 END, due_date, created_at DESC LIMIT ? OFFSET ?");
+        if ("updated".equals(sort)) {
+            // 按最后修改时间（2026-09-20）：**不先按状态分组**，整表倒序。
+            // 前端是按状态分三条泳道渲染的，状态不需要在这层排；反过来先按状态排，
+            // 取到的 100 条会变成「先取办完的、再取在做的」，把用户想看的顺序打乱。
+            // ⚠️ updated_at 可为空（V1 里它就是 TEXT 不带 NOT NULL），NULL 在 DESC 下会全部沉到最后，
+            //    那就等于把历史任务静默踢出前 100 条 —— 用 created_at 兜底（两者同为
+            //    yyyy-MM-dd HH:mm:ss 文本，字典序即时间序；回收站算保留期也是这么兜的）。
+            // id DESC 是同一秒内多次修改时的 tie-breaker，保证顺序稳定、刷新不会来回跳。
+            sql.append(" ORDER BY COALESCE(updated_at, created_at) DESC, id DESC LIMIT ? OFFSET ?");
+        } else {
+            sql.append(" ORDER BY CASE status WHEN 'doing' THEN 0 WHEN 'todo' THEN 1 WHEN 'done' THEN 2 ELSE 3 END,")
+                    .append(" CASE priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END,")
+                    .append(" CASE WHEN due_date IS NULL THEN 1 ELSE 0 END, due_date, created_at DESC LIMIT ? OFFSET ?");
+        }
         args.add(Integer.valueOf(size));
         args.add(Integer.valueOf((page - 1) * size));
         return jdbcTemplate.query(sql.toString(), rowMapper, args.toArray());

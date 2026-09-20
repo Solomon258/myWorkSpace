@@ -7,11 +7,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.icecode.workbench.attachment.AttachmentService;
+import com.icecode.workbench.attachment.AttachmentVO;
 import com.icecode.workbench.auth.AppConfigRepository;
 import com.icecode.workbench.auth.AuthConstants;
 import com.icecode.workbench.common.BizException;
@@ -26,6 +28,10 @@ public class TaskService {
             "干得漂亮，又拿下一城！", "稳！这个节奏保持住。", "漂亮，这事终于落地了。",
             "执行力拉满，向你致敬。", "状态正佳，乘胜追击！", "积小胜为大胜，很好。"
     };
+
+    /** 任务列表的两个排序口径（2026-09-20）。取值同时是 SQL 分支的开关，别改字面量。 */
+    private static final String SORT_DUE = "due";
+    private static final String SORT_UPDATED = "updated";
 
     private final TaskRepository taskRepository;
     private final AppConfigRepository configRepository;
@@ -47,19 +53,33 @@ public class TaskService {
         this.attachmentService = attachmentService;
     }
 
+    /**
+     * 任务列表。{@code sort} 只有两个取值：{@code due}（按截止时间，默认）与
+     * {@code updated}（按最后修改时间）。
+     *
+     * <p>排序必须落在 SQL 里（见 {@code TaskRepository.find}），不能取回来再排：任务页一次只加载
+     * 100 条，本地排序只能在这 100 条里做 —— 选「按最后修改时间」的用户要看的是最近改过的那一批，
+     * 它们完全可能不在「按截止时间排出来的前 100 条」之内。</p>
+     */
     public List<TaskVO> list(String status, String priority, String grp, String keyword, String dueFrom,
-                             String dueTo, int page, int size) {
+                             String dueTo, String sort, int page, int size) {
         validateOptionalStatus(status);
         validateOptionalPriority(priority);
         validateOptionalGroup(grp);
         validateOptionalDate(dueFrom);
         validateOptionalDate(dueTo);
+        String order = normalizeSort(sort);
         int safePage = Math.max(1, page);
         int safeSize = Math.min(100, Math.max(1, size));
         LocalDate today = today();
+        List<TaskRecord> records = taskRepository.find(status, priority, grp, keyword, dueFrom, dueTo, order, safePage, safeSize);
+        // 附件走一次批量查询再按 ownerId 分组（N+1 会把一屏 100 条任务变成 100 次查询，见 AttachmentService）。
+        List<Long> ids = new ArrayList<Long>(records.size());
+        for (TaskRecord record : records) ids.add(Long.valueOf(record.id));
+        Map<Long, List<AttachmentVO>> attachments = attachmentService.mapByOwner("task", ids);
         List<TaskVO> result = new ArrayList<TaskVO>();
-        for (TaskRecord record : taskRepository.find(status, priority, grp, keyword, dueFrom, dueTo, safePage, safeSize)) {
-            result.add(toVO(record, today));
+        for (TaskRecord record : records) {
+            result.add(toVO(record, today, attachments.get(Long.valueOf(record.id))));
         }
         return result;
     }
@@ -215,7 +235,12 @@ public class TaskService {
         return join(reasons, " · ");
     }
 
+    /** 单条路径：附件按这一条查一次就够（列表路径必须走 {@code mapByOwner} 批量，见 list）。 */
     private TaskVO toVO(TaskRecord record, LocalDate today) {
+        return toVO(record, today, attachmentService.listByOwner("task", record.id));
+    }
+
+    private TaskVO toVO(TaskRecord record, LocalDate today, List<AttachmentVO> attachments) {
         boolean overdue = false;
         int overdueDays = 0;
         if (record.due != null && !"done".equals(record.status) && !"canceled".equals(record.status)) {
@@ -227,7 +252,8 @@ public class TaskService {
                 record.due, overdue, overdueDays, record.deep, record.blocking, record.note,
                 record.grp == null ? "work" : record.grp,
                 record.postponed, record.sourceInboxId, record.createdAt, record.updatedAt,
-                record.completedAt, record.demo);
+                record.completedAt, record.demo,
+                attachments == null ? new ArrayList<AttachmentVO>() : attachments);
     }
 
     private TaskRecord requireTask(long id) {
@@ -277,6 +303,19 @@ public class TaskService {
     }
     private void validateOptionalDate(String value) { if (value != null && !value.isEmpty()) parseDate(value); }
     private void validateOptionalGroup(String value) { if (value != null && !value.trim().isEmpty()) normalizeGroup(value); }
+    /**
+     * 排序口径收敛到 due / updated 两值；不传 = due（这正是前端默认那一档，不是「另一种排序」）。
+     *
+     * <p>报错文案必须写清合法取值：用户可能是拿接口做自动化时把 {@code updated} 拼成了
+     * {@code update}，只回「请求参数不正确」他得去翻文档才知道错在哪。</p>
+     */
+    private String normalizeSort(String value) {
+        if (value == null || value.trim().isEmpty()) return SORT_DUE;
+        String sort = value.trim().toLowerCase();
+        if (SORT_DUE.equals(sort) || SORT_UPDATED.equals(sort)) return sort;
+        throw new BizException(ErrorCode.INVALID_PARAMETER,
+                "排序方式只能填 due（按截止时间）或 updated（按最后修改时间）");
+    }
     /**
      * 分组取值收敛到 work / life 两值。
      *

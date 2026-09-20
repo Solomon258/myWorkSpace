@@ -127,6 +127,104 @@ class KnowledgeFlowTest {
     }
 
     @Test
+    void questionPhrasingDoesNotStealTheMatchFromTheDistinctiveWord() throws Exception {
+        // 回归（2026-09-18）：检索词原本就是问句的 CJK 二元组，等权计分。
+        // 「复盘应该怎么做」于是产出 复盘/盘应/应该/该怎/怎么/么做，其中「怎么」「该怎」
+        // 这些**问句措辞**在笔记小标题里到处都是（「怎么设计」「如何做」），
+        // 命中小标题还额外 +4 分，结果压过了真正的关键词「复盘」。
+        // 实测在用户真实 Vault（3399 个片段）上，问「复盘应该怎么做」返回的三个片段
+        // 全部与复盘无关，模型只能回答「笔记里相关信息有限」——用户看到的就是
+        // 「回答只给了几个文档链接、没有内容」。
+        // 现在：疑问词先剥离、按语料频次加权、且必须命中一个「稀有词」才算相关。
+        writeVaultNote("该怎么做.md",
+                "# 该怎么做\n\n## 怎么设计与怎么做\n\n"
+                        + "这里讲的是服务端接口的怎么设计与怎么做，属于通用工程问题，和复盘没有关系。\n");
+        writeVaultNote("复盘方法.md",
+                "# 复盘方法\n\n## 四个步骤\n\n"
+                        + "复盘要先还原事实，再区分事实与判断，最后落成一条可执行的改进项。\n");
+
+        mockMvc.perform(post("/api/v1/knowledge/ask").session(session)
+                        .contentType("application/json")
+                        .content("{\"question\":\"复盘应该怎么做？\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.answered").value(true))
+                .andExpect(jsonPath("$.data.capturedToInbox").value(false))
+                .andExpect(jsonPath("$.data.citations[0].file").value("复盘方法.md"))
+                .andExpect(jsonPath("$.data.citations[0].index").value(1));
+    }
+
+    @Test
+    void citationsAreNumberedAndSpreadAcrossFiles() throws Exception {
+        // 出处列表的编号必须与答案正文里的 [1][2] 对得上，且不能全来自同一篇长笔记 ——
+        // 四段都取自同一篇，「归纳」出来的就只是那一篇的摘要，不是知识库对这个问题的回答。
+        writeVaultNote("限流设计.md",
+                "# 限流设计\n\n## 通道级限流\n\n限流按通道隔离，每个通道一个令牌桶，互不影响。\n\n"
+                        + "## 全局限流\n\n全局限流兜住所有通道的总量，防止某一个下游把配额吃光。\n\n"
+                        + "## 限流降级\n\n单通道超限时只熔断该通道，核心通道永不降级，其他的按优先级排队。\n");
+        writeVaultNote("网关配置.md",
+                "# 网关配置\n\n## 限流开关\n\n限流开关在前置网关统一配置，改完立即生效，不用重启。\n");
+
+        mockMvc.perform(post("/api/v1/knowledge/ask").session(session)
+                        .contentType("application/json")
+                        .content("{\"question\":\"限流\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.citations[0].index").value(1))
+                .andExpect(jsonPath("$.data.citations[1].index").value(2));
+
+        String body = mockMvc.perform(post("/api/v1/knowledge/ask").session(session)
+                        .contentType("application/json")
+                        .content("{\"question\":\"限流\"}"))
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertThat(body).contains("\"file\":\"限流设计.md\"").contains("\"file\":\"网关配置.md\"");
+        // 同一篇最多两个片段
+        int fromSameFile = body.split(java.util.regex.Pattern.quote("\"file\":\"限流设计.md\""), -1).length - 1;
+        assertThat(fromSameFile).isEqualTo(2);
+    }
+
+    @Test
+    void extractiveFallbackListsEveryUsedChunk() throws Exception {
+        // 没配 AI 时的兜底以前只摘第一条的前 140 字 —— 读起来就像「只甩了一个文档链接」。
+        // 现在把命中的片段按编号列出来，用户至少能看到几处原文各自讲了什么。
+        writeVaultNote("限流设计.md",
+                "# 限流设计\n\n## 通道级限流\n\n限流按通道隔离，每个通道一个令牌桶，互不影响。\n\n"
+                        + "## 全局限流\n\n全局限流兜住所有通道的总量，防止某一个下游把配额吃光。\n");
+        writeVaultNote("网关配置.md",
+                "# 网关配置\n\n## 限流开关\n\n限流开关在前置网关统一配置，改完立即生效，不用重启。\n");
+
+        mockMvc.perform(post("/api/v1/knowledge/ask").session(session)
+                        .contentType("application/json")
+                        .content("{\"question\":\"限流\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.llmUsed").value(false))
+                .andExpect(jsonPath("$.data.answer", org.hamcrest.Matchers.containsString("根据你的笔记")))
+                .andExpect(jsonPath("$.data.answer", org.hamcrest.Matchers.containsString("[1]")))
+                .andExpect(jsonPath("$.data.answer", org.hamcrest.Matchers.containsString("[2]")));
+    }
+
+    @Test
+    void questionMadeOnlyOfCommonWordsIsCapturedInsteadOfAnsweredWithNoise() throws Exception {
+        // 剥掉疑问词之后，剩下的内容词如果满库都是（这里「工作」出现在每个片段里），
+        // 说明这个问题在这个 Vault 里没有对应的笔记。给出一堆「碰巧含这个词」的链接
+        // 比承认没找到更糟 —— 要把问题收进收集箱。
+        // ⚠️ 片段数必须超过 MIN_STATS_CHUNKS（20）：低于那个量级时统计量不可靠，
+        // 代码会按「任何命中都算数」处理，这条断言就测不到闸门了。
+        StringBuilder body = new StringBuilder("# 工作笔记\n\n## 工作安排\n\n每天都在处理工作上的事情，"
+                + "把工作记录下来，工作结束之后再看一遍，工作里反复出现的才值得沉淀。\n");
+        for (int i = 1; i <= 25; i++) {
+            body.append("\n## 工作片段 ").append(i).append("\n\n这是第 ").append(i)
+                    .append(" 段工作记录，写工作的方式基本一致，工作内容各有不同但都叫工作。\n");
+        }
+        writeVaultNote("工作笔记.md", body.toString());
+
+        mockMvc.perform(post("/api/v1/knowledge/ask").session(session)
+                        .contentType("application/json")
+                        .content("{\"question\":\"什么是番茄工作法\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.answered").value(false))
+                .andExpect(jsonPath("$.data.capturedToInbox").value(true));
+    }
+
+    @Test
     void shortQueryMatchesContentInsteadOfFallingBackToInbox() throws Exception {
         // 回归：相关度阈值曾用固定 MIN_SCORE=6，而每个检索词最多只贡献 7 分
         // （content 1 + heading 4 + file 2）。2 字问题只产出 1 个 CJK 二元组，
