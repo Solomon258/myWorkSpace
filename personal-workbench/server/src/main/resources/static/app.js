@@ -725,7 +725,7 @@ function taskCard(task){
     :canceled
       ?'<span class="task-check" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="12" fill="currentColor"/><path d="M8.7 8.7l6.6 6.6M15.3 8.7l-6.6 6.6" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg></span>'
       :"";
-  return `<div class="task-card${canceled?" is-canceled":""}${dueToday?" is-due-today":""}" draggable="false" data-task-id="${task.id}" data-status="${task.status}" data-prio="${task.priority}"><div class="tc-top">${check}<div class="grow"><div class="task-title${canceled?" strike":""}">${esc(task.title)} ${flags}</div><div class="task-meta">${statusName(task.status)} · ${dueMeta}${task.overdue?` · <span class="overdue-text">逾期 ${task.overdueDays} 天</span>`:""}${task.postponed?` · 已顺延 ${task.postponed} 次`:""}</div>${task.note?`<div class="task-meta task-note">备注：${esc(task.note)}</div>`:""}</div><span class="pill task-prio${prio?" "+prio:""}">${task.priority}</span></div>${attStrip(task.attachments,{owner:"task:"+task.id})}<div class="actions tc-acts"><button class="btn sm" data-action="edit" data-id="${task.id}">编辑</button>${!ended?`<button class="btn sm" data-action="postpone" data-id="${task.id}">顺延</button>`:""}<button class="btn sm" data-action="status" data-id="${task.id}" data-status="${task.status==="canceled"||task.status==="done"?"todo":"canceled"}">${ended?"恢复":"取消"}</button>${moveMenu("task",task.id)}<button class="btn sm danger" data-action="delete" data-id="${task.id}">删除</button></div></div>`;
+  return `<div class="task-card${canceled?" is-canceled":""}${dueToday?" is-due-today":""}" draggable="false" data-task-id="${task.id}" data-status="${task.status}" data-prio="${task.priority}"><div class="tc-top">${check}<div class="grow"><div class="task-title${canceled?" strike":""}">${esc(task.title)} ${flags}</div><div class="task-meta">${statusName(task.status)} · ${dueMeta}${task.overdue?` · <span class="overdue-text">逾期 ${task.overdueDays} 天</span>`:""}${task.postponed?` · 已顺延 ${task.postponed} 次`:""}</div>${task.note?`<div class="task-meta task-note">备注：${esc(task.note)}</div>`:""}</div><span class="pill task-prio${prio?" "+prio:""}">${task.priority}</span></div>${attStrip(task.attachments,{owner:"task:"+task.id})}<div class="actions tc-acts"><button class="btn sm" data-action="edit" data-id="${task.id}">编辑</button><button class="btn sm" data-action="duplicate" data-id="${task.id}" title="新建一条同名任务，截止日期改为今天；附件一并带过去，原任务不动">复制</button>${!ended?`<button class="btn sm" data-action="postpone" data-id="${task.id}">顺延</button>`:""}<button class="btn sm" data-action="status" data-id="${task.id}" data-status="${task.status==="canceled"||task.status==="done"?"todo":"canceled"}">${ended?"恢复":"取消"}</button>${moveMenu("task",task.id)}<button class="btn sm danger" data-action="delete" data-id="${task.id}">删除</button></div></div>`;
 }
 // 拖动落点 = 把卡片换到目标泳道对应的状态。
 // 这里**不能只发一次 status 请求**：后端是严格状态机（todo→doing→done，「开始」这一步跳不过去），
@@ -2986,6 +2986,32 @@ async function handleAction(button){
   if(action==="edit"){openTaskEditor(id);return}
   if(action==="status"){await WorkbenchApi.changeTaskStatus(id,button.dataset.status);await refreshAll();toast("任务已改为「"+statusName(button.dataset.status)+"」");return}
   if(action==="postpone"){const task=await WorkbenchApi.postponeTask(id);await refreshAll();toast("已顺延到 "+formatDate(task.due)+"，第 "+task.postponed+" 次");return}
+  // 复制任务（2026-09-21）。三步都不能省，见下。
+  if(action==="duplicate"){
+    // ① 防连点。复制出来的卡片和原卡片**同名**，连点两下会建出两条一模一样的任务 ——
+    //    用户在列表里分不出哪条是哪条，只能靠时间线去猜。请求期间禁用按钮，
+    //    失败路径由 finally 恢复（恢复不了就等于用户再也点不动这个按钮了）。
+    if(button.disabled)return;
+    button.disabled=true;
+    try{
+      const copy=await WorkbenchApi.duplicateTask(id);
+      await refreshAll();
+      // ② 可见性**必须排在重绘之后**：createdVisibilityNote 在需要放宽条件时自己会再调一次
+      //    refreshAll，先高亮的话那一次重绘会把 hl 类整个冲掉（DOM 重建），用户看不到高亮。
+      const note=await createdVisibilityNote("task",copy.id);
+      // ③ 同名 → 不高亮就等于没反馈。选择器限定 #view-tasks：驾驶舱的 Top3 / 今天截止列表里
+      //    也有同名条目且 DOM 更靠前，选错了高亮会落在看不见的地方（drillTask 踩过同一个坑）。
+      highlightRow(document.querySelector('#view-tasks .task-card[data-task-id="'+copy.id+'"]'));
+      const attachCount=copy.attachments?copy.attachments.length:0;
+      toast("已复制，新任务在「待办」，截止日期 "+formatDate(copy.due)+(isDueToday(copy)?"（今天）":"")
+        +(attachCount?"，附件 "+attachCount+" 个一并带过来了":"")+note);
+    }catch(error){
+      toast(error.message);
+    }finally{
+      button.disabled=false;
+    }
+    return
+  }
   if(action==="confirm-inbox"){await confirmInbox(id);return}
   if(action==="reclassify-inbox"){await reclassifyInbox(id);return}
   if(action==="delete-inbox"){await WorkbenchApi.deleteInbox(id);await refreshAll();toast("已移入回收站，30 天内可恢复");return}

@@ -345,6 +345,45 @@ public class AttachmentService {
         }
     }
 
+    /**
+     * 把某个归属名下的附件整批复制到另一个归属下（2026-09-21，供任务复制使用）。
+     *
+     * <p><b>为什么不能复用 {@code bindAll}</b>：它落到 {@code bindOwner} 时 WHERE 带着
+     * {@code owner_id IS NULL}，只接受「已上传、还没归属」的附件 —— 源附件本来就挂在原记录上，
+     * 直接把它们的 id 传进来会被 {@code ATTACHMENT_OCCUPIED} 拒掉。所以这里必须新增行，
+     * 而不是改归属；改归属会让原记录**当场丢掉附件**。</p>
+     *
+     * <p><b>磁盘上不复制文件</b>：落盘文件名是 sha256 前 16 位，同内容天然共用一份。
+     * 这不是省空间的小聪明，而是删的时候必须成立的前提 —— 见下。</p>
+     *
+     * <p><b>共用一个文件是安全的</b>：{@link #delete(long)} 只软删数据库行，不碰磁盘；
+     * 物理回收交给孤儿清理，它按 {@code countActiveByFileName} 的引用计数判断
+     * （引用没归零就不删）。所以删掉原任务不会让新任务的附件变成打不开的死链。
+     * ⚠️ 将来若有人把「删记录的同事顺手删文件」加回 {@link #delete(long)}，
+     * 这里立刻变成数据丢失 —— 两个归属共用一个文件的前提就会被打破。</p>
+     *
+     * @return 实际复制过去的条数（源没有附件时为 0，调用方据此决定提示里要不要提附件）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int duplicateForOwner(String fromOwnerType, long fromOwnerId, String toOwnerType, long toOwnerId) {
+        requireOwnerType(fromOwnerType);
+        requireOwnerType(toOwnerType);
+        List<AttachmentRecord> sources = attachmentRepository.findByOwner(fromOwnerType, fromOwnerId);
+        if (sources.isEmpty()) {
+            return 0;
+        }
+        String now = now();
+        // 排序位在新归属里从 0 重排：直接沿用源的 sort_order 会在目标已有附件时撞号，
+        // 而 .att-strip 是按 sort_order 渲染的，撞号会让顺序随机漂。
+        int sortOrder = 0;
+        for (AttachmentRecord source : sources) {
+            attachmentRepository.insert(toOwnerType, Long.valueOf(toOwnerId),
+                    source.fileName, source.originalName, source.mimeType, source.byteSize,
+                    source.width, source.height, source.sha256, sortOrder++, now);
+        }
+        return sources.size();
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public void delete(long id) {
         AttachmentRecord record = requireForRead(id);

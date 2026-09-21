@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>任务「复制」按钮 · 样式确认</title>
+<style>
+:root{--red:#c0392b;--text:#2c3a33;--muted:#8a9a90;--border:#e8edf3}
+*{box-sizing:border-box}
+body{margin:0;padding:28px 24px 60px;background:#f6f8fa;color:var(--text);
+  font:13px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+h1{font-size:17px;font-weight:500;margin:0 0 6px}
+.sub{font-size:12.5px;color:var(--muted);margin:0 0 22px}
+.panel{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:18px}
+.panel h2{font-size:13.5px;font-weight:500;margin:0 0 12px}
+.ctl{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.ctl label{font-size:12.5px;color:#5f6f78}
+input[type=range]{width:260px}
+.seg{display:inline-flex;border:1px solid #cfd9cb;border-radius:8px;overflow:hidden}
+.seg button{font:inherit;font-size:12.5px;padding:5px 12px;border:0;background:#fff;color:#4e5a4c;cursor:pointer}
+.seg button.on{background:#eef4ec;font-weight:500}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:4px}
+.read div{background:#f7f9fb;border-radius:9px;padding:9px 12px}
+.read b{display:block;font-size:11.5px;font-weight:400;color:var(--muted);margin-bottom:3px}
+.read span{font-size:16px;font-weight:500;font-variant-numeric:tabular-nums}
+.ok{color:#3b6d11}.bad{color:var(--red)}
+
+.board{background:#eef3f8;border-radius:14px;padding:14px}
+.lane{background:#e6f1fb;border:1px solid #85b7eb;border-radius:11px;padding:10px 11px 12px}
+.lane h3{font-size:13px;font-weight:500;color:#185fa5;margin:0 0 9px}
+.lane-body{display:flex;flex-direction:column;gap:10px;background:#f4f8fd;border-radius:9px;padding:10px;min-height:120px}
+
+.task-card{display:flex;flex-direction:column;gap:9px;padding:12px 13px 11px;background:#fff;
+  border:1px solid var(--border);border-left:3px solid #85b7eb;border-radius:11px;
+  box-shadow:0 1px 2px rgba(38,49,66,.05)}
+.task-card.due{border-color:#e0a9a9;box-shadow:0 0 0 3px rgba(192,57,43,.07),0 4px 12px rgba(31,42,33,.06)}
+.tc-top{display:flex;align-items:flex-start;gap:10px}
+.tc-top .grow{flex:1;min-width:0}
+.task-title{font-size:13.5px;line-height:1.55}
+.task-meta{font-size:11.5px;line-height:1.6;color:var(--muted)}
+.task-meta .dtd-day{color:var(--red);font-weight:500}
+.pill{font-size:11px;padding:1px 8px;border-radius:99px;background:#eef3f8;color:#5f7386;flex:0 0 auto;white-space:nowrap}
+.pill.dtd{background:#f8e7e7;color:var(--red);font-weight:600}
+.pill.prio{background:#eef3f8}
+
+.btn{min-height:44px;border:1px solid #cbd8e6;border-radius:9px;background:#fff;color:#52657b;
+  padding:8px 14px;cursor:pointer;font:inherit}
+.btn.sm{min-height:34px;padding:5px 10px;font-size:12px}
+.btn.ghost{border-color:transparent;background:transparent;color:#8a94a6;min-height:30px;padding:4px 9px}
+.btn.danger{color:var(--red)}
+.tc-acts{display:flex;gap:3px;justify-content:flex-end;flex-wrap:wrap;border:0}
+.tc-acts .btn{font-family:inherit}
+.tight .tc-acts{gap:2px}
+.tight .tc-acts .btn{padding-left:6px;padding-right:6px}
+
+mark{background:#fdf3d7;color:inherit;border-radius:3px;padding:0 2px}
+.note{font-size:12.5px;line-height:1.75;color:#4a5a52;background:#fbfcfa;border-left:3px solid #cfd9cb;
+  border-radius:0 8px 8px 0;padding:11px 14px;margin-top:14px}
+.note strong{font-weight:500}
+.hl{animation:hlPulse 2.4s ease-out}
+@keyframes hlPulse{0%{background:#fdf3d7}100%{background:#fff}}
+</style>
+</head>
+<body>
+
+<h1>任务卡「复制」按钮 · 样式确认</h1>
+<p class="sub">拖动下面的宽度滑块，看六个按钮在哪一档开始折行。数值取自 style.css 的真实定义，折行与否由浏览器实测，不是估算。</p>
+
+<div class="panel">
+  <h2>宽度与排版实测</h2>
+  <div class="ctl">
+    <label>卡片可用宽度</label>
+    <input type="range" id="w" min="246" max="271" value="246">
+    <span id="wv" style="font-variant-numeric:tabular-nums;font-size:12.5px">246px</span>
+    <span class="seg" id="seg">
+      <button data-pad="10" class="on">原样 · padding 10px / gap 3px</button>
+      <button data-pad="6">收窄 · padding 6px / gap 2px</button>
+    </span>
+  </div>
+  <div class="read">
+    <div><b>六个按钮实际总宽</b><span id="rTotal">—</span></div>
+    <div><b>可用宽度</b><span id="rAvail">—</span></div>
+    <div><b>余量</b><span id="rSlack">—</span></div>
+    <div><b>是否折行</b><span id="rWrap">—</span></div>
+  </div>
+</div>
+
+<div class="board">
+  <div class="lane" id="lane">
+    <h3>待办</h3>
+    <div class="lane-body">
+      <div class="task-card" id="card">
+        <div class="tc-top">
+          <div class="grow">
+            <div class="task-title">给领导发汇报数据邮件</div>
+            <div class="task-meta">待办 · 明天截止 09-22</div>
+          </div>
+          <span class="pill prio">P2</span>
+        </div>
+        <div class="tc-acts" id="acts">
+          <button class="btn sm">编辑</button>
+          <button class="btn sm" id="dupBtn">复制</button>
+          <button class="btn sm">顺延</button>
+          <button class="btn sm">取消</button>
+          <button class="btn sm ghost">移至</button>
+          <button class="btn sm danger">删除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="note" id="verdict"></div>
+
+<div class="panel" style="margin-top:18px">
+  <h2>点「复制」之后</h2>
+  <p class="sub" style="margin:0 0 12px">点一下试试：新卡片落在「待办」、日期变今天、高亮闪一下；原任务原地不动。</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+    <div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 7px">复制出的新卡片</p>
+      <div class="task-card due" id="newCard" style="display:none">
+        <div class="tc-top">
+          <div class="grow">
+            <div class="task-title">给领导发汇报数据邮件</div>
+            <div class="task-meta">待办 · <span class="dtd-day">今天截止 09-21</span></div>
+          </div>
+          <span class="pill prio">P2</span>
+        </div>
+        <div class="tc-acts" id="newActs">
+          <button class="btn sm">编辑</button>
+          <button class="btn sm">复制</button>
+          <button class="btn sm">顺延</button>
+          <button class="btn sm">取消</button>
+          <button class="btn sm ghost">移至</button>
+          <button class="btn sm danger">删除</button>
+        </div>
+      </div>
+    </div>
+    <div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 7px">顶部提示（toast）</p>
+      <div id="toastBox" style="display:none;background:#2c3a33;color:#fff;border-radius:9px;
+        padding:10px 13px;font-size:12.5px;line-height:1.6"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var card=document.getElementById("card");
+  var acts=document.getElementById("acts");
+  var lane=document.getElementById("lane");
+  var w=document.getElementById("w"), wv=document.getElementById("wv");
+  var rTotal=document.getElementById("rTotal"), rAvail=document.getElementById("rAvail");
+  var rSlack=document.getElementById("rSlack"), rWrap=document.getElementById("rWrap");
+  var verdict=document.getElementById("verdict");
+  var padMode=10;
+
+  // 卡片总宽 = 可用宽度 + 左右内边距(13+13) + 左边框 3 + 右 1
+  function cardWidth(){ return Number(w.value) + 13 + 13 + 3 + 1; }
+
+  function rowsCount(){
+    var kids=[].slice.call(acts.children);
+    var tops={};
+    kids.forEach(function(el){ tops[Math.round(el.getBoundingClientRect().top)]=1; });
+    return Object.keys(tops).length;
+  }
+
+  function measure(){
+    // 清掉换行影响：先量每颗按钮自身的渲染宽，再按当前 gap 求和
+    var gap=parseFloat(getComputedStyle(acts).columnGap)||0;
+    var kids=[].slice.call(acts.children);
+    var sum=0;
+    kids.forEach(function(el){ sum+=el.getBoundingClientRect().width; });
+    var total=sum+gap*(kids.length-1);
+    var avail=acts.clientWidth;
+    var slack=avail-total;
+    var wrapped=rowsCount()>1;
+
+    rTotal.textContent=total.toFixed(1)+"px";
+    rAvail.textContent=avail+"px";
+    rSlack.textContent=slack.toFixed(1)+"px";
+    rSlack.className=slack>=0?"ok":"bad";
+    rWrap.textContent=wrapped?"折行（2 行）":"不折行（1 行）";
+    rWrap.className=wrapped?"bad":"ok";
+
+    var padLabel=padMode===10?"原样内边距":"收窄内边距";
+    verdict.innerHTML="当前：<strong>"+padLabel+"</strong>，卡片可用宽度 <strong>"+avail+"px</strong>，"
+      +"六个按钮合计 <strong>"+total.toFixed(1)+"px</strong>，"
+      +(wrapped
+        ? "<strong style='color:#c0392b'>已经折行</strong> —— 「删除」被顶到第二行。"
+        : "<strong style='color:#3b6d11'>仍在一行内</strong>，余量 "+slack.toFixed(1)+"px。");
+  }
+
+  function applyPad(){
+    card.classList.toggle("tight", padMode===6);
+    document.getElementById("newActs").classList.toggle("tight", padMode===6);
+  }
+
+  w.addEventListener("input", function(){
+    wv.textContent=w.value+"px";
+    document.getElementById("lane").style.setProperty("width", (Number(w.value)+26+4)+"px");
+    document.getElementById("card").style.setProperty("width", (Number(w.value)+26+4)+"px");
+    measure();
+  });
+
+  document.getElementById("seg").addEventListener("click", function(e){
+    var b=e.target.closest("button"); if(!b)return;
+    [].forEach.call(this.querySelectorAll("button"), function(x){ x.classList.toggle("on", x===b); });
+    padMode=Number(b.dataset.pad);
+    applyPad(); measure();
+  });
+
+  document.getElementById("dupBtn").addEventListener("click", function(){
+    var c=document.getElementById("newCard");
+    c.style.display="block";
+    c.classList.remove("hl"); void c.offsetWidth; c.classList.add("hl");
+    var t=document.getElementById("toastBox");
+    t.style.display="block";
+    t.textContent="已复制「给领导发汇报数据邮件」，截止日期改为 2026-09-21（今天）"+(padMode===6?"":"");
+    measure();
+  });
+
+  // 初始化：把宽度真的落到看板上
+  w.dispatchEvent(new Event("input"));
+  // 字体加载完再量一次，避免首测偏窄
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(measure);
+})();
+</script>
+</body>
+</html>

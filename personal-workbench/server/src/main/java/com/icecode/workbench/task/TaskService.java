@@ -179,6 +179,66 @@ public class TaskService {
         return get(id);
     }
 
+    /**
+     * 复制任务（2026-09-21）：给「昨天做了、今天还得做」这类事一条快捷路径。
+     *
+     * <p><b>与 {@link #postpone(long)} 的分工</b>：顺延把**同一条任务**的截止日期往后挪，
+     * 昨天做过这件事的痕迹会被这次改动覆盖掉；复制是**新开一条**，原任务原地不动
+     * （通常在「已完成」里躺着），于是「这事我昨天做过」有据可查。前者适合「今天没做完」，
+     * 后者适合「今天又要做一遍」—— 后者才是每天给领导发汇报邮件这种周期性事情的真实形状。</p>
+     *
+     * <p><b>为什么不复用 {@link #create}</b>：创建那条路会把标题 + 描述再送进
+     * {@code resolveCreateGroup} 跑一遍关键词判定，而原任务的分组早就定下来了。
+     * 复制品分组和执行者预期不一致（原任务是「生活」、复制品被判成「工作」），
+     * 界面上看不出来，但「工作」筛选项里会悄悄多一条、少一条。这里直接沿用 {@code grp}。</p>
+     *
+     * <p>不搬过去的东西，逐条说明理由：</p>
+     * <ul>
+     *   <li><b>状态</b>：由 {@code TaskRepository.insert} 固定写 {@code 'todo'} ——
+     *       复制品是「今天要做」的一件事，从「待办」起步才符合预期。</li>
+     *   <li><b>顺延次数</b>：insert 不写这一列，落库默认 0。昨天顺延过 3 次是昨天的事，
+     *       记在复制品头上会让它一出生就顶着一个「顺延≥3次」的红标签。</li>
+     *   <li><b>番茄钟关联</b>：{@code pomodoro.task_id} 指的是原任务那一次专注，
+     *       挪到复制品上等于凭空多出一条不属于它的专注记录（番茄钟面板按 task_id 聚合）。</li>
+     *   <li><b>收录来源</b>：{@code source_inbox_id} 传 null。复制品的来源是「另一条任务」，
+     *       不是某次收录；沿用它会让「这条收录生成了哪些任务」多算一条。</li>
+     *   <li><b>{@code is_demo}</b>：**继承**原任务的。与「移至」同理（见 {@code TaskRepository.insert}
+     *       的注释）：示例数据复制出来的若不带上这个标记，「清空示例数据」就清不掉它 ——
+     *       用户点了清空、提示说已清空 N 条，列表里却还剩一条，只会怀疑功能坏了。</li>
+     * </ul>
+     *
+     * <p>附件整批复制过去，磁盘上共用同一份文件（见 {@code AttachmentService.duplicateForOwner}）。
+     * 复制品是独立的一行记录，所以删掉原任务不会牵连它。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public TaskVO duplicate(long id) {
+        TaskRecord source = requireTask(id);
+        String today = TimeUtil.format(today());
+        TaskCreateRequest request = new TaskCreateRequest();
+        request.setTitle(source.title);
+        request.setDescription(source.description);
+        request.setPriority(source.priority);
+        // 截止日期一律改成今天：不管原来有没有截止、原来是不是未来。
+        // 规则单一才可预测 —— 「原任务没有截止就保持没有」会让用户每次点之前都得先看一眼
+        // 原任务有没有日期，才知道这次点下去会得到什么。
+        request.setDue(today);
+        request.setDeep(source.deep);
+        request.setBlocking(source.blocking);
+        request.setNote(source.note);
+        request.setGrp(source.grp == null || source.grp.trim().isEmpty() ? "work" : source.grp);
+        String now = now();
+        long newId = taskRepository.insert(request, now, source.demo, null);
+        // 附件复制落在同一个事务里：复制到一半失败要连带新任务一起回滚，
+        // 否则会留下一条「任务在、附件没了」的记录 —— 而卡片上只会少几个缩略图，
+        // 用户根本不会察觉是那次复制没做完。
+        int copiedAttachments = attachmentService.duplicateForOwner("task", id, "task", newId);
+        taskRepository.insertActivity("task",
+                "复制任务「" + source.title + "」到今天 " + today
+                        + (copiedAttachments > 0 ? "（含 " + copiedAttachments + " 个附件）" : ""),
+                now);
+        return get(newId);
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public void delete(long id) {
         TaskRecord task = requireTask(id);

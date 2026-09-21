@@ -42,6 +42,11 @@
     updateTask:function(id,data){return request("/api/v1/tasks/"+id,{method:"PATCH",body:JSON.stringify(data)})},
     changeTaskStatus:function(id,status){return request("/api/v1/tasks/"+id+"/status",{method:"POST",body:JSON.stringify({status:status})})},
     postponeTask:function(id){return request("/api/v1/tasks/"+id+"/postpone",{method:"POST"})},
+    // 复制任务（2026-09-21）：新建一条同名任务、截止日期改为今天。
+    // **空请求体**是刻意的：复制要搬的东西前端看不全（附件在独立表里、顺延次数与收录来源只存在库里），
+    // 让前端拼一份"看起来一样"的请求体迟早会漏项，而且漏了不报错（只是少几个缩略图）。
+    // 后端 POST /tasks/{id}/duplicate 上也有对应说明，两边一起改。
+    duplicateTask:function(id){return request("/api/v1/tasks/"+id+"/duplicate",{method:"POST"})},
     // 只改工作 / 生活分组：卡片上的分组徽标是一键切换，走 updateTask 会把标题 / 优先级 /
     // 日期 / 备注全部回传一遍，并发场景下会把别处刚做的修改覆盖掉（丢失更新）。
     // 前端不使用（2026-09-17 起）：任务页的分组功能整体移除，卡片上的分组徽标与编辑表单里的

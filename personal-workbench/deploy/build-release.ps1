@@ -1,6 +1,13 @@
 ﻿<#
     build-release.ps1 - 构建 Windows 免安装包（版本 A，Java 8 版）
 
+    ⚠️ 自 v1.0.4 起已被 deploy/build_packages.py 取代：
+       - 新脚本一次产出「干净包 + 含数据包」两个 ZIP
+       - 新脚本多了「jar 内前端资源与源码逐字节比对」的新鲜度校验，
+         本脚本没有这道校验，存在把过期前端打进交付包的风险
+       本文件保留仅为兼容旧命令，不再新增功能。
+       完整说明见 deploy/打包与分发说明.md
+
     用法：
       .\build-release.ps1 -Version 1.0.0
       .\build-release.ps1 -Version 1.0.0 -SkipBuild      # 跳过 Maven，用已有 jar

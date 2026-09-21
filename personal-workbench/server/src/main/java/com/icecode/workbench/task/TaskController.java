@@ -86,6 +86,22 @@ public class TaskController {
     }
 
     /**
+     * 复制任务（2026-09-21）：新建一条同名任务，截止日期改为今天。
+     *
+     * <p>用 POST + 路径动作，而不是让前端拿 {@code GET /{id}} 的结果去调 {@code POST /tasks}：
+     * 复制要搬的东西前端看不全 —— 附件是独立表、顺延次数与收录来源都只存在库里。
+     * 让前端拼一份"看起来一样"的请求体，迟早会漏掉某一项，而且漏了不报错
+     * （少几个缩略图而已）。判定与搬运都只会有一份实现，放在服务层。</p>
+     *
+     * <p>⚠️ 这个端点**不带请求体**。将来若要加参数（比如"复制到指定日期"），
+     * 记得同时改前端 —— 现在的调用是 {@code POST} 空体，加了必填字段会直接 400。</p>
+     */
+    @PostMapping("/{id}/duplicate")
+    public ApiResponse<TaskVO> duplicate(@PathVariable long id) {
+        return ApiResponse.success(taskService.duplicate(id));
+    }
+
+    /**
      * 改任务的工作 / 生活分组。
      *
      * <p>单独开一个端点而不是复用 {@code PATCH /{id}}：卡片上的分组徽标是一键切换，
