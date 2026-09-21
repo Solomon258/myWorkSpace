@@ -4,7 +4,7 @@
 // 它仍由 TaskService.resolveGroupFor 按标题关键词写入，只是前端不再读取、不再作为视图口径 ——
 // 这样既没有破坏性迁移（不动表结构），也不要再往取数层加回 grp 参数
 // （加了就会变成「默认只显示一半任务」的静默过滤，那个坑 2026-09-14 刚踩过）。
-const state={status:null,dashboard:null,tasks:[],inbox:[],classify:[],events:[],pendingEvents:[],memos:[],activity:[],settings:null,backups:[],trash:[],memoGrp:"all",memoArchived:false,memoQuery:"",taskQuery:"",eventQuery:"",taskSearchOpen:false,eventSearchOpen:false,memoSearchOpen:false,tab:"dashboard",timelineCollapsed:{},moveOpen:null,taskFilter:"all",
+const state={status:null,dashboard:null,tasks:[],inbox:[],classify:[],events:[],pendingEvents:[],favorites:[],activity:[],settings:null,backups:[],trash:[],favoriteGrp:"all",favoriteArchived:false,favoriteQuery:"",taskQuery:"",eventQuery:"",taskSearchOpen:false,eventSearchOpen:false,favoriteSearchOpen:false,tab:"dashboard",timelineCollapsed:{},moveOpen:null,taskFilter:"all",
   // 任务页的排序口径（2026-09-20 用户要求「任务菜单的所有任务应该提供两个排序，按截止时间（默认）、
   // 按最后修改时间」）。"due" = 按截止时间（默认，与改动前**完全一致**的顺序）；
   // "updated" = 按最后修改时间倒序。
@@ -13,6 +13,12 @@ const state={status:null,dashboard:null,tasks:[],inbox:[],classify:[],events:[],
   //    恰恰是最近改过的那一批，它们完全可能不在「按截止时间排出来的前 100 条」里。
   //    这是「接口写好没接上 / 过滤写成本地」那一族失效，只不过换成排序而已。
   taskSort:"due",
+  // 「已完成」页的按天汇总（2026-09-20，用户要求「用户能一眼看清今天完成了哪些内容」）。
+  // 形状见 TaskDoneSummaryVO：{date, today:{...}, days:[{date,count,p0Count,...}]}。
+  // ⚠️ **null = 汇总不可用**（接口失败），此时 renderDoneLane 退回改动前的一整段倒序列表：
+  //    宁可没有分组标题，也不能拿「已加载的 100 条」自己数出一个会少算的数字。
+  //    汇总必须由后端算（全表分组）—— 今天的完成项可能排在 100 条之外。
+  doneSummary:null,
   dragTaskId:null,
   // 周视图（2026-09-13，见 docs/日程周视图设计.md）。visibleWeeks 是**有序**的周起始日（周一）列表，
   // 顺序 = 页面从上到下（未来在上、过去在下），默认 [下周一, 本周一, 上周一]。
@@ -22,13 +28,13 @@ const state={status:null,dashboard:null,tasks:[],inbox:[],classify:[],events:[],
   // （时间线折叠踩过同一个坑）。用「哪个展开」而不是「哪些折叠」，是因为后者能表达出
   // 「全展开」「全折叠」这些不该存在的状态。
   weekBase:"",visibleWeeks:[],expandedWeek:"",
-  // 页内检索的防抖计时器（任务 / 日程 / 备忘各一个）。见 debounceInPage。
+  // 页内检索的防抖计时器（任务 / 日程 / 收藏各一个）。见 debounceInPage。
   inPageTimers:{},
   // 「默认带入当日」的字段各自上一次被自动写进去的值（见 defaultOf / applyAutoDefault）。
   // 空 = 还没写过；等于它 = 仍是默认值（可以被 AI 填表覆盖、可以随「今天」刷新）。
   autoDefaults:{},
   // 全局搜索的独立状态。**不参与 refreshAll** —— 那条链路一次拉 11 个接口并全量重绘 11 个视图，
-  // 挂上去就等于每敲一个字符把整个工作台重画一遍（现有 #memoSearch 就是这个毛病）。
+  // 挂上去就等于每敲一个字符把整个工作台重画一遍（现有 #favoriteSearch 就是这个毛病）。
   search:{q:"",open:false,scope:"all",typeFilter:"",previewOpen:true,groups:[],activeIndex:-1,loading:false,error:"",totalCount:0,elapsedMs:0,truncated:false,seq:0,timer:null,resultQuery:"",
     semanticState:"off",expandedTerms:[],semanticCount:0},
   knowledge:{notes:[],index:null,indexState:"idle",indexError:"",chat:[],asking:false},
@@ -38,7 +44,7 @@ const state={status:null,dashboard:null,tasks:[],inbox:[],classify:[],events:[],
   // 图片区（2026-09-16）：四个入口各一份。元素形如
   // {localId,kind:"image"|"file",status:"uploading"|"done"|"failed",attachmentId,name,sizeText,url,error}
   // 只放 state、**不参与 refreshAll** —— 上传是独立通道，重绘整页会把缩略图弄丢。
-  media:{inbox:[],task:[],event:[],memo:[]}};
+  media:{inbox:[],task:[],event:[],favorite:[]}};
 const $=id=>document.getElementById(id);
 // 转义必须覆盖引号。esc 的输出**大量用在属性上下文**（`value="…"` / `href="…"` / `data-name="…"`），
 // 而「textContent → innerHTML」那种写法只转义 & < >，引号原样输出：
@@ -56,8 +62,8 @@ function greeting(){const hour=new Date().getHours();return hour<11?"早上好":
 function eventTypeName(type){return {meeting:"会议",deep_block:"深度块",other:"其他"}[type]||type}
 function statusName(status){return {todo:"待办",doing:"进行中",done:"已完成",canceled:"已取消"}[status]||status}
 function inboxStatusName(status){return {pending:"待整理",processed:"待确认",failed:"整理失败",archived:"已归档"}[status]||status}
-function categoryName(category){return {task:"任务",schedule:"日程",memo:"备忘",knowledge:"知识"}[category]||category}
-function categoryOptions(){const options=["task","schedule","memo"];if(state.settings&&state.settings.obsidianVaultPath)options.push("knowledge");return options}
+function categoryName(category){return {task:"任务",schedule:"日程",favorite:"收藏",knowledge:"知识"}[category]||category}
+function categoryOptions(){const options=["task","schedule","favorite"];if(state.settings&&state.settings.obsidianVaultPath)options.push("knowledge");return options}
 function nextStatus(status){return status==="todo"?"doing":status==="doing"?"done":"todo"}
 // 任务页三泳道：泳道 key 就是任务的 status。泳道名跟着看板上的标题走，别在提示文案里各处硬编码中文。
 function laneName(lane){return {todo:"待办",doing:"进行中",done:"已完成"}[lane]||lane}
@@ -76,15 +82,15 @@ function formatDate(value){return value?value.slice(5):"无截止"}
 // 回收站里的 type 是后端约定的实体名，和用户看到的页面名不是一回事（event ↔ 日程）。
 // inbox 对应现在的「收录」页签 —— 恢复提示里会写「去「收录」看看」，名字必须和导航一致，
 // 否则用户会去找一个已经不存在的「收集箱」。
-function trashTypeName(type){return {inbox:"收录",task:"任务",event:"日程",memo:"备忘",knowledge:"知识"}[type]||type}
-// 「移至」：任务 / 日程 / 备忘三个菜单之间搬运。目标只有另外两个，所以按来源直接推出来 ——
+function trashTypeName(type){return {inbox:"收录",task:"任务",event:"日程",favorite:"收藏",knowledge:"知识"}[type]||type}
+// 「移至」：任务 / 日程 / 收藏三个菜单之间搬运。目标只有另外两个，所以按来源直接推出来 ——
 // 不写死三份列表：漏一份的表现是某个菜单里只列出两个目标，不报错，只能靠肉眼发现。
-function menuName(type){return {task:"任务",event:"日程",memo:"备忘"}[type]||type}
-function moveTargets(from){return from==="task"?["event","memo"]:from==="event"?["task","memo"]:["task","event"]}
+function menuName(type){return {task:"任务",event:"日程",favorite:"收藏"}[type]||type}
+function moveTargets(from){return from==="task"?["event","favorite"]:from==="event"?["task","favorite"]:["task","event"]}
 // 菜单的开合状态存在 state 里，而不是只挂在 DOM 的 class 上：refreshAll 每次都重绘卡片，
 // 状态只在 DOM 里的话下一次刷新就没了（时间线折叠踩过同一个坑，这里不重复）。
 // 按钮样式必须**跟着所在那一行**走，不能在这里写死：任务 / 日程卡片那一行是实心按钮
-// （编辑 / 顺延 / 取消 / 删除），备忘卡片那一行整排是 ghost（置顶 / 归档 / 编辑 / 删除）。
+// （编辑 / 顺延 / 取消 / 删除），收藏卡片那一行整排是 ghost（置顶 / 归档 / 编辑 / 删除）。
 // 原来写死 ghost 的后果是「移至」是任务行里唯一一个无边框、灰字、还矮 4px 的按钮，
 // 和左右邻居明显不是一套。所以 ghost 由调用方按所在行传进来：第三参数 true = 跟 ghost 排。
 function moveMenu(from,id,ghost){
@@ -99,7 +105,7 @@ function closeMoveMenu(){
   document.querySelectorAll(".move-menu.open").forEach(menu=>menu.classList.remove("open"));
 }
 async function refreshAll(){
-  const memoParams={archived:state.memoArchived};if(state.memoGrp!=="all")memoParams.grp=state.memoGrp;if(state.memoQuery)memoParams.q=state.memoQuery;
+  const favoriteParams={archived:state.favoriteArchived};if(state.favoriteGrp!=="all")favoriteParams.grp=state.favoriteGrp;if(state.favoriteQuery)favoriteParams.q=state.favoriteQuery;
   // 任务检索走后端 keyword（命中 标题 / 描述 / 备注），所以必须在**取数**这一步带上，
   // 不能在渲染阶段过滤：任务页只加载前 100 条，本地过滤会把「第 100 条之外的那个匹配项」
   // 静默漏掉——用户搜了、没结果，会以为那条任务不存在。
@@ -115,21 +121,28 @@ async function refreshAll(){
   // 用本机日期兜底（前端与后端同机同时区），拿到 dashboard 后再校一次，跨零点会整组复位。
   // 检索态让出区间：命中跨全部日期，带上 from/to 会变成「只在这一段里搜」。
   syncVisibleWeeks();
-  const results=await Promise.all([WorkbenchApi.dashboard(),WorkbenchApi.events(eventParams()),WorkbenchApi.tasks(taskParams),WorkbenchApi.inbox("pending"),WorkbenchApi.inbox("processed"),WorkbenchApi.memos(memoParams),WorkbenchApi.activity(500),WorkbenchApi.settings(),WorkbenchApi.backups(),WorkbenchApi.knowledgeNotes(),WorkbenchApi.pendingEvents(),WorkbenchApi.trash(),WorkbenchApi.inbox("failed")]);
-  state.dashboard=results[0];
-  // dashboard.date 可能与首帧兜底算出的「本周」不同（首次进入、或跨了零点）：那时上面那条
+  const results=await Promise.all([WorkbenchApi.dashboard(),WorkbenchApi.events(eventParams()),WorkbenchApi.tasks(taskParams),WorkbenchApi.inbox("pending"),WorkbenchApi.inbox("processed"),WorkbenchApi.favorites(favoriteParams),WorkbenchApi.activity(500),WorkbenchApi.settings(),WorkbenchApi.backups(),WorkbenchApi.knowledgeNotes(),WorkbenchApi.pendingEvents(),WorkbenchApi.trash(),WorkbenchApi.inbox("failed")]);
+  state.dashboard=results[0];  // dashboard.date 可能与首帧兜底算出的「本周」不同（首次进入、或跨了零点）：那时上面那条
   // events 请求的区间已经过期，按新周补取一次，否则界面上会缺一整周的数据。
   const weeksChanged=syncVisibleWeeks();
-  state.events=weeksChanged?(await WorkbenchApi.events(eventParams()))||[]:(results[1]||[]);state.tasks=results[2];state.classify=results[4];state.memos=results[5];state.activity=results[6]||[];state.settings=results[7];state.backups=results[8]||[];state.knowledge.notes=results[9]||[];state.pendingEvents=results[10]||[];state.trash=results[11]||[];
+  state.events=weeksChanged?(await WorkbenchApi.events(eventParams()))||[]:(results[1]||[]);state.tasks=results[2];state.classify=results[4];state.favorites=results[5];state.activity=results[6]||[];state.settings=results[7];state.backups=results[8]||[];state.knowledge.notes=results[9]||[];state.pendingEvents=results[10]||[];state.trash=results[11]||[];
   // 「待整理」区同时装 pending 与 failed：整理失败的条目状态既不是 pending 也不是 processed，
   // 两个列表都捞不到它 —— 条目会彻底从界面上消失。这是「静默丢数据」的典型形态。
   state.inbox=(results[3]||[]).concat(results[12]||[]);
-  renderDashboard();renderTasks();renderInbox();renderClassify();renderSchedule();renderPendingEvents();renderMemos();renderTimeline();renderPomoTasks();renderSettings();renderKnowledge();renderTrash();
+  // 「已完成」页的按天汇总（2026-09-20）。**不接受它在 Promise.all 里**，两个理由：
+  //   ① 它是「已完成」泳道的辅助信息，失败不该拖垮整页 —— Promise.all 是全有全无，
+  //      13 个请求里任何一个失败会让 11 个视图全部保持旧 DOM（本项目已踩过）。
+  //   ② 它算的是全表分组，比列表那条重，单独发可以让别的视图先出。
+  // 失败时**置 null 而不是保留旧值**：留着上一次的汇总，界面会拿旧数字配对新列表 ——
+  // 比没有汇总更糟（用户看不出来，会以为今天真完成了那么多）。
+  // 降级形态见 renderDoneLane：没有汇总 = 退回改动前的一整段倒序列表，功能不做假承诺。
+  try{state.doneSummary=await WorkbenchApi.doneSummary()}catch(error){state.doneSummary=null}
+  renderDashboard();renderTasks();renderInbox();renderClassify();renderSchedule();renderPendingEvents();renderFavorites();renderTimeline();renderPomoTasks();renderSettings();renderKnowledge();renderTrash();
 }
 // ===== 新增 / 收录生成之后：保证刚建的那一条**立刻**看得见（2026-09-18）=====
 //
 // 「重取数 + 重绘」**不等于**「用户看得见」。三个列表都带「会收窄结果」的条件，而且它们在页内
-// 一直保留着：备忘是空间（state.memoGrp，走服务端 ?grp= 过滤）、任务是页内检索
+// 一直保留着：收藏是空间（state.favoriteGrp，走服务端 ?grp= 过滤）、任务是页内检索
 // （state.taskQuery → ?keyword=）与驾驶舱下钻留下的筛选（state.taskFilter）、日程是页内检索
 // （state.eventQuery → ?q=）和「周视图只保留可见那几条周」。
 // 新记录被关键词自动归到另一侧、或与检索词不匹配时，它**压根不在当前视图里** ——
@@ -141,13 +154,13 @@ async function refreshAll(){
 //   ② 查不到 = 被视图条件挡住了 → 把条件放宽到「一定能看见它」的档位，再取一次数；
 //   ③ 放宽了什么必须说出来（不许静默改视图：用户下次看到的列表口径变了却不知道为什么）。
 // 放宽而不是「只提示一句」：用户要的是「立刻看到刚建的那条」，提示一句仍然要他自己去切。
-function categoryKind(category){return category==="schedule"?"event":category==="task"?"task":category==="memo"?"memo":null}
+function categoryKind(category){return category==="schedule"?"event":category==="task"?"task":category==="favorite"?"favorite":null}
 // 「看得见吗」必须**与各页真正的渲染口径一致**，不能只问「接口返回里有没有这条」——
 // 任务页除了服务端检索，还有一层**本地**筛选（驾驶舱下钻留下的 state.taskFilter，
 // 由 taskVisible 在渲染时应用），取数命中不等于画得出来。第一版就是漏了这一层，
 // 断言当场抓到「筛选=逾期 时新建任务仍然看不见」。
 function createdVisible(kind,id){
-  if(kind==="memo")return state.memos.some(item=>String(item.id)===String(id));
+  if(kind==="favorite")return state.favorites.some(item=>String(item.id)===String(id));
   if(kind==="task"){
     const task=state.tasks.filter(item=>String(item.id)===String(id))[0];
     return !!task&&taskVisible(task);
@@ -162,9 +175,9 @@ function createdVisible(kind,id){
 }
 function relaxViewForCreated(kind,hint){
   const notes=[];
-  if(kind==="memo"){
-    if(state.memoQuery){clearMemoQuery();notes.push("已清掉备忘的页内检索")}
-    if(state.memoGrp!=="all"){state.memoGrp="all";notes.push("空间已切回「全部」")}
+  if(kind==="favorite"){
+    if(state.favoriteQuery){clearFavoriteQuery();notes.push("已清掉收藏的页内检索")}
+    if(state.favoriteGrp!=="all"){state.favoriteGrp="all";notes.push("空间已切回「全部」")}
   }else if(kind==="task"){
     if(state.taskQuery){clearTaskQuery();notes.push("已清掉任务的页内检索")}
     if((state.taskFilter||"all")!=="all"){state.taskFilter="all";notes.push("已取消驾驶舱带来的筛选")}
@@ -279,7 +292,7 @@ function highlightRow(row){
 // 下钻前的清场与「一键取消」按钮都走这两个函数，别各写一份。
 function clearTaskQuery(){state.taskQuery="";const el=$("taskSearch");if(el)el.value=""}
 function clearEventQuery(){state.eventQuery="";const el=$("eventSearch");if(el)el.value=""}
-function clearMemoQuery(){state.memoQuery="";const el=$("memoSearch");if(el)el.value=""}
+function clearFavoriteQuery(){state.favoriteQuery="";const el=$("favoriteSearch");if(el)el.value=""}
 // ===== 搜索行（2026-09-12 改版）=====
 // 收起态只留「＋新建X」+ 一个放大镜方按钮；点放大镜后输入框接管这一行、新建压窄留在左边。
 // 展开/收起是**纯视图状态**，所以按 ID 绑定、不走 data-action（同 bindComposer 的理由：
@@ -289,16 +302,16 @@ function clearMemoQuery(){state.memoQuery="";const el=$("memoSearch");if(el)el.v
 //    不这么做的话 .composer 被压窄成一百来像素而里面的表单还开着，grid 会被挤成一条细缝。
 // ② 收起**不等于**退出搜索：关键词留着，靠按钮上的小圆点 + 页面上那条 .filter-note 说明
 //    「列表还是筛过的」。列表被筛过却看不出为什么 = 静默过滤，是本项目最忌讳的一类失效。
-// ③ 备忘页的「显示已归档」收起后没有入口（它管的是常驻列表，不只是搜索），
+// ③ 收藏页的「显示已归档」收起后没有入口（它管的是常驻列表，不只是搜索），
 //    勾选生效时补一个「含归档」标签兜住，点一下就关。
 function searchRowIds(tab){
   if(tab==="event")return {row:"eventSearchRow",input:"eventSearch",btn:"eventSearchBtn",body:"composerBodyEvent",toggle:"composerToggleEvent",name:"日程"};
-  if(tab==="memo")return {row:"memoSearchRow",input:"memoSearch",btn:"memoSearchBtn",body:"composerBodyMemo",toggle:"composerToggleMemo",name:"备忘"};
+  if(tab==="favorite")return {row:"favoriteSearchRow",input:"favoriteSearch",btn:"favoriteSearchBtn",body:"composerBodyFavorite",toggle:"composerToggleFavorite",name:"收藏"};
   return {row:"taskSearchRow",input:"taskSearch",btn:"taskSearchBtn",body:"composerBodyTask",toggle:"composerToggleTask",name:"任务"};
 }
-function searchQuery(tab){return tab==="event"?state.eventQuery:tab==="memo"?state.memoQuery:state.taskQuery}
-function searchOpenFlag(tab){return tab==="event"?!!state.eventSearchOpen:tab==="memo"?!!state.memoSearchOpen:!!state.taskSearchOpen}
-function setSearchOpenFlag(tab,open){if(tab==="event")state.eventSearchOpen=open;else if(tab==="memo")state.memoSearchOpen=open;else state.taskSearchOpen=open}
+function searchQuery(tab){return tab==="event"?state.eventQuery:tab==="favorite"?state.favoriteQuery:state.taskQuery}
+function searchOpenFlag(tab){return tab==="event"?!!state.eventSearchOpen:tab==="favorite"?!!state.favoriteSearchOpen:!!state.taskSearchOpen}
+function setSearchOpenFlag(tab,open){if(tab==="event")state.eventSearchOpen=open;else if(tab==="favorite")state.favoriteSearchOpen=open;else state.taskSearchOpen=open}
 // 只同步 DOM：不改 state、不取数。所以三个 render 的末尾都能安全地调它，
 // 保证「state 一变、这一行跟着变」，不会出现两处各写一套显隐逻辑然后漂掉。
 function applySearchRow(tab){
@@ -313,12 +326,12 @@ function applySearchRow(tab){
     // 小圆点只在「收起但关键词还在」时亮。展开时不用它：输入框里的字本身就是提示。
     btn.classList.toggle("busy",!open&&!!query);
   }
-  if(tab==="memo"){
-    const label=$("memoArchivedLabel");if(label)label.classList.toggle("hidden",!open);
+  if(tab==="favorite"){
+    const label=$("favoriteArchivedLabel");if(label)label.classList.toggle("hidden",!open);
     // 勾选框藏在 .hidden 里时它的 checked 不会自己跟着 state 走，展开时补一次同步：
     // 否则「含归档」标签关掉之后重新展开，勾选框还画着对勾（显示与状态不符）。
-    const box=$("memoShowArchived");if(box&&box.checked!==!!state.memoArchived)box.checked=!!state.memoArchived;
-    const chip=$("memoArchivedChip");if(chip)chip.classList.toggle("hidden",!(state.memoArchived&&!open));
+    const box=$("favoriteShowArchived");if(box&&box.checked!==!!state.favoriteArchived)box.checked=!!state.favoriteArchived;
+    const chip=$("favoriteArchivedChip");if(chip)chip.classList.toggle("hidden",!(state.favoriteArchived&&!open));
   }
 }
 function setSearchOpen(tab,open){
@@ -337,9 +350,9 @@ function setSearchOpen(tab,open){
 }
 // ===== 页内检索：防抖 + 只重渲染自己那一块（2026-09-12）=====
 // 这三个输入框原来是 `input → refreshAll()`：**每敲一个字符拉 11 个接口、重绘 11 个视图**。
-// 而检索命中的只是自己那一页的数据（任务 `?keyword=` / 日程 `?q=` / 备忘 `?q=`），
+// 而检索命中的只是自己那一页的数据（任务 `?keyword=` / 日程 `?q=` / 收藏 `?q=`），
 // 其余 10 个视图一个字都不会变。所以收敛成「防抖 200ms + 只取自己要的那一份」。
-// 注意 state 字段的语义完全不变（taskQuery / eventQuery / memoQuery），
+// 注意 state 字段的语义完全不变（taskQuery / eventQuery / favoriteQuery），
 // 下一次 refreshAll 用的是同一批字段 —— 两套取数口径必须保持一致，否则
 // 「搜索后再点别处」会看到两种不同的列表。
 const IN_PAGE_SEARCH_DEBOUNCE_MS=200;
@@ -357,12 +370,12 @@ async function reloadTasks(){
   state.tasks=(await WorkbenchApi.tasks(params))||[];
   renderTasks();
 }
-async function reloadMemos(){
-  const params={archived:state.memoArchived};
-  if(state.memoGrp!=="all")params.grp=state.memoGrp;
-  if(state.memoQuery)params.q=state.memoQuery;
-  state.memos=(await WorkbenchApi.memos(params))||[];
-  renderMemos();
+async function reloadFavorites(){
+  const params={archived:state.favoriteArchived};
+  if(state.favoriteGrp!=="all")params.grp=state.favoriteGrp;
+  if(state.favoriteQuery)params.q=state.favoriteQuery;
+  state.favorites=(await WorkbenchApi.favorites(params))||[];
+  renderFavorites();
 }
 function drillMetric(kind){
   if(kind==="inbox"){setTab("inbox");return}
@@ -452,7 +465,7 @@ function sortLane(list){return taskSortMode()==="updated"?sortByUpdated(list):pi
  * 所以在 renderTasks 末尾调用它。
  *
  * <p>⚠️ 选择器限定在 {@code #taskSortBar} 之内：裸 {@code .ts-choice} 一旦别处也用了这个类名，
- * {@code querySelectorAll} 会跨控件命中，把别的切换器一起改掉（§7.5.1 备忘页踩过）。</p>
+ * {@code querySelectorAll} 会跨控件命中，把别的切换器一起改掉（§7.5.1 收藏页踩过）。</p>
  */
 function applyTaskSort(){
   const bar=$("taskSortBar");
@@ -470,6 +483,147 @@ function setTaskSort(sort){
   if(next===taskSortMode())return false;
   state.taskSort=next;
   return true;
+}
+// ===== 「已完成」泳道按天分组（2026-09-20）=====
+//
+// 用户诉求原话：「在任务列表的『已完成』页面，我希望用户能一眼看清今天完成了哪些内容。」
+// 方案（已与用户确认）：**日期分组 + 今天组高亮 + 组头统计**；
+// 口径（1a）「今天完成」**只算真正完成的**（task.completed_at 非空），已取消单独标注、不并入主数字；
+// 统计（2a）**由后端算**（GET /tasks/done-summary），不在前端按已加载的 100 条自己数；
+// 「今天」（3a）沿用后端下发的日期口径（state.doneSummary.date / dashboard.date），**不用 new Date()**；
+// 组头粘性（4a）做；相对日期词（5a）「今天 / 昨天 / 更早的绝对日期」；
+// 粒度（6a）只对「今天」做高亮分组，更早的仍是一整段倒序列表；
+// 空状态（7a）今天一项都没完成时给一行轻提示，而不是让整块消失。
+//
+// ⚠️ 三条不许破的约束：
+//   ① **汇总不可用时退回旧形态**（state.doneSummary === null → 一整段倒序列表）。
+//      绝不能拿「已加载的 100 条」自己数 —— 今天的完成项可能排在 100 条之外，
+//      数出来的数字会比真实值小，而页面上没有任何迹象说明它算少了。
+//   ② **「今天」只有后端一个定义**（doneSummary.date，按用户时区算）。
+//      前端 `new Date()` 在跨零点 / 跨时区时和它差一天，会让「今天」这一组在 0 点前后错位。
+//   ③ **换分组只改 `.pr-` 之外的 DOM 结构**：这里整条 innerHTML 重建是安全的，
+//      因为泳道里没有需要保留焦点的常驻控件（卡片上的按钮每次 refreshAll 本来就重建）。
+//      但**焦点会回到 body** —— 与诗词栏那次「只换 `.pr-poem` 节点」的教训同源，
+//      区别是泳道本来就没有跨重绘保持焦点的控件，不需要额外处理。
+/** 某一天的相对称呼：今天 / 昨天 / 绝对日期（M月D日 周X）。 */
+function doneDayLabel(date,weekday){
+  if(!date)return "";
+  const parts=String(date).split("-");
+  if(parts.length!==3)return date;
+  const month=Number(parts[1]),day=Number(parts[2]);
+  const tail=(month+"月"+day+"日")+(weekday?" "+weekday:"");
+  const today=doneTodayString();
+  if(date===today)return "今天 · "+tail;
+  if(today&&date===shiftDay(today,-1))return "昨天 · "+tail;
+  return tail;
+}
+/** 「今天」的唯一来源：后端汇总里的 date，取不到时退回 dashboard.date，再退回本机日期。 */
+function doneTodayString(){
+  if(state.doneSummary&&state.doneSummary.date)return state.doneSummary.date;
+  if(state.dashboard&&state.dashboard.date)return state.dashboard.date;
+  return todayString();
+}
+/** 把 yyyy-MM-dd 往前 / 往后挪 n 天。 */
+function shiftDay(date,delta){
+  const parts=String(date).split("-");
+  if(parts.length!==3)return "";
+  const d=new Date(Number(parts[0]),Number(parts[1])-1,Number(parts[2]));
+  d.setDate(d.getDate()+delta);
+  const pad=n=>String(n).length<2?"0"+n:String(n);
+  return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+}
+/** 该日期的星期几（中文），算不出来时返回空串。 */
+function weekdayOf(date){
+  const parts=String(date||"").split("-");
+  if(parts.length!==3)return "";
+  const d=new Date(Number(parts[0]),Number(parts[1])-1,Number(parts[2]));
+  if(isNaN(d.getTime()))return "";
+  return ["周日","周一","周二","周三","周四","周五","周六"][d.getDay()]||"";
+}
+/** 一组（某天）在汇总里的统计；没有汇总 / 没有这一天时返回 null。 */
+function doneDayStat(date){
+  const summary=state.doneSummary;
+  if(!summary||!summary.days)return null;
+  for(let i=0;i<summary.days.length;i++){if(summary.days[i].date===date)return summary.days[i]}
+  return null;
+}
+/**
+ * 分组头的统计文案：`完成 5 项 · P0 2 · 深度 1`。
+ *
+ * <p>统计来自后端汇总（全表口径），**当天的卡片只是被加载出来的那部分** ——
+ * 两者可能不一致（列表被截断、或被检索筛过）。不一致时**以汇总为准**，
+ * 并在文案里说明「本次加载 N 条」，而不是让两个数字在页面上各说各话。</p>
+ */
+function doneGroupStat(date,loadedCount){
+  const stat=doneDayStat(date);
+  if(!stat)return loadedCount?("本次加载 "+loadedCount+" 条"):"";
+  const bits=["完成 "+stat.count+" 项"];
+  if(stat.p0Count>0)bits.push("P0 "+stat.p0Count);
+  if(stat.deepCount>0)bits.push("深度 "+stat.deepCount);
+  if(stat.count!==loadedCount&&loadedCount>0)bits.push("本次加载 "+loadedCount+" 条");
+  return bits.join(" · ");
+}
+/**
+ * 渲染「已完成」泳道。
+ *
+ * <p>两种形态：有汇总 → 今天一组（高亮）+ 更早的一段（倒序，每段带日期头）；
+ * 没有汇总 → 改动前的一整段倒序列表（降级，不做假承诺）。</p>
+ */
+function renderDoneLane(done,narrowed,emptyText){
+  if(!done.length)return "<div class=\"empty\">"+emptyText+"</div>";
+  // 降级：汇总取不到时不做分组，直接退回改动前的形态。宁可没有分组标题，
+  // 也不能拿「已加载的这批」自己数出一个会少算的数字（见本段开头的约束 ①）。
+  if(!state.doneSummary)return done.map(taskCard).join("");
+  const today=doneTodayString();
+  const isToday=task=>{
+    // 今天这一组：真正完成的看 completedAt；已取消的没有 completedAt（后端置 NULL），
+    // 退回 updatedAt —— 这条分支只在「今天取消」的条目上生效，不会把历史完成项捞进来。
+    const stamp=task.status==="done"?task.completedAt:(task.completedAt||task.updatedAt);
+    return !!stamp&&String(stamp).slice(0,10)===today;
+  };
+  const todays=done.filter(isToday);
+  const earlier=done.filter(task=>!isToday(task));
+  const html=[];
+  // 今天这一组：无论有没有条目都渲染组头（空状态给一行轻提示）。
+  // 「有头无项」比「整块消失」好理解 —— 后者会让人以为分组功能坏了。
+  const todayStat=state.doneSummary.today||{};
+  html.push("<div class=\"done-day-head is-today\">"
+    +"<span class=\"ddh-label\">"+esc(doneDayLabel(today,weekdayOf(today)))+"</span>"
+    +"<span class=\"ddh-count\">"+(todayStat.count||0)+" 项</span>"
+    +"<span class=\"ddh-stat\">"+esc(doneTodayMeta(todayStat))+"</span>"
+    +"</div>");
+  if(todays.length){
+    html.push("<div class=\"done-day-body\">"+todays.map(taskCard).join("")+"</div>");
+  }else{
+    html.push("<div class=\"done-day-empty\">今天还没有完成的任务。做完的卡片会落到这里。</div>");
+  }
+  // 更早的一段：只给一个分组头，不再逐天拆分（改动最小，用户要的是「今天」突出）。
+  if(earlier.length){
+    html.push("<div class=\"done-day-head is-earlier\">"
+      +"<span class=\"ddh-label\">更早完成</span>"
+      +"<span class=\"ddh-count\">"+earlier.length+" 项</span>"
+      +"<span class=\"ddh-stat\">"+esc(narrowed?"已按当前条件筛选":"按完成时间倒序")+"</span>"
+      +"</div>");
+    html.push("<div class=\"done-day-body\">"+earlier.map(taskCard).join("")+"</div>");
+  }
+  // 今天取消的条数单独说一句：它不并入「完成 N 项」（取消不是成果），
+  // 但也不能藏掉 —— 藏掉的话那条任务在界面上连痕迹都没有（与「已取消不单开泳道」同一考虑）。
+  if(todayStat.canceledCount>0){
+    html.push("<div class=\"done-day-canceled\">今天另取消 "+todayStat.canceledCount+" 项</div>");
+  }
+  return html.join("");
+}
+/** 今天那一组头部的细分统计：`P0 2 · 深度 1 · 最早 09:48，最晚 14:32`。 */
+function doneTodayMeta(stat){
+  if(!stat||!stat.count)return "";
+  const bits=[];
+  if(stat.p0Count>0)bits.push("P0 "+stat.p0Count);
+  if(stat.p1Count>0)bits.push("P1 "+stat.p1Count);
+  if(stat.deepCount>0)bits.push("深度 "+stat.deepCount);
+  if(stat.firstAt&&stat.lastAt)bits.push(stat.firstAt===stat.lastAt?("完成于 "+stat.firstAt):("最早 "+stat.firstAt+"，最晚 "+stat.lastAt));
+  if(stat.diffFromPreviousDay>0)bits.push("比昨天多 "+stat.diffFromPreviousDay+" 项");
+  else if(stat.diffFromPreviousDay<0)bits.push("比昨天少 "+(-stat.diffFromPreviousDay)+" 项");
+  return bits.join(" · ");
 }
 function renderTasks(){
   const filter=state.taskFilter||"all";
@@ -520,7 +674,9 @@ function renderTasks(){
       done:"还没有已完成的任务。做完的卡片会落到这里。"};
   $("taskLaneTodo").innerHTML=todo.length?todo.map(taskCard).join(""):"<div class=\"empty\">"+empty.todo+"</div>";
   $("taskLaneDoing").innerHTML=doing.length?doing.map(taskCard).join(""):"<div class=\"empty\">"+empty.doing+"</div>";
-  $("taskLaneDone").innerHTML=done.length?done.map(taskCard).join(""):"<div class=\"empty\">"+empty.done+"</div>";
+  // 「已完成」泳道按天分组（2026-09-20）：用户要「一眼看清今天完成了哪些内容」。
+  // 只有这条泳道分组 —— 待办 / 进行中是「接下来要做什么」，按天分组没有意义。
+  $("taskLaneDone").innerHTML=renderDoneLane(done,narrowed,empty.done);
   // 截断说明挂在整个看板下方：它讲的是「列表不完整（只加载了前 100 条）」，不是某条泳道为空，
   // 塞进泳道里会被读成「这一列的任务丢了」。
   const boardNote=$("taskBoardNote");
@@ -548,7 +704,7 @@ function taskCard(task){
   const dueMeta=dueToday?'<span class="dtd-day">今天截止 '+formatDate(task.due)+'</span>':"截止 "+formatDate(task.due);
   const flags=[dueFlag,task.overdue?'<span class="pill red">逾期</span>':"",task.blocking?'<span class="pill amber">阻塞</span>':"",task.deep?'<span class="pill blue">深度</span>':"",task.postponed>=3?'<span class="pill red">顺延≥3次</span>':""].join("");
   // 卡片自上而下三层：标题/元信息 → 操作按钮 → 内联编辑表单。
-  // 编辑表单放**最底下**，与备忘卡片一致：点「编辑」不会把上面的按钮顶来顶去。
+  // 编辑表单放**最底下**，与收藏卡片一致：点「编辑」不会把上面的按钮顶来顶去。
   // draggable 默认 false、由 mousedown 动态打开（见文件末尾 taskBoard 的绑定）：
   // 整卡常驻 draggable=true 会让编辑表单里的输入框没法用鼠标选中文本，Chrome / Firefox 都会。
   // 2026-09-17 做了两处「减法」，都是为了把卡片还给内容本身：
@@ -621,7 +777,7 @@ function renderInbox(){
   $("inboxList").innerHTML=pending.length?pending.map(item=>`<div class="list-item qcard" data-inbox-id="${item.id}" data-inbox-status="${item.status}"><div class="qc-head"><div class="task-title">${esc(item.raw)}</div></div><div class="task-meta">${inboxStatusName(item.status)} · ${item.source==="wecom"?"微信":"Web"} · ${item.createdAt}</div>${attStrip(item.attachments,{owner:"inbox:"+item.id,max:4})}<div class="qc-foot"><button class="btn ghost sm" data-action="reclassify-inbox" data-id="${item.id}">重新整理</button><button class="icon-btn danger" data-action="delete-inbox" data-id="${item.id}" aria-label="删除这条收录记录" title="删除这条收录记录（移入回收站，30 天内可恢复）">${trashIcon()}</button></div></div>`).join(""):'<div class="empty">没有待整理的条目。</div>';
 }
 // 各分类真正会落库的字段：task 用【日期+优先级】，schedule 用【日期+开始时间】，
-// memo / knowledge 只用标题。这里按需求 US-2.3「修改分类后字段表单联动切换」做显隐，
+// favorite / knowledge 只用标题。这里按需求 US-2.3「修改分类后字段表单联动切换」做显隐，
 // 避免出现「填了却不生效」的静默丢弃字段。
 function classifyFieldVisible(category,field){
   if(field==="due")return category==="task"||category==="schedule";
@@ -880,7 +1036,7 @@ function renderPendingEvents(){
   const badge=$("pendingCount");if(badge)badge.textContent=list.length?"（"+list.length+" 项待补全）":"";
   $("pendingEventList").innerHTML=list.length?list.map(e=>eventCard(e,{pending:true})).join(""):"<div class=\"empty\">没有待定日程。整理时抽不出日期的日程会先落到这里。</div>";
 }
-function memoTime(value){
+function favoriteTime(value){
   const m=String(value||"").match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2})/);
   if(!m)return String(value||"").slice(0,16);
   // 「今天」的年份只认后端下发的 dashboard.date，前端不另算一套（否则时区差会串天）。
@@ -888,146 +1044,146 @@ function memoTime(value){
   const day=(thisYear&&m[1]===thisYear)?Number(m[2])+"月"+Number(m[3])+"日":m[1]+"-"+m[2]+"-"+m[3];
   return day+" "+m[4];
 }
-function renderMemos(){
-  const view=$("view-memos");view.className="view memo-theme-"+state.memoGrp+(state.tab==="memos"?" active":"");
-  // 空间切换器的选中态跟着 state 走（不能只在点击时切 class：全局搜索等入口会直接改 state.memoGrp）。
-  // ⚠️ 选择器**必须**带 `.memo-switch-wrap` 前缀、不能写成裸的 `.memo-choice`：本项目对共用类的
+function renderFavorites(){
+  const view=$("view-favorites");view.className="view favorite-theme-"+state.favoriteGrp+(state.tab==="favorites"?" active":"");
+  // 空间切换器的选中态跟着 state 走（不能只在点击时切 class：全局搜索等入口会直接改 state.favoriteGrp）。
+  // ⚠️ 选择器**必须**带 `.favorite-switch-wrap` 前缀、不能写成裸的 `.favorite-choice`：本项目对共用类的
   // 约定就是各带容器前缀。2026-09-17 之前任务页的分组切换器抄了同一套类名，裸选择器会把它的
   // 三个按钮一起选进来、按 data-grp（任务按钮上不存在）把它们全部清成非选中 ——
   // 筛选与指示器互相矛盾，而且控制台一个字都不报。那个切换器已经移除，但前缀继续留着。
-  document.querySelectorAll(".memo-switch-wrap .memo-switch .memo-choice")
-    .forEach(b=>b.classList.toggle("active",b.dataset.grp===state.memoGrp));
-  const list=state.memos;
-  $("memoList").innerHTML=list.length?list.map(m=>{
+  document.querySelectorAll(".favorite-switch-wrap .favorite-switch .favorite-choice")
+    .forEach(b=>b.classList.toggle("active",b.dataset.grp===state.favoriteGrp));
+  const list=state.favorites;
+  $("favoriteList").innerHTML=list.length?list.map(m=>{
     const tags=(m.tags||[]).map(t=>`<span class="pill">${esc(t)}</span>`).join("");
-    // 备忘的 title 是后端从 content 裁出来的（MemoService.shortTitle，裁 24 字不拼省略号），
-    // 所以 24 字以内的备忘标题与正文**完全相等**，两层都渲染就是同一句话显示两遍。
+    // 收藏的 title 是后端从 content 裁出来的（FavoriteService.shortTitle，裁 24 字不拼省略号），
+    // 所以 24 字以内的收藏标题与正文**完全相等**，两层都渲染就是同一句话显示两遍。
     // 只有用户手动改过标题（两者不同）时才需要正文这一层。
     // 另：正文现在是可空的（只有标题的「速查信息」也能存），所以正文为空时必须整层不渲染——
-    // 否则会留下一个空的 .memo-body 占位，卡片底部凭空多出一段空白。
+    // 否则会留下一个空的 .favorite-body 占位，卡片底部凭空多出一段空白。
     const contentText=String(m.content||"").trim();
     const showBody=!!contentText&&contentText!==String(m.title||"").trim();
     // 附件行放在正文 / 链接之下、操作行之上（2026-09-19）：附件是**内容的一部分**，
     // 跟标签、按钮那些「元信息」不是一类东西，塞到最下面就变成操作区的一部分了。
     // 它由 attStrip 负责，没有附件时返回空串，卡片高度与以前完全一致。
-    return `<div class="memo-card cat-${m.grp} ${m.pinned?"pinned":""} ${m.status==="archived"?"archived":""}" data-memo-id="${m.id}"><div class="memo-kicker"><span class="memo-dot"></span><span>${m.grp==="work"?"工作":"生活"}</span><span class="memo-sep">·</span><span>${esc(memoTime(m.updatedAt||m.createdAt))}</span>${m.status==="archived"?'<span class="memo-arch">已归档</span>':""}</div><div class="memo-title">${m.pinned?'<span class="memo-pin">置顶</span>':""}${esc(m.title)}</div>${showBody?`<div class="memo-body">${esc(m.content)}</div>`:""}${m.url?`<div class="memo-link"><a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.url)}</a></div>`:""}${attStrip(m.attachments,{owner:"memo:"+m.id})}<div class="memo-foot"><div class="memo-tags">${tags}</div><div class="actions memo-acts"><button class="btn sm ghost" data-action="pin-memo" data-id="${m.id}">${m.pinned?"取消置顶":"置顶"}</button><button class="btn sm ghost" data-action="archive-memo" data-id="${m.id}">${m.status==="archived"?"恢复":"归档"}</button><button class="btn sm ghost" data-action="edit-memo" data-id="${m.id}">编辑</button>${moveMenu("memo",m.id,true)}<button class="btn sm ghost danger" data-action="delete-memo" data-id="${m.id}">删除</button></div></div></div>`;
-  }).join(""):"<div class=\"empty\">当前空间没有备忘。随手记一条链接、班车或家里要买的东西。</div>";
-  // 备忘的检索状态也要写在页面上：2026-09-12 起输入框会被收起，没有这条就变成
+    return `<div class="favorite-card cat-${m.grp} ${m.pinned?"pinned":""} ${m.status==="archived"?"archived":""}" data-favorite-id="${m.id}"><div class="favorite-kicker"><span class="favorite-dot"></span><span>${m.grp==="work"?"工作":"生活"}</span><span class="favorite-sep">·</span><span>${esc(favoriteTime(m.updatedAt||m.createdAt))}</span>${m.status==="archived"?'<span class="favorite-arch">已归档</span>':""}</div><div class="favorite-title">${m.pinned?'<span class="favorite-pin">置顶</span>':""}${esc(m.title)}</div>${showBody?`<div class="favorite-body">${esc(m.content)}</div>`:""}${m.url?`<div class="favorite-link"><a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.url)}</a></div>`:""}${attStrip(m.attachments,{owner:"favorite:"+m.id})}<div class="favorite-foot"><div class="favorite-tags">${tags}</div><div class="actions favorite-acts"><button class="btn sm ghost" data-action="pin-favorite" data-id="${m.id}">${m.pinned?"取消置顶":"置顶"}</button><button class="btn sm ghost" data-action="archive-favorite" data-id="${m.id}">${m.status==="archived"?"恢复":"归档"}</button><button class="btn sm ghost" data-action="edit-favorite" data-id="${m.id}">编辑</button>${moveMenu("favorite",m.id,true)}<button class="btn sm ghost danger" data-action="delete-favorite" data-id="${m.id}">删除</button></div></div></div>`;
+  }).join(""):"<div class=\"empty\">当前空间没有收藏。随手记一条链接、班车或家里要买的东西。</div>";
+  // 收藏的检索状态也要写在页面上：2026-09-12 起输入框会被收起，没有这条就变成
   // 「列表是筛过的但看不出为什么」—— 这一条是这次改版**必须补**的，以前输入框常驻所以不需要。
-  const note=$("memoSearchNote");
+  const note=$("favoriteSearchNote");
   if(note){
-    const q=state.memoQuery||"";
+    const q=state.favoriteQuery||"";
     note.classList.toggle("hidden",!q);
-    note.innerHTML=q?`<span>正在当前空间里搜索「${esc(q)}」，共 ${list.length} 条${state.memoArchived?"（含已归档）":""}。</span><button class="btn sm ghost" data-action="clear-memo-search">清除搜索</button>`:"";
+    note.innerHTML=q?`<span>正在当前空间里搜索「${esc(q)}」，共 ${list.length} 条${state.favoriteArchived?"（含已归档）":""}。</span><button class="btn sm ghost" data-action="clear-favorite-search">清除搜索</button>`:"";
   }
-  applySearchRow("memo");
+  applySearchRow("favorite");
 }
-// 切备忘空间。加幂等守卫：值没变就不必重新取数。
+// 切收藏空间。加幂等守卫：值没变就不必重新取数。
 // 守卫还有一个更实际的作用 —— 任何一次误调（比如委托绑错元素、取到 undefined）
 // 都会当场变成「一次多余的 refreshAll」，把整页请求数抬高一倍；
 // 有守卫时至少「值没变」这一类不会产生副作用，问题更容易在开发阶段暴露。
-function setMemoGrp(grp){
+function setFavoriteGrp(grp){
   if(grp!=="all"&&grp!=="work"&&grp!=="life")return; // 非法值直接忽略，绝不写进 state
-  if(state.memoGrp===grp)return;
-  state.memoGrp=grp;
+  if(state.favoriteGrp===grp)return;
+  state.favoriteGrp=grp;
   refreshAll().catch(error=>toast(error.message));
 }
-// ===== 备忘编辑弹层（2026-09-17）=====
-// 原来备忘的编辑面板是卡片内联的 .edit-panel（#memo-edit-{id}，靠 classList.toggle("open") 展开），
-// 宽度被 .memo-grid 的列宽锁死，正文只有约 285×80px 却要装 4000 字。现在整条链路只剩这一个
-// 编辑入口，所以只需要记住「正在编辑哪一条」；保存前一律按 id 从 state.memos 现取，
+// ===== 收藏编辑弹层（2026-09-17）=====
+// 原来收藏的编辑面板是卡片内联的 .edit-panel（#favorite-edit-{id}，靠 classList.toggle("open") 展开），
+// 宽度被 .favorite-grid 的列宽锁死，正文只有约 285×80px 却要装 4000 字。现在整条链路只剩这一个
+// 编辑入口，所以只需要记住「正在编辑哪一条」；保存前一律按 id 从 state.favorites 现取，
 // 而不是在打开时缓存整条对象 —— 否则列表刷新之后弹层还拿着旧快照，会把别人的改动覆盖回去。
-let memoEditingId=null;
+let favoriteEditingId=null;
 // 打开那一刻的原值，用来判断「有没有未保存的改动」。必须有这一层：Esc 和点遮罩都能关掉弹层，
 // 少了它就会静默丢掉刚敲的正文 —— 本项目最忌讳的「静默无反应」，在这条链路上等价于「静默丢失」。
-let memoEditorSnapshot=null;
-let memoEditorSaving=false;
-function memoEditorOpen(){return $("memoEditorMask").classList.contains("open")}
-function memoEditorSyncCount(){
-  const box=$("memoEditContent"),label=$("memoEditCount");
+let favoriteEditorSnapshot=null;
+let favoriteEditorSaving=false;
+function favoriteEditorOpen(){return $("favoriteEditorMask").classList.contains("open")}
+function favoriteEditorSyncCount(){
+  const box=$("favoriteEditContent"),label=$("favoriteEditCount");
   if(box&&label)label.textContent=box.value.length+" / 4000";
 }
-function memoEditorDirty(){
-  if(!memoEditorSnapshot||!memoEditorOpen())return false;
-  return $("memoEditTitle").value.trim()!==memoEditorSnapshot.title
-    ||$("memoEditContent").value.trim()!==memoEditorSnapshot.content
-    ||$("memoEditTags").value.trim()!==memoEditorSnapshot.tags
-    ||$("memoEditGrp").value!==memoEditorSnapshot.grp;
+function favoriteEditorDirty(){
+  if(!favoriteEditorSnapshot||!favoriteEditorOpen())return false;
+  return $("favoriteEditTitle").value.trim()!==favoriteEditorSnapshot.title
+    ||$("favoriteEditContent").value.trim()!==favoriteEditorSnapshot.content
+    ||$("favoriteEditTags").value.trim()!==favoriteEditorSnapshot.tags
+    ||$("favoriteEditGrp").value!==favoriteEditorSnapshot.grp;
 }
-function openMemoEditor(id){
+function openFavoriteEditor(id){
   // 列表是筛过的（空间 / 检索 / 含归档），找不到就说明这条已经不在当前视图里。
   // 不能静默 return —— 用户点的是自己看得见的按钮，什么都不发生就是「点了没反应」。
-  const memo=(state.memos||[]).find(m=>String(m.id)===String(id));
-  if(!memo){toast("这条备忘已不在当前列表里，请刷新后再试");return}
-  memoEditingId=memo.id;
-  $("memoEditTitle").value=memo.title||"";
-  $("memoEditContent").value=memo.content||"";
-  $("memoEditTags").value=(memo.tags||[]).join(",");
+  const favorite=(state.favorites||[]).find(m=>String(m.id)===String(id));
+  if(!favorite){toast("这条收藏已不在当前列表里，请刷新后再试");return}
+  favoriteEditingId=favorite.id;
+  $("favoriteEditTitle").value=favorite.title||"";
+  $("favoriteEditContent").value=favorite.content||"";
+  $("favoriteEditTags").value=(favorite.tags||[]).join(",");
   // 只给 work / life 两档，没有「自动」：自动分组是**创建时**判定一次的规则，
   // 编辑面板里再放一个「自动」等于每次保存都把用户手选的分组重算一遍。
-  $("memoEditGrp").value=memo.grp==="life"?"life":"work";
-  memoEditorSnapshot={title:$("memoEditTitle").value.trim(),content:$("memoEditContent").value.trim(),
-    tags:$("memoEditTags").value.trim(),grp:$("memoEditGrp").value};
-  memoEditorSyncCount();
-  // 把这条备忘已有的附件灌进附件区（2026-09-19）：不灌的话用户会以为附件丢了，
+  $("favoriteEditGrp").value=favorite.grp==="life"?"life":"work";
+  favoriteEditorSnapshot={title:$("favoriteEditTitle").value.trim(),content:$("favoriteEditContent").value.trim(),
+    tags:$("favoriteEditTags").value.trim(),grp:$("favoriteEditGrp").value};
+  favoriteEditorSyncCount();
+  // 把这条收藏已有的附件灌进附件区（2026-09-19）：不灌的话用户会以为附件丢了，
   // 而列表上明明看得见缩略图。附件列表直接用列表接口下发的那一份，不再多发一个请求。
-  mediaSeed("edit-memo",memo.attachments);
-  $("memoEditorMask").classList.add("open");
-  document.body.classList.add("memo-editing");
+  mediaSeed("edit-favorite",favorite.attachments);
+  $("favoriteEditorMask").classList.add("open");
+  document.body.classList.add("favorite-editing");
   // 焦点：正文有内容就接着改正文（绝大多数场景），只写了标题的「速查信息」才落在标题上。
   // 光标推到末尾，省掉一次手工移动。
-  const first=$("memoEditContent").value.trim()?$("memoEditContent"):$("memoEditTitle");
+  const first=$("favoriteEditContent").value.trim()?$("favoriteEditContent"):$("favoriteEditTitle");
   first.focus();
   if(first.setSelectionRange)first.setSelectionRange(first.value.length,first.value.length);
 }
-function closeMemoEditor(){
-  if(!memoEditorOpen())return;
-  $("memoEditorMask").classList.remove("open");
-  document.body.classList.remove("memo-editing");
-  memoEditingId=null;
-  memoEditorSnapshot=null;
-  // 附件区跟着弹层一起清空：留着的话下次打开别的备忘会先闪一眼上一条的附件。
-  mediaClear("edit-memo");
+function closeFavoriteEditor(){
+  if(!favoriteEditorOpen())return;
+  $("favoriteEditorMask").classList.remove("open");
+  document.body.classList.remove("favorite-editing");
+  favoriteEditingId=null;
+  favoriteEditorSnapshot=null;
+  // 附件区跟着弹层一起清空：留着的话下次打开别的收藏会先闪一眼上一条的附件。
+  mediaClear("edit-favorite");
 }
-// 取消 / 关闭 × / 点遮罩 / Esc 四个出口全部走这里，只有「保存成功」那条路直接调 closeMemoEditor ——
+// 取消 / 关闭 × / 点遮罩 / Esc 四个出口全部走这里，只有「保存成功」那条路直接调 closeFavoriteEditor ——
 // 保证四条出口的确认行为一模一样，不会有哪一条悄悄把正文丢掉。
-function requestCloseMemoEditor(){
-  if(!memoEditorOpen())return;
-  if(memoEditorDirty()&&!confirm("正文有改动还没保存，确定放弃并关闭？"))return;
-  closeMemoEditor();
+function requestCloseFavoriteEditor(){
+  if(!favoriteEditorOpen())return;
+  if(favoriteEditorDirty()&&!confirm("正文有改动还没保存，确定放弃并关闭？"))return;
+  closeFavoriteEditor();
 }
-async function saveMemoEditor(){
-  if(memoEditorSaving)return; // 连点两次「保存」不该发两次请求
-  const id=memoEditingId;
+async function saveFavoriteEditor(){
+  if(favoriteEditorSaving)return; // 连点两次「保存」不该发两次请求
+  const id=favoriteEditingId;
   if(id===null||id===undefined)return;
-  const title=$("memoEditTitle").value.trim();
-  const content=$("memoEditContent").value.trim();
-  // 与后端 MemoService.requireTitleOrContent 同一条规则；在这里先拦一次只为省掉一轮白等的网络。
-  if(!title&&!content){toast("标题和正文至少写一项");$("memoEditTitle").focus();return}
-  const button=$("memoEditorSave");
-  memoEditorSaving=true;
+  const title=$("favoriteEditTitle").value.trim();
+  const content=$("favoriteEditContent").value.trim();
+  // 与后端 FavoriteService.requireTitleOrContent 同一条规则；在这里先拦一次只为省掉一轮白等的网络。
+  if(!title&&!content){toast("标题和正文至少写一项");$("favoriteEditTitle").focus();return}
+  const button=$("favoriteEditorSave");
+  favoriteEditorSaving=true;
   if(button){button.disabled=true;button.textContent="保存中…"}
   try{
     // 空串要**原样**发出去，不能转成 null：后端 update 是局部更新（字段为 null = 不动这个字段），
     // 把「被清空的标题」发成 null，会让「清空标题 → 回落到正文前 24 字」这条既有规则失效。
-    await WorkbenchApi.updateMemo(id,{title:title,content:content,
-      tags:$("memoEditTags").value.trim(),grp:$("memoEditGrp").value});
-    closeMemoEditor();
+    await WorkbenchApi.updateFavorite(id,{title:title,content:content,
+      tags:$("favoriteEditTags").value.trim(),grp:$("favoriteEditGrp").value});
+    closeFavoriteEditor();
     await refreshAll();
-    toast("备忘已更新");
+    toast("收藏已更新");
   }catch(error){
     // 失败时**不关弹层**：关掉就等于把用户刚敲的正文扔了，比报错本身严重得多。
     toast(error.message);
   }finally{
-    memoEditorSaving=false;
-    if(button){button.disabled=false;button.textContent="保存备忘"}
+    favoriteEditorSaving=false;
+    if(button){button.disabled=false;button.textContent="保存收藏"}
   }
 }
 // ===== 任务 / 日程编辑弹层（2026-09-18）=====
-// 与备忘弹层同构（2026-09-17 落地的那套）：同一份骨架类 .memo-mask / .memo-modal / .mm-*，
+// 与收藏弹层同构（2026-09-17 落地的那套）：同一份骨架类 .editor-mask / .editor-modal / .mm-*，
 // 四个出口（取消 / × / 点遮罩 / Esc）全部走 requestClose*，保存只有一条路 save*，
 // 失败不关弹层。变量名保持「一套弹层一套状态」而不是共用，是为了三处能各自独立演进
-// （备忘那侧已有 57 条冒烟断言钉着，不去动它的内部结构）。
+// （收藏那侧已有 57 条冒烟断言钉着，不去动它的内部结构）。
 // 内容全部来自原来的卡片内联 .edit-panel，字段一个没变；变的只是承载形态 ——
 // 任务卡片只有约 273~350px 宽、备注原来挤在一个单行 input 里，日程更极端（卡片 136px）。
 let taskEditingId=null;
@@ -1076,14 +1232,14 @@ function openTaskEditor(id){
     due:$("taskEditDue").value,note:$("taskEditNote").value.trim(),
     deep:$("taskEditDeep").checked,blocking:$("taskEditBlocking").checked};
   taskEditorSyncCount();
-  // 附件区：用列表接口已经下发的那一份，不再多发请求（理由同 openMemoEditor）。
+  // 附件区：用列表接口已经下发的那一份，不再多发请求（理由同 openFavoriteEditor）。
   mediaSeed("edit-task",task.attachments);
   // 「移至」菜单的开合是全局单例状态（state.moveOpen）：上一个 id 的菜单要是还开着，
   // 弹层里新渲染的那份会当场是展开态。
   state.moveOpen=null;
   $("taskEditorMask").classList.add("open");
-  document.body.classList.add("memo-editing");
-  // 焦点落在标题：任务的主体就是标题。备忘那边相反（落正文），因为备忘常常只有正文没有标题。
+  document.body.classList.add("favorite-editing");
+  // 焦点落在标题：任务的主体就是标题。收藏那边相反（落正文），因为收藏常常只有正文没有标题。
   $("taskEditTitle").focus();
   const title=$("taskEditTitle");
   if(title.setSelectionRange)title.setSelectionRange(title.value.length,title.value.length);
@@ -1091,7 +1247,7 @@ function openTaskEditor(id){
 function closeTaskEditor(){
   if(!taskEditorOpen())return;
   $("taskEditorMask").classList.remove("open");
-  document.body.classList.remove("memo-editing");
+  document.body.classList.remove("favorite-editing");
   taskEditingId=null;
   taskEditorSnapshot=null;
   mediaClear("edit-task");
@@ -1167,7 +1323,7 @@ function openEventEditor(id){
   // 附件区：待定日程要从 pendingEvents 里找（findEventById 已经找过了），那份数据同样带 attachments。
   mediaSeed("edit-event",event.attachments);
   $("eventEditorMask").classList.add("open");
-  document.body.classList.add("memo-editing");
+  document.body.classList.add("favorite-editing");
   $("eventEditTitle").focus();
   const title=$("eventEditTitle");
   if(title.setSelectionRange)title.setSelectionRange(title.value.length,title.value.length);
@@ -1175,7 +1331,7 @@ function openEventEditor(id){
 function closeEventEditor(){
   if(!eventEditorOpen())return;
   $("eventEditorMask").classList.remove("open");
-  document.body.classList.remove("memo-editing");
+  document.body.classList.remove("favorite-editing");
   eventEditingId=null;
   eventEditorSnapshot=null;
   // 菜单状态跟着弹层一起清：留着的话下次打开这条会直接是展开态。
@@ -1226,8 +1382,8 @@ async function deleteEditingEvent(){
   await refreshAll();
   toast("已移入回收站，30 天内可恢复");
 }
-function timelineTypeName(type){return {inbox:"收录",task:"事件",praise:"完成",memo:"备忘",pomo:"番茄",plan:"计划"}[type]||"记录"}
-const TL_COLORS={inbox:"#378ADD",task:"#534AB7",praise:"#639922",memo:"#BA7517","memo:work":"#6C9D81","memo:life":"#D98267",pomo:"#0F6E56",plan:"#888780"};
+function timelineTypeName(type){return {inbox:"收录",task:"事件",praise:"完成",favorite:"收藏",pomo:"番茄",plan:"计划"}[type]||"记录"}
+const TL_COLORS={inbox:"#378ADD",task:"#534AB7",praise:"#639922",favorite:"#BA7517","favorite:work":"#6C9D81","favorite:life":"#D98267",pomo:"#0F6E56",plan:"#888780"};
 function dayString(date){return date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0")}
 function localDay(offset){const d=new Date();d.setDate(d.getDate()+offset);return dayString(d)}
 // 不能用 new Date("2026-09-11")：它按 UTC 解析，东八区会退回前一天。
@@ -1455,9 +1611,9 @@ function renderTimeline(){
     const collapsed=state.timelineCollapsed[day]===true;
     const rows=groups[day].map((item,index)=>{
       const side=index%2===0?"left":"right";
-      const colorKey=item.type==="memo"&&item.category?"memo:"+item.category:item.type;
+      const colorKey=item.type==="favorite"&&item.category?"favorite:"+item.category:item.type;
       const color=TL_COLORS[colorKey]||TL_COLORS[item.type]||"#888780";
-      const tname=item.type==="memo"?(item.category==="work"?"备忘·工作":item.category==="life"?"备忘·生活":"备忘"):timelineTypeName(item.type);
+      const tname=item.type==="favorite"?(item.category==="work"?"收藏·工作":item.category==="life"?"收藏·生活":"收藏"):timelineTypeName(item.type);
       const time=(item.createdAt||"").slice(11,16);
       return `<div class="tl-item ${side}${item.type==="praise"?" praise":""}" data-log-id="${item.id}"><span class="tl-node" style="color:${color};background:${color}"></span><div class="tl-card"><button class="tl-del" data-action="delete-activity" data-id="${item.id}" title="永久删除这条记录（无法恢复）" aria-label="永久删除这条记录，无法恢复"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg></button><span class="tl-time">${time} · ${tname}</span><span class="tl-text">${esc(item.content)}</span></div></div>`;
     }).join("");
@@ -1492,7 +1648,7 @@ function renderKnowledge(){
   $("kbNoteList").innerHTML=notes.length?notes.map(n=>{
     const syncPill=n.syncStatus==="synced"?'<span class="pill green">已同步</span>':n.syncStatus==="failed"?'<span class="pill red">同步失败</span>':'<span class="pill amber">待同步</span>';
     const tags=(n.tags||[]).map(t=>`<span class="pill">${esc(t)}</span>`).join("");
-    return `<div class="list-item"><div class="grow"><div class="task-title">${esc(n.title)} ${syncPill}</div><div class="task-meta">${(n.createdAt||"").slice(0,16)}${n.vaultPath?" · "+esc(n.vaultPath):""}</div><div class="task-meta">${esc(n.content||"")}</div>${tags?`<div class="memo-tags">${tags}</div>`:""}</div><div class="actions">${n.obsidianUrl?`<a class="btn sm" href="${esc(n.obsidianUrl)}">原文 ↗</a>`:""}${n.syncStatus!=="synced"?`<button class="btn sm" data-action="sync-knowledge" data-id="${n.id}">重试同步</button>`:""}<button class="btn sm danger" data-action="delete-knowledge" data-id="${n.id}">删除</button></div></div>`;
+    return `<div class="list-item"><div class="grow"><div class="task-title">${esc(n.title)} ${syncPill}</div><div class="task-meta">${(n.createdAt||"").slice(0,16)}${n.vaultPath?" · "+esc(n.vaultPath):""}</div><div class="task-meta">${esc(n.content||"")}</div>${tags?`<div class="favorite-tags">${tags}</div>`:""}</div><div class="actions">${n.obsidianUrl?`<a class="btn sm" href="${esc(n.obsidianUrl)}">原文 ↗</a>`:""}${n.syncStatus!=="synced"?`<button class="btn sm" data-action="sync-knowledge" data-id="${n.id}">重试同步</button>`:""}<button class="btn sm danger" data-action="delete-knowledge" data-id="${n.id}">删除</button></div></div>`;
   }).join(""):'<div class="empty">还没有知识笔记。在「整理确认」把有价值的条目归类为「知识」，就会写入 Vault。</div>';
   paintKbChat();
 }
@@ -1507,7 +1663,7 @@ function renderTrash(){
   if(clearTrashButton)clearTrashButton.classList.toggle("hidden",items.length===0);
   // 剩余天数由后端按保留期算（30 天是后端规则，前端不自己推），这里只负责措辞：
   // daysLeft 为 0 时不能说「还剩 0 天可恢复」——那读起来像是还能用，实际是今天之内。
-  $("trashList").innerHTML=items.length?items.map(item=>`<div class="list-item" data-trash-type="${item.type}" data-trash-id="${item.id}"><div class="grow"><div class="task-title">${esc(item.title==null||item.title===""?"（无标题）":item.title)} <span class="pill">${trashTypeName(item.type)}</span></div><div class="task-meta">${item.detail?esc(item.detail)+" · ":""}${(item.deletedAt||"").slice(0,16)} 删除 · ${item.daysLeft>0?"还剩 "+item.daysLeft+" 天可恢复":"今天之后不能再恢复"}</div></div><div class="actions"><button class="btn sm primary" data-action="restore-trash" data-type="${item.type}" data-id="${item.id}">恢复</button><button class="btn sm danger" data-action="delete-trash" data-type="${item.type}" data-id="${item.id}">彻底删除</button></div></div>`).join(""):"<div class=\"empty\">回收站是空的。删除的任务、日程、备忘、知识记录和收集箱条目会先到这里，30 天内可以恢复。</div>";
+  $("trashList").innerHTML=items.length?items.map(item=>`<div class="list-item" data-trash-type="${item.type}" data-trash-id="${item.id}"><div class="grow"><div class="task-title">${esc(item.title==null||item.title===""?"（无标题）":item.title)} <span class="pill">${trashTypeName(item.type)}</span></div><div class="task-meta">${item.detail?esc(item.detail)+" · ":""}${(item.deletedAt||"").slice(0,16)} 删除 · ${item.daysLeft>0?"还剩 "+item.daysLeft+" 天可恢复":"今天之后不能再恢复"}</div></div><div class="actions"><button class="btn sm primary" data-action="restore-trash" data-type="${item.type}" data-id="${item.id}">恢复</button><button class="btn sm danger" data-action="delete-trash" data-type="${item.type}" data-id="${item.id}">彻底删除</button></div></div>`).join(""):"<div class=\"empty\">回收站是空的。删除的任务、日程、收藏、知识记录和收集箱条目会先到这里，30 天内可以恢复。</div>";
 }
 function paintKbChat(){
   const box=$("kbChatBox");
@@ -1613,6 +1769,70 @@ async function collectArticle(){
   }finally{
     state.collect.collecting=false;button.disabled=false;button.textContent="收藏";
   }
+}
+/* ===== 收藏区的拖拽落点（2026-09-20） =====
+   场景：用户在微信 PC 端把得到的分享卡片直接拖进工作台，省掉「右键复制链接 → 点输入框 → 粘贴」。
+
+   微信 PC 端拖动一条消息时到底给什么 MIME，没有公开约定，各版本还不一样 ——
+   可能是 text/plain（标题+链接的纯文本）、可能是 text/html（带 <a href>），
+   也可能是私有类型。所以这里**不押注单一格式**：把能读到的类型全读一遍再统一抽链接，
+   读不到时把「实际拿到了哪些类型」回显出来，否则这类失败只能靠猜。 */
+const COLLECT_URL_PATTERN=/https?:\/\/[^\s，。；、！？"'（）【】《》]+/g;
+function collectDropText(dataTransfer){
+  if(!dataTransfer)return{text:"",types:[]};
+  const types=Array.prototype.slice.call(dataTransfer.types||[]);
+  const parts=[];
+  types.forEach(function(type){
+    // 拖进来的文件走 Files 分支：收藏文章只认链接，这里明确不处理
+    if(type==="Files")return;
+    let data="";
+    // 个别浏览器在 drop 阶段读某些类型会抛异常，一个类型失败不该拖垮整次拖拽
+    try{data=dataTransfer.getData(type)||""}catch(error){data=""}
+    if(data)parts.push(data);
+  });
+  return{text:parts.join("\n"),types:types};
+}
+// 优先挑得到自己的域名：分享卡片的 HTML 里常混着封面图、logo、统计链，取第一个会取错
+function extractCollectUrl(text){
+  if(!text)return "";
+  const all=String(text).match(COLLECT_URL_PATTERN)||[];
+  const hit=all.find(function(url){return /dedao\.cn|igetget\.com/i.test(url)});
+  return (hit||all[0]||"").trim();
+}
+function describeCollectDropFailure(picked){
+  if(!picked.text.trim()){
+    if(picked.types.indexOf("Files")>=0)return "拖进来的是文件或图片，不是链接。收藏文章只认分享链接，请改用「复制链接 → 粘贴」。";
+    return "没能从拖拽里读到内容（拿到的类型："+(picked.types.join(" / ")||"空")+"）。请改用「复制链接 → 粘贴」。";
+  }
+  const head=picked.text.replace(/\s+/g," ").trim().slice(0,50);
+  return "拖进来的内容里没有链接（拿到的类型："+picked.types.join(" / ")+"；开头是「"+head+"…」）。请改用「复制链接 → 粘贴」。";
+}
+function bindCollectDrop(){
+  const card=$("collectCard"),input=$("collectInput");
+  if(!card||!input)return;
+  card.addEventListener("dragover",function(event){
+    // 不 preventDefault，浏览器就认为这里不接受拖放，drop 压根不触发
+    // （表现是「拖过去松手没反应」，且控制台一个字都不报）。
+    event.preventDefault();
+    if(event.dataTransfer)event.dataTransfer.dropEffect="copy";
+    card.classList.add("collect-dragover");
+  });
+  card.addEventListener("dragleave",function(event){
+    // 移入子元素同样会触发 dragleave，用 relatedTarget 判断是否真的离开了卡片
+    if(card.contains(event.relatedTarget))return;
+    card.classList.remove("collect-dragover");
+  });
+  card.addEventListener("drop",function(event){
+    event.preventDefault();
+    card.classList.remove("collect-dragover");
+    const picked=collectDropText(event.dataTransfer);
+    const link=extractCollectUrl(picked.text);
+    if(!link){toast(describeCollectDropFailure(picked),5200);return}
+    // 填进输入框再走原来那条路：拖入与粘贴共用一份提交逻辑，
+    // 提示信息、防重、失败回显都保持一致。
+    input.value=link;
+    collectArticle().catch(function(error){toast(error.message,4200)});
+  });
 }
 async function askKnowledge(){
   const input=$("kbChatInput"),question=input.value.trim();
@@ -1732,6 +1952,12 @@ function renderSettings(){
   setIfIdle("setAiBaseUrl",s.aiBaseUrl);setIfIdle("setAiModel",s.aiModel);setIfIdle("setVaultPath",s.obsidianVaultPath);
   $("setAiEnabled").checked=!!s.aiEnabled;
   $("aiKeyHint").textContent=s.aiApiKeySet?("已保存 API Key："+s.aiApiKeyMasked+"（重新输入可替换，留空保持不变）"):"未配置 API Key 时始终使用本地规则整理。";
+  // 得到 Cookie 只回传「配没配」（明文不回传，也没必要回传），所以这里只显示状态。
+  // 这段文案是用户排查「收藏只能拿试读」时的第一落点，必须带上下一步该做什么。
+  const dedaoHint=$("dedaoCookieHint");
+  if(dedaoHint)dedaoHint.textContent=s.dedaoCookieSet
+    ?"已配置：收藏文章会带上你的登录态。粘贴新的一串可替换，留空保存即清除。"
+    :"未配置：收藏文章只能拿到试读部分（约 20%）。";
   setIfIdle("setPomoWork",state.pomo.config.work);setIfIdle("setPomoShort",state.pomo.config.shortBreak);setIfIdle("setPomoLong",state.pomo.config.longBreak);
   $("backupList").innerHTML=state.backups.length?state.backups.map(b=>`<div class="list-item"><div class="grow"><div class="task-title">${esc(b.name)}</div><div class="task-meta">${fmtSize(b.sizeBytes)} · ${(b.modifiedAt||"").replace("T"," ").slice(0,16)}</div></div><button class="btn sm" data-action="restore-backup" data-name="${esc(b.name)}">恢复此备份</button></div>`).join(""):"<div class=\"empty\">还没有备份。点「立即备份」创建第一份。</div>";
   renderVaultStatus();
@@ -1788,10 +2014,22 @@ async function saveVaultSetting(){
   if(state.tab==="knowledge"||state.tab==="settings") await loadKnowledgeIndex();
   toast("Vault 路径已保存");
 }
+// 保存「得到登录 Cookie」—— 收藏文章取全文的钥匙（不带它，分享页只开放约 20% 正文）。
+// 无论成败都要把设置页的状态文案刷出来：用户下一次收藏失败时，
+// 第一件要确认的就是「Cookie 到底配上了没有」。
+async function saveDedaoSetting(){
+  const input=$("setDedaoCookie"),raw=input.value.trim();
+  try{
+    await WorkbenchApi.saveDedaoCookie(raw);
+  }catch(error){toast(error.message,6200);return}
+  input.value="";
+  await refreshAll();
+  toast(raw?"得到 Cookie 已保存，收藏文章会带上你的登录态":"已清除得到 Cookie");
+}
 async function doBackupNow(){const result=await WorkbenchApi.backupNow();await refreshAll();toast("备份完成："+result.file+"（"+fmtSize(result.sizeBytes)+"）")}
 async function doClearDemo(){
   if(!confirm("确定清空所有示例数据？此操作只删除标记为示例的记录。"))return;
-  if(!confirm("再次确认：示例任务、日程、备忘、收录记录与相关流水将被删除，无法撤销。"))return;
+  if(!confirm("再次确认：示例任务、日程、收藏、收录记录与相关流水将被删除，无法撤销。"))return;
   const result=await WorkbenchApi.clearDemo();await refreshAll();toast("已清空 "+result.total+" 条示例数据");
 }
 async function doShutdown(){
@@ -1826,7 +2064,7 @@ function mediaKindFor(scope,kind){return String(scope||"").indexOf("edit-")===0?
  * 不能让它变成一次静默的意外。</p>
  */
 function mediaOwnerOf(scope){
-  if(scope==="edit-memo")return memoEditingId?{ownerType:"memo",ownerId:memoEditingId}:null;
+  if(scope==="edit-favorite")return favoriteEditingId?{ownerType:"favorite",ownerId:favoriteEditingId}:null;
   if(scope==="edit-task")return taskEditingId?{ownerType:"task",ownerId:taskEditingId}:null;
   if(scope==="edit-event")return eventEditingId?{ownerType:"schedule_event",ownerId:eventEditingId}:null;
   return null;
@@ -2047,7 +2285,7 @@ function attClipIcon(){
     +'<path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>';
 }
 /**
- * 图片缩略图按钮。owner 是「归属标识」（`memo:17` / `task:3` / `event:9` / `inbox:4`），
+ * 图片缩略图按钮。owner 是「归属标识」（`favorite:17` / `task:3` / `event:9` / `inbox:4`），
  * **只用来回查这条记录的全部图片**（点开一张后要能左右翻），所以它不是附件 id。
  */
 function attShotHtml(a,owner,index){
@@ -2110,7 +2348,7 @@ function attachmentsOf(ownerKey){
   const kind=parts[0],id=parts[1];
   if(!kind||!id)return [];
   let pool=[];
-  if(kind==="memo")pool=state.memos||[];
+  if(kind==="favorite")pool=state.favorites||[];
   else if(kind==="task")pool=state.tasks||[];
   else if(kind==="event")pool=(state.events||[]).concat(state.pendingEvents||[]);
   else if(kind==="inbox")pool=(state.inbox||[]).concat(state.classify||[]);
@@ -2183,7 +2421,7 @@ function bindAttViewer(){
 // ===== 图片多模态解析（阶段二，2026-09-16）=====
 // 三个入口里图片的**去向不同**：
 //   inbox  → 解析结果进「整理合并」，用户在待确认卡里逐条核对后生成（与文字收录同一套 UI）
-//   task/schedule/memo → 「抽取预填」：把抽到的标题/日期/时间填进表单，用户自己按保存
+//   task/schedule/favorite → 「抽取预填」：把抽到的标题/日期/时间填进表单，用户自己按保存
 // 这个差别是刻意的：表单页没有待确认卡，硬塞一个确认页会让流程变成两段。
 const PARSE_POLL_MS=1200;
 let parsePollTimer=null;
@@ -2311,12 +2549,12 @@ function prefillEventFromImage(item){
   // 预填改的是 el.value，快捷片的选中态不会自己跟上，这里补一次。
   paintTimeChips($("eventStart"));paintTimeChips($("eventEnd"));
 }
-function prefillMemoFromImage(item){
+function prefillFavoriteFromImage(item){
   prefillFromParsed(item,{
-    title:{id:"memoTitle",from:function(p,t){return t}},
+    title:{id:"favoriteTitle",from:function(p,t){return t}},
     // 正文只在完全空的时候补，且用**整图原文**（raw）——那张图里的信息量
     // 往往比一个标题多得多，丢掉等于让用户重新打字。
-    content:{id:"memoContent",from:function(){return item.raw||""}}
+    content:{id:"favoriteContent",from:function(){return item.raw||""}}
   });
 }
 
@@ -2328,7 +2566,7 @@ function bindMedia(){
       const category=extractBtn.dataset.category;
       // 三个表单页共用这一段：抽到的字段各自往自己的表单里填。
       const apply=category==="task"?prefillTaskFromImage
-        :category==="schedule"?prefillEventFromImage:prefillMemoFromImage;
+        :category==="schedule"?prefillEventFromImage:prefillFavoriteFromImage;
       extractBtn.disabled=true;
       const label=extractBtn.textContent;
       extractBtn.textContent="识别中…";
@@ -2340,7 +2578,7 @@ function bindMedia(){
     }
     const parseBtn=event.target.closest?event.target.closest("[data-media-parse]"):null;
     // 「＋AI」只负责选图与上传；**解析在提交时触发**（见 submitMediaParsing），
-    // 因为任务/日程/备忘三个入口是「抽取预填」，要先有表单上下文才知道抽到哪去。
+    // 因为任务/日程/收藏三个入口是「抽取预填」，要先有表单上下文才知道抽到哪去。
     if(parseBtn){mediaPick(mediaKeyOf(parseBtn),"image");return}
     const attachBtn=event.target.closest?event.target.closest("[data-media-attach]"):null;
     if(attachBtn){mediaPick(mediaKeyOf(attachBtn),"file");return}
@@ -2391,22 +2629,22 @@ function bindMedia(){
   });
 }
 
-async function createMemo(){
-  const content=$("memoContent").value.trim();
-  const title=$("memoTitle").value.trim();
-  // 背书 MemoCreateRequest：正文不再是必填，title / content **至少写一项**即可。
-  // 两者都空才会被后端拒（400/1002「备忘的标题和正文不能同时为空，至少写一项」），
+async function createFavorite(){
+  const content=$("favoriteContent").value.trim();
+  const title=$("favoriteTitle").value.trim();
+  // 背书 FavoriteCreateRequest：正文不再是必填，title / content **至少写一项**即可。
+  // 两者都空才会被后端拒（400/1002「收藏的标题和正文不能同时为空，至少写一项」），
   // 前端先拦一次只是为了不白跑一趟接口，措辞与后端保持一致。
-  if(!content&&!title){toast("标题和正文至少写一项");$("memoTitle").focus();return}
-  if(mediaBusy("memo")){toast("附件还在上传，请稍候再保存");return}
+  if(!content&&!title){toast("标题和正文至少写一项");$("favoriteTitle").focus();return}
+  if(mediaBusy("favorite")){toast("附件还在上传，请稍候再保存");return}
   // title / content 只能传 null（不能传空串）：空串会让后端把「留空」当成「显式写了空标题」，
-  // 于是显式标题的回退逻辑（取正文前 24 字）被跳过，备忘会存成没有标题的一条。
-  const created=await WorkbenchApi.createMemo({title:title||null,content:content||null,tags:$("memoTags").value.trim()||null,grp:$("memoGrp").value,attachmentIds:mediaIds("memo")});
-  $("memoTitle").value="";$("memoContent").value="";$("memoTags").value="";mediaClear("memo");await refreshAll();
-  // 刚存下的这条可能被「空间 / 页内检索」挡在当前视图之外（备忘的 grp 是按内容自动判定的，
+  // 于是显式标题的回退逻辑（取正文前 24 字）被跳过，收藏会存成没有标题的一条。
+  const created=await WorkbenchApi.createFavorite({title:title||null,content:content||null,tags:$("favoriteTags").value.trim()||null,grp:$("favoriteGrp").value,attachmentIds:mediaIds("favorite")});
+  $("favoriteTitle").value="";$("favoriteContent").value="";$("favoriteTags").value="";mediaClear("favorite");await refreshAll();
+  // 刚存下的这条可能被「空间 / 页内检索」挡在当前视图之外（收藏的 grp 是按内容自动判定的，
   // 判定结果与用户此刻看的空间不一致时，它就不会出现在列表里）—— 那正是「存了却看不到、
   // 要 F5 才显示」的成因。这里按 id 反查一次，必要时放宽视图条件并说明放宽了什么。
-  toast("备忘已保存"+await createdVisibilityNote("memo",created&&created.id));
+  toast("收藏已保存"+await createdVisibilityNote("favorite",created&&created.id));
 }
 // 日期默认预填**今天**，不跟着正在查看的那一周走。
 // 「日期为空」仍然只剩一种含义：还没定下哪一天 → 落到「待定时间」区。
@@ -2418,7 +2656,7 @@ async function createMemo(){
 // 2026-09-20 之前只有「进页面写一次」—— 页面开着跨过零点，新建的日程默认还落在昨天。
 // ⚠️ 保持单行：变异靶子必须单行，本文件是 CRLF，跨行模式永远匹配不上。
 function defaultEventDate(){return todayString()}
-// 切周 / 追加周只重取日程，不重拉整页（任务、备忘、流水等与周无关，没必要跟着刷新）。
+// 切周 / 追加周只重取日程，不重拉整页（任务、收藏、流水等与周无关，没必要跟着刷新）。
 // 检索态必须把 q 带上、并让出区间：否则翻一次周，检索结果会被这一段的日程顶掉，
 // 看上去像「搜索被重置了」。
 async function loadEvents(){state.events=(await WorkbenchApi.events(eventParams()))||[];renderSchedule()}
@@ -2527,8 +2765,8 @@ async function confirmInbox(id){
   const result=await WorkbenchApi.confirmInbox(id,{category:category,title:$("confirm-title-"+id).value.trim(),due:due,priority:$("confirm-priority-"+id).value,start:$("confirm-start-"+id).value.trim()||null,end:null,eventType:eventType});
   await refreshAll();
   // 生成出来的记录同样要保证「立刻看得见」——这正是用户报的那条：
-  // 「新收录一条备忘后，点备忘菜单看不到，要 F5」。（分类是「备忘」时最容易撞上：
-  // 收回来的备忘会被自动归到工作 / 生活某一侧，与用户当前看的空间不一致时就落到视图外。）
+  // 「新收录一条收藏后，点收藏菜单看不到，要 F5」。（分类是「收藏」时最容易撞上：
+  // 收回来的收藏会被自动归到工作 / 生活某一侧，与用户当前看的空间不一致时就落到视图外。）
   const kind=categoryKind(result&&result.category||category);
   const note=await createdVisibilityNote(kind,result&&result.entityId,{date:due});
   toast("已确认并生成「"+categoryName(category)+"」"+note);
@@ -2539,7 +2777,7 @@ async function reclassifyInbox(id){
 }
 
 /**
- * 表单页（任务 / 日程 / 备忘）的「从图片识别」。
+ * 表单页（任务 / 日程 / 收藏）的「从图片识别」。
  *
  * <p>与收录页的区别：这里**不生成任何记录**，只把抽到的字段填进表单，
  * 由用户自己按「保存」。三个表单页都没有待确认卡，硬塞一个确认页会把
@@ -2601,7 +2839,7 @@ async function waitForParsedImages(wanted){
 async function createTask(){
   const title=$("taskTitle").value.trim();if(!title){toast("请输入任务标题");return}
   // 分组已移除（2026-09-17）：不再传 grp，一律让后端按标题 / 描述的关键词自动判定
-  // （TaskCreateRequest.grp 留空即 auto，与备忘页同一套规则）。
+  // （TaskCreateRequest.grp 留空即 auto，与收藏页同一套规则）。
   // 以前这里会带着「当前视图是哪一侧」预填 grp，是为了避免「在生活页里新建却被判成工作、
   // 那条任务当场从列表里消失」；现在任务页不再按分组收窄，这个顾虑自然不存在了。
   if(mediaBusy("task")){toast("附件还在上传，请稍候再创建");return}
@@ -2610,7 +2848,7 @@ async function createTask(){
   // （它是「默认值」不是「上次填的内容」—— 标题/备注清空是同一个道理。）
   $("taskTitle").value="";$("taskNote").value="";$("taskDeep").checked=false;$("taskBlocking").checked=false;resetAutoDefault("taskDue");mediaClear("task");await refreshAll();
   // 任务页的两个收窄条件都在页内保留：驾驶舱下钻带来的筛选、页内检索（走后端 keyword）。
-  // 新任务不满足其中任何一个时就不会出现在列表里 —— 与备忘、日程同一条规则：按 id 反查，
+  // 新任务不满足其中任何一个时就不会出现在列表里 —— 与收藏、日程同一条规则：按 id 反查，
   // 被挡住就把条件放宽并说明放宽了什么（见 createdVisibilityNote）。
   toast("任务已创建"+await createdVisibilityNote("task",created&&created.id));
 }
@@ -2656,7 +2894,7 @@ async function handleAction(button){
     // 在新记录上又没注意看，只会得出「移动把附件弄丢了」的结论。
     if(result.movedAttachments)message+=" 连同 "+result.movedAttachments+" 个附件一起移过去了。";
     if(result.warnings&&result.warnings.length)message+=" 注意："+result.warnings.join(" ");
-    // 目标菜单那边也是「新建记录」，同样可能被那边的视图条件挡住（比如备忘的空间）。
+    // 目标菜单那边也是「新建记录」，同样可能被那边的视图条件挡住（比如收藏的空间）。
     // 这里**不切页签**，所以不用「立刻出现在列表里」那套措辞：先把条件放宽，
     // 用户点过去时列表就是对的 —— 否则又是一次「刚移过去的东西看不到」。
     if(!createdVisible(result.toType,result.id)){
@@ -2741,9 +2979,9 @@ async function handleAction(button){
   }
   if(action==="add-future-week"){await growWeeks(1);return}
   if(action==="add-past-week"){await growWeeks(-1);return}
-  // 备忘的「清除搜索」只清关键词：备忘页没有驾驶舱下钻进来的筛选，没有第二样东西要清。
-  if(action==="clear-memo-search"){clearMemoQuery();await refreshAll();return}
-  // 任务的编辑 2026-09-18 也搬进全局弹层（与备忘一致）：入口只剩 openTaskEditor，
+  // 收藏的「清除搜索」只清关键词：收藏页没有驾驶舱下钻进来的筛选，没有第二样东西要清。
+  if(action==="clear-favorite-search"){clearFavoriteQuery();await refreshAll();return}
+  // 任务的编辑 2026-09-18 也搬进全局弹层（与收藏一致）：入口只剩 openTaskEditor，
   // 「取消 / 保存」两条分支随之删除 —— 它们的出口在弹层内部，不再经过 handleAction。
   if(action==="edit"){openTaskEditor(id);return}
   if(action==="status"){await WorkbenchApi.changeTaskStatus(id,button.dataset.status);await refreshAll();toast("任务已改为「"+statusName(button.dataset.status)+"」");return}
@@ -2754,15 +2992,15 @@ async function handleAction(button){
   if(action==="delete-event"){await WorkbenchApi.deleteEvent(id);await refreshAll();toast("已移入回收站，30 天内可恢复");return}
   // 日程同理：点卡片开弹层，取消 / 保存 / 删除 / 移至都收进弹层内部。
   if(action==="edit-event"){openEventEditor(id);return}
-  if(action==="pin-memo"){await WorkbenchApi.pinMemo(id);await refreshAll();toast("已更新置顶");return}
-  if(action==="archive-memo"){await WorkbenchApi.archiveMemo(id);await refreshAll();toast("已更新归档状态");return}
-  // 备忘编辑走全局弹层（2026-09-17）：原来这三行是「就地展开卡片里那个内联面板」，
-  // 面板宽度被卡片锁死（正文约 285×80px 却要装 4000 字）。现在只有一个入口 openMemoEditor，
+  if(action==="pin-favorite"){await WorkbenchApi.pinFavorite(id);await refreshAll();toast("已更新置顶");return}
+  if(action==="archive-favorite"){await WorkbenchApi.archiveFavorite(id);await refreshAll();toast("已更新归档状态");return}
+  // 收藏编辑走全局弹层（2026-09-17）：原来这三行是「就地展开卡片里那个内联面板」，
+  // 面板宽度被卡片锁死（正文约 285×80px 却要装 4000 字）。现在只有一个入口 openFavoriteEditor，
   // 取消 / 保存两条分支随之删除 —— 它们的出口在弹层内部，不再经过 handleAction。
-  // ⚠️ 保存路径必须只有一条：按钮点击与 Ctrl+Enter 都调到 saveMemoEditor()，
+  // ⚠️ 保存路径必须只有一条：按钮点击与 Ctrl+Enter 都调到 saveFavoriteEditor()，
   // 两条路各写一份校验，早晚会出现「按钮能存的、快捷键存不了」。
-  if(action==="edit-memo"){openMemoEditor(id);return}
-  if(action==="delete-memo"){await WorkbenchApi.deleteMemo(id);await refreshAll();toast("已移入回收站，30 天内可恢复");return}
+  if(action==="edit-favorite"){openFavoriteEditor(id);return}
+  if(action==="delete-favorite"){await WorkbenchApi.deleteFavorite(id);await refreshAll();toast("已移入回收站，30 天内可恢复");return}
   if(action==="retry-knowledge-index"){await loadKnowledgeIndex();return}
   if(action==="sync-knowledge"){await WorkbenchApi.syncKnowledge(id);state.knowledge.indexState="idle";await refreshAll();toast("已重新同步到 Vault");return}
   if(action==="delete-knowledge"){await WorkbenchApi.deleteKnowledge(id);await refreshAll();toast("已移入回收站，30 天内可恢复（Vault 里的 .md 文件一直保留）");return}
@@ -2771,7 +3009,7 @@ async function handleAction(button){
     // 所以这里是唯一保留二次确认的删除动作——其余删除都只是移入回收站（30 天内可恢复），
     // 按设计规范 §8.2 放宽为免确认。触发点仍是卡片角上一个小图标，且触屏下常显，
     // 越是不起眼的入口越需要这层确认。
-    if(!confirm("确认删除这条时间线记录？\n\n时间线是操作流水，按设计走物理删除、不经过回收站，删了无法恢复——这一点和任务、备忘、日程的删除不一样，那些都能在回收站里找回来。"))return;
+    if(!confirm("确认删除这条时间线记录？\n\n时间线是操作流水，按设计走物理删除、不经过回收站，删了无法恢复——这一点和任务、收藏、日程的删除不一样，那些都能在回收站里找回来。"))return;
     await WorkbenchApi.deleteActivity(id);await refreshAll();toast("这条时间线记录已永久删除（回收站里没有）");return
   }
   if(action==="restore-trash"){
@@ -2834,19 +3072,19 @@ function applyPageBackground(){
   img.onload=()=>document.body.classList.add("has-page-bg");
   img.src="/assets/backgrounds/workbench.jpg";
 }
-// ===== 全局搜索（跨 收录 / 任务 / 日程 / 备忘 / 时间线 + 回收站）=====
+// ===== 全局搜索（跨 收录 / 任务 / 日程 / 收藏 / 时间线 + 回收站）=====
 // 设计见 docs/全文搜索功能设计.md。四条红线，每一条都对应一类真实故障：
 // ① **绝不调 refreshAll**。它一次拉 11 个接口并全量重绘 11 个视图，挂上去就等于
-//    每敲一个字符把整个工作台重画一遍（现有 #memoSearch 正是这个毛病）。搜索走独立状态。
+//    每敲一个字符把整个工作台重画一遍（现有 #favoriteSearch 正是这个毛病）。搜索走独立状态。
 // ② **高亮必须先转义再包标签**，且只走 highlightMatch() 这一个出口：
 //    分两处自己拼 innerHTML，迟早有一处漏掉转义（搜 <img src=x onerror=...> 会真的执行）。
 // ③ **乱序响应要丢弃**。自增 seq，回来时对不上就扔掉 —— 否则「先打的字后回来」会让
 //    界面上的结果与输入框里的关键词不是一回事，而用户看不出哪里不对。
-// ④ **回收站命中只能跳回收站页**。任务 / 日程 / 备忘页查的都是 deleted=0，
+// ④ **回收站命中只能跳回收站页**。任务 / 日程 / 收藏页查的都是 deleted=0，
 //    跳过去根本找不到那一条，用户看到的就是「点了没反应」。
-const SEARCH_LABELS={task:"任务",event:"日程",memo:"备忘",inbox:"收录",timeline:"时间线"};
-// 沿用项目既有的「单字方块」图标风格（设置页的 账/番/险/库、备忘空间的 工/生 都是这样）
-const SEARCH_ICONS={task:"任",event:"程",memo:"忘",inbox:"收",timeline:"线"};
+const SEARCH_LABELS={task:"任务",event:"日程",favorite:"收藏",inbox:"收录",timeline:"时间线"};
+// 沿用项目既有的「单字方块」图标风格（设置页的 账/番/险/库、收藏空间的 工/生 都是这样）
+const SEARCH_ICONS={task:"任",event:"程",favorite:"忘",inbox:"收",timeline:"线"};
 const SEARCH_DEBOUNCE_MS=200;
 // 检索词按长度降序：前端按这个顺序占位，长词先占，短词不会把长词切碎
 // （后端 matchedTerms 已经排好了，这里再排一次是为了不依赖调用顺序）。
@@ -3047,7 +3285,7 @@ function searchMetaText(item){
   }else if(item.entity==="event"){
     parts.push(eventTypeName(meta.type));
     parts.push(meta.date?((meta.start?meta.start+" ":"")+meta.date):"时间待定");
-  }else if(item.entity==="memo"){
+  }else if(item.entity==="favorite"){
     parts.push(meta.grp==="life"?"生活":"工作");
     if(meta.archived)parts.push("已归档");
   }else if(item.entity==="inbox"){
@@ -3083,7 +3321,7 @@ function previewMetaRows(item){
   }else if(item.entity==="event"){
     rows.push(["类型",eventTypeName(meta.type)]);
     rows.push(["时间",meta.date?((meta.start?meta.start+" - "+(meta.end||"")+" ":"")+meta.date).trim():"待定（还没排进具体哪天）"]);
-  }else if(item.entity==="memo"){
+  }else if(item.entity==="favorite"){
     rows.push(["空间",meta.grp==="life"?"生活":"工作"]);
     if(meta.tags)rows.push(["标签",meta.tags]);
     if(meta.archived)rows.push(["状态","已归档（列表里默认不显示）"]);
@@ -3124,7 +3362,7 @@ function renderSearchPanel(){
   const query=String(search.q||"").trim();
   const summary=$("searchSummary");
   if(summary){
-    if(!query)summary.innerHTML='<span class="gs-muted">跨任务、日程、备忘、收录与时间线一起检索；选中后回车即可跳到那一条。</span>';
+    if(!query)summary.innerHTML='<span class="gs-muted">跨任务、日程、收藏、收录与时间线一起检索；选中后回车即可跳到那一条。</span>';
     else if(search.error)summary.innerHTML='<span class="gs-error">'+esc(search.error)+'</span>';
     else if(search.loading&&!search.groups.length)summary.innerHTML='<span class="gs-muted">正在搜索…</span>';
     else{
@@ -3154,7 +3392,7 @@ function renderSearchPanel(){
     const groups=visibleSearchGroups();
     if(!query){
       // 空态不留白：直接教怎么用，比一个空面板有用
-      listEl.innerHTML='<div class="gs-empty">试试搜「限流」找出相关的任务与备忘，或者搜「复盘」翻出上周的日程。<br>结果按 任务 → 日程 → 备忘 → 收录 → 时间线 → 回收站 分组，回车直接跳到那一条。</div>';
+      listEl.innerHTML='<div class="gs-empty">试试搜「限流」找出相关的任务与收藏，或者搜「复盘」翻出上周的日程。<br>结果按 任务 → 日程 → 收藏 → 收录 → 时间线 → 回收站 分组，回车直接跳到那一条。</div>';
     }else if(search.error){
       listEl.innerHTML='<div class="gs-empty">搜索暂时不可用。<br><button class="btn sm" data-search-retry="1">重试</button></div>';
     }else if(!groups.length){
@@ -3207,7 +3445,7 @@ async function openSearchResult(item){
   const target=item.target||{};
   closeSearchPanel();
   if(target.tab==="trash"){
-    // 已删数据的落点只有回收站。跳任务 / 日程 / 备忘页是找不到它的（那些页面查 deleted=0）。
+    // 已删数据的落点只有回收站。跳任务 / 日程 / 收藏页是找不到它的（那些页面查 deleted=0）。
     setTab("trash");
     highlightRow(document.querySelector('#trashList .list-item[data-trash-type="'+item.entity+'"][data-trash-id="'+item.id+'"]'));
     return;
@@ -3245,19 +3483,19 @@ async function openSearchResult(item){
     else toast("这条日程不在当前显示的周里，可用周头右上角的 ↑ / ↓ 翻到它那一周",5600);
     return;
   }
-  if(target.tab==="memos"){
+  if(target.tab==="favorites"){
     const grp=target.grp==="life"?"life":"work";
     const archived=!!(item.meta&&item.meta.archived);
-    // 已归档的备忘在列表里默认不显示：不替用户把开关打开，高亮必然落空。
-    const reload=state.memoGrp!==grp||!!state.memoQuery||(archived&&!state.memoArchived);
-    state.memoGrp=grp;clearMemoQuery();
-    if(archived)state.memoArchived=true;
-    setTab("memos");
-    if(reload)await refreshAll();else renderMemos();
-    const box=$("memoShowArchived");if(box)box.checked=!!state.memoArchived;
-    const row=document.querySelector('#memoList .memo-card[data-memo-id="'+item.id+'"]');
+    // 已归档的收藏在列表里默认不显示：不替用户把开关打开，高亮必然落空。
+    const reload=state.favoriteGrp!==grp||!!state.favoriteQuery||(archived&&!state.favoriteArchived);
+    state.favoriteGrp=grp;clearFavoriteQuery();
+    if(archived)state.favoriteArchived=true;
+    setTab("favorites");
+    if(reload)await refreshAll();else renderFavorites();
+    const box=$("favoriteShowArchived");if(box)box.checked=!!state.favoriteArchived;
+    const row=document.querySelector('#favoriteList .favorite-card[data-favorite-id="'+item.id+'"]');
     if(row)highlightRow(row);
-    else toast("这条备忘不在当前空间的列表里，可到备忘页切到「"+(grp==="life"?"生活":"工作")+"」空间查看",5600);
+    else toast("这条收藏不在当前空间的列表里，可到收藏页切到「"+(grp==="life"?"生活":"工作")+"」空间查看",5600);
     return;
   }
   if(target.tab==="inbox"){
@@ -3366,7 +3604,7 @@ if(taskBoard){
 }
 $("createTaskButton").addEventListener("click",()=>createTask().catch(error=>toast(error.message)));
 $("taskTitle").addEventListener("keydown",event=>{if(event.key==="Enter")createTask().catch(error=>toast(error.message))});
-// 检索边走边刷（和备忘的搜索框一致）：任务页只加载前 100 条，本地过滤会漏掉第 100 条之外的匹配项。
+// 检索边走边刷（和收藏的搜索框一致）：任务页只加载前 100 条，本地过滤会漏掉第 100 条之外的匹配项。
 // 防抖 + 只重取任务这一份数据，不再顺手把整个工作台重绘一遍。
 $("taskSearch").addEventListener("input",()=>{state.taskQuery=$("taskSearch").value.trim();debounceInPage("task",function(){reloadTasks().catch(error=>toast(error.message))})});
 $("inboxAddButton").addEventListener("click",()=>createInbox().catch(error=>toast(error.message)));
@@ -3387,25 +3625,25 @@ $("eventTitle").addEventListener("keydown",event=>{if(event.key==="Enter")create
 // 日程检索跨全部日期（含待定区），所以复用 loadEvents —— 它本来就是「按当前检索态取日程」
 // 的唯一入口，refreshAll 里调的也是它。
 $("eventSearch").addEventListener("input",()=>{state.eventQuery=$("eventSearch").value.trim();debounceInPage("event",function(){loadEvents().catch(error=>toast(error.message))})});
-$("memoAddButton").addEventListener("click",()=>createMemo().catch(error=>toast(error.message)));
+$("favoriteAddButton").addEventListener("click",()=>createFavorite().catch(error=>toast(error.message)));
 // 正文从单行 input 改成了多行 textarea（因为现在标题与正文分开录）：回车必须是换行，
 // 保存改用 Ctrl / Cmd + Enter —— 页面上有一行文字提示，否则用户按回车没反应会以为坏了。
 // 标题框里的回车用来把焦点交给正文，形成「标题 → 正文 → 保存」的顺手顺序。
-$("memoTitle").addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();$("memoContent").focus()}});
-$("memoContent").addEventListener("keydown",event=>{if(event.key==="Enter"&&(event.ctrlKey||event.metaKey)){event.preventDefault();createMemo().catch(error=>toast(error.message))}});
-$("memoSearch").addEventListener("input",()=>{state.memoQuery=$("memoSearch").value.trim();debounceInPage("memo",function(){reloadMemos().catch(error=>toast(error.message))})});
-$("memoShowArchived").addEventListener("change",()=>{state.memoArchived=$("memoShowArchived").checked;refreshAll().catch(error=>toast(error.message))});
-// 备忘页的「空间 全部 / 工作 / 生活」切换。
-// 以前这里写的是 `.memo-switch:not(.task-switch)`：任务页那个分组切换器（DOM 里更靠前）
-// 同样带着 .memo-switch 类，querySelector 只取第一个匹配，于是这行会**绑到任务那排按钮上**，
-// 备忘页自己的切换器一个监听都没挂。两条后果都真实伤过用户：
-//   ① 任务页点分组时备忘的处理器也跟着跑，拿 dataset.grp（任务按钮上是 undefined）
-//      调 setMemoGrp(undefined)，把 state.memoGrp 写成 undefined 并多发一次 refreshAll；
-//   ② 备忘页的「空间」点了完全没反应 —— 「结构都在、入口没接上」的典型形态，控制台不报错。
-// 2026-09-17 任务页的分组切换器整体移除，页面上只剩这一处 .memo-switch，碰撞源没有了。
-// 这里仍保留 `.memo-switch-wrap` 前缀（而不是裸的 .memo-switch）：本项目对共用类的约定是
+$("favoriteTitle").addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();$("favoriteContent").focus()}});
+$("favoriteContent").addEventListener("keydown",event=>{if(event.key==="Enter"&&(event.ctrlKey||event.metaKey)){event.preventDefault();createFavorite().catch(error=>toast(error.message))}});
+$("favoriteSearch").addEventListener("input",()=>{state.favoriteQuery=$("favoriteSearch").value.trim();debounceInPage("favorite",function(){reloadFavorites().catch(error=>toast(error.message))})});
+$("favoriteShowArchived").addEventListener("change",()=>{state.favoriteArchived=$("favoriteShowArchived").checked;refreshAll().catch(error=>toast(error.message))});
+// 收藏页的「空间 全部 / 工作 / 生活」切换。
+// 以前这里写的是 `.favorite-switch:not(.task-switch)`：任务页那个分组切换器（DOM 里更靠前）
+// 同样带着 .favorite-switch 类，querySelector 只取第一个匹配，于是这行会**绑到任务那排按钮上**，
+// 收藏页自己的切换器一个监听都没挂。两条后果都真实伤过用户：
+//   ① 任务页点分组时收藏的处理器也跟着跑，拿 dataset.grp（任务按钮上是 undefined）
+//      调 setFavoriteGrp(undefined)，把 state.favoriteGrp 写成 undefined 并多发一次 refreshAll；
+//   ② 收藏页的「空间」点了完全没反应 —— 「结构都在、入口没接上」的典型形态，控制台不报错。
+// 2026-09-17 任务页的分组切换器整体移除，页面上只剩这一处 .favorite-switch，碰撞源没有了。
+// 这里仍保留 `.favorite-switch-wrap` 前缀（而不是裸的 .favorite-switch）：本项目对共用类的约定是
 // **选择器必须带上自己的容器前缀**，将来谁再加一个同类的切换器也不会又悄悄串味。
-document.querySelector(".memo-switch-wrap .memo-switch").addEventListener("click",event=>{const button=event.target.closest(".memo-choice");if(button)setMemoGrp(button.dataset.grp)});
+document.querySelector(".favorite-switch-wrap .favorite-switch").addEventListener("click",event=>{const button=event.target.closest(".favorite-choice");if(button)setFavoriteGrp(button.dataset.grp)});
 // 驾驶舱的「今日主题」卡片已于 2026-09-20 整体下线（用户反馈「没有什么用」）：
 // 一并移除的是这里的两个顶层监听、renderDashboard 里的回填、saveTheme()、api.js 的
 // saveTheme 与后端 POST /dashboard/theme。**别只删 HTML 不留神这里的 themeInput 引用** ——
@@ -3424,6 +3662,7 @@ $("savePasswordButton").addEventListener("click",()=>savePassword().catch(error=
 $("savePomoButton").addEventListener("click",()=>savePomoSetting().catch(error=>toast(error.message)));
 $("saveAiButton").addEventListener("click",()=>saveAiSetting().catch(error=>toast(error.message)));
 $("saveVaultButton").addEventListener("click",()=>saveVaultSetting().catch(error=>toast(error.message)));
+$("saveDedaoCookieButton").addEventListener("click",()=>saveDedaoSetting().catch(error=>toast(error.message)));
 $("backupNowButton").addEventListener("click",()=>doBackupNow().catch(error=>toast(error.message)));
 $("clearDemoButton").addEventListener("click",()=>doClearDemo().catch(error=>toast(error.message)));
 $("shutdownButton").addEventListener("click",()=>doShutdown().catch(error=>toast(error.message)));
@@ -3432,10 +3671,12 @@ $("kbChatSend").addEventListener("click",()=>askKnowledge().catch(error=>toast(e
 $("kbChatInput").addEventListener("keydown",event=>{if(event.key==="Enter")askKnowledge().catch(error=>toast(error.message))});
 $("collectButton").addEventListener("click",()=>collectArticle().catch(error=>toast(error.message)));
 $("collectInput").addEventListener("keydown",event=>{if(event.key==="Enter")collectArticle().catch(error=>toast(error.message))});
+// 收藏区同时是拖拽落点：微信 PC 端里的分享卡片可以直接拖进来（2026-09-20 用户刚需）
+bindCollectDrop();
 $("importVaultButton").addEventListener("click",()=>importVault().catch(error=>toast(error.message)));
 // ===== 全局搜索的接线 =====
 // 输入即搜（防抖 200ms）。这里**只打 /api/v1/search 一个接口**：
-// 现有 #memoSearch 是 input → refreshAll，每敲一个字符会拉 11 个接口并重绘 11 个视图。
+// 现有 #favoriteSearch 是 input → refreshAll，每敲一个字符会拉 11 个接口并重绘 11 个视图。
 $("globalSearchInput").addEventListener("input",function(){
   state.search.q=$("globalSearchInput").value;
   openSearchPanel();
@@ -3523,7 +3764,7 @@ document.addEventListener("click",function(event){
   closeSearchPanel();
 });
 if(window.addEventListener)window.addEventListener("resize",function(){if(state.search.open)positionSearchPanel()});
-// 三个「新增」区（任务 / 日程 / 备忘）折叠成 SaaS 风格的「＋ 新建」入口条：默认收起，点开才展开表单。
+// 三个「新增」区（任务 / 日程 / 收藏）折叠成 SaaS 风格的「＋ 新建」入口条：默认收起，点开才展开表单。
 // 直接按 ID 绑定而不是走 data-action —— 展开/收起是纯视图状态，不进 handleAction 的 if 链，
 // 也不会被检查脚本「每个 data-action 都有处理分支」扫到（那条盯的是会改数据 / 跳转的动作）。
 // 2026-09-12：新建表单现在和搜索同行，所以多一个 tab 参数 —— 展开表单时要**互斥**地收起搜索，
@@ -3555,7 +3796,7 @@ bindMedia();
 bindAttViewer();
 bindComposer("task","composerToggleTask","composerBodyTask");
 bindComposer("event","composerToggleEvent","composerBodyEvent");
-bindComposer("memo","composerToggleMemo","composerBodyMemo");
+bindComposer("favorite","composerToggleFavorite","composerBodyFavorite");
 // 三个放大镜按钮：点它是**切换**（展开 ↔ 收起），收起时关键词不丢 ——
 // 「还在检索」这件事由按钮上的小圆点和页面上那条提示条负责说，不靠用户记性。
 function bindSearchToggle(tab,btnId){
@@ -3565,42 +3806,42 @@ function bindSearchToggle(tab,btnId){
 }
 bindSearchToggle("task","taskSearchBtn");
 bindSearchToggle("event","eventSearchBtn");
-bindSearchToggle("memo","memoSearchBtn");
+bindSearchToggle("favorite","favoriteSearchBtn");
 // Esc 收起搜索框，给键盘用户留一个出口（不然只能靠 Tab 摸到那个按钮）。
 // 只收起**不清空**：清空是页面上「清除搜索」按钮的事，混在一起会让人按一次 Esc 就丢了关键词。
 document.addEventListener("keydown",event=>{
   if(event.key!=="Escape")return;
-  ["task","event","memo"].forEach(tab=>{if(searchOpenFlag(tab))setSearchOpen(tab,false)});
+  ["task","event","favorite"].forEach(tab=>{if(searchOpenFlag(tab))setSearchOpen(tab,false)});
 });
 // 「含归档」标签：它存在的理由就是「显示已归档」跟着搜索框一起被收起来了，
 // 而那个开关管的是常驻列表 —— 不补这个出口，用户勾上之后就再也找不到怎么关掉。
-$("memoArchivedChip").addEventListener("click",()=>{state.memoArchived=false;refreshAll().catch(error=>toast(error.message))});
-// ===== 备忘编辑弹层的事件绑定（2026-09-17）=====
+$("favoriteArchivedChip").addEventListener("click",()=>{state.favoriteArchived=false;refreshAll().catch(error=>toast(error.message))});
+// ===== 收藏编辑弹层的事件绑定（2026-09-17）=====
 // 五个出口集中挂在一处：按钮点击与键盘快捷键最终都落到同两个函数上，
 // 这样「点保存」和「按 Ctrl+Enter」不可能因为各写一份而出现行为差异。
-$("memoEditorCancel").addEventListener("click",requestCloseMemoEditor);
-$("memoEditorClose").addEventListener("click",requestCloseMemoEditor);
-$("memoEditorSave").addEventListener("click",()=>{saveMemoEditor().catch(error=>toast(error.message))});
+$("favoriteEditorCancel").addEventListener("click",requestCloseFavoriteEditor);
+$("favoriteEditorClose").addEventListener("click",requestCloseFavoriteEditor);
+$("favoriteEditorSave").addEventListener("click",()=>{saveFavoriteEditor().catch(error=>toast(error.message))});
 // 点遮罩关闭必须比 event.target 与遮罩本身，不能用 closest 判断「在不在弹层内」：
 // 浮层里的按钮常在点击过程中重绘自己所在的容器，事件冒到 document 时 target 已脱离文档树，
 // closest 会返回 null —— 于是「点一下弹层内部」被误判成「点了外面」，弹层自己关掉且不报错。
-$("memoEditorMask").addEventListener("click",event=>{if(event.target===$("memoEditorMask"))requestCloseMemoEditor()});
-$("memoEditContent").addEventListener("input",memoEditorSyncCount);
+$("favoriteEditorMask").addEventListener("click",event=>{if(event.target===$("favoriteEditorMask"))requestCloseFavoriteEditor()});
+$("favoriteEditContent").addEventListener("input",favoriteEditorSyncCount);
 // Esc / Ctrl+Enter 只在弹层开着时接管。用**捕获阶段**挂：既有的两条 Esc 监听
 // （收搜索框、关问号气泡）都是 document 冒泡阶段的，弹层开着时按 Esc 只应该关弹层 ——
 // 用 stopPropagation 把它们挡在后面，而不是去改那两条既有逻辑。
 document.addEventListener("keydown",event=>{
-  if(!memoEditorOpen())return;
-  if(event.key==="Escape"){event.stopPropagation();event.preventDefault();requestCloseMemoEditor();return}
-  if(event.key==="Enter"&&(event.ctrlKey||event.metaKey)){event.preventDefault();saveMemoEditor().catch(error=>toast(error.message))}
+  if(!favoriteEditorOpen())return;
+  if(event.key==="Escape"){event.stopPropagation();event.preventDefault();requestCloseFavoriteEditor();return}
+  if(event.key==="Enter"&&(event.ctrlKey||event.metaKey)){event.preventDefault();saveFavoriteEditor().catch(error=>toast(error.message))}
 },true);
 // ===== 任务 / 日程编辑弹层的事件绑定（2026-09-18）=====
-// 与备忘那组同构，理由也一样：出口集中挂在一处，「点保存」和「按 Ctrl+Enter」不可能各写一份。
+// 与收藏那组同构，理由也一样：出口集中挂在一处，「点保存」和「按 Ctrl+Enter」不可能各写一份。
 $("taskEditorCancel").addEventListener("click",requestCloseTaskEditor);
 $("taskEditorClose").addEventListener("click",requestCloseTaskEditor);
 $("taskEditorSave").addEventListener("click",()=>{saveTaskEditor().catch(error=>toast(error.message))});
 // 点遮罩关闭一律比 event.target 与遮罩本身，不能用 closest 判断「在不在弹层内」——
-// 理由见上面备忘那一条（浮层内的按钮常在点击过程中重绘自己的容器）。
+// 理由见上面收藏那一条（浮层内的按钮常在点击过程中重绘自己的容器）。
 $("taskEditorMask").addEventListener("click",event=>{if(event.target===$("taskEditorMask"))requestCloseTaskEditor()});
 $("taskEditNote").addEventListener("input",taskEditorSyncCount);
 $("eventEditorCancel").addEventListener("click",requestCloseEventEditor);
@@ -3610,7 +3851,7 @@ $("eventEditorDelete").addEventListener("click",()=>{deleteEditingEvent().catch(
 $("eventEditorMask").addEventListener("click",event=>{if(event.target===$("eventEditorMask"))requestCloseEventEditor()});
 // Esc / Ctrl+Enter 也用**捕获阶段**接管，并且只在对应弹层开着时才 stopPropagation：
 // 既有那两条 Esc 监听（收页内搜索框、关问号气泡）都挂在冒泡阶段，弹层开着时按 Esc
-// 只应该关弹层。备忘那条虽然先注册，但它自带 `if(!memoEditorOpen())return`，拦不到这里。
+// 只应该关弹层。收藏那条虽然先注册，但它自带 `if(!favoriteEditorOpen())return`，拦不到这里。
 document.addEventListener("keydown",event=>{
   if(!taskEditorOpen()&&!eventEditorOpen())return;
   if(event.key==="Escape"){

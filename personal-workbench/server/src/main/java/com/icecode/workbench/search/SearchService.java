@@ -27,7 +27,7 @@ import com.icecode.workbench.util.TextUtil;
 import com.icecode.workbench.util.TimeUtil;
 
 /**
- * 全局搜索：跨 收录 / 任务 / 日程 / 备忘 / 时间线 五类实体 + 回收站。
+ * 全局搜索：跨 收录 / 任务 / 日程 / 收藏 / 时间线 五类实体 + 回收站。
  *
  * <p>设计见 {@code docs/全文搜索功能设计.md}。四件必须守住的事：</p>
  * <ol>
@@ -35,9 +35,9 @@ import com.icecode.workbench.util.TimeUtil;
  *       对中文无效）+ 索引同步」三重代价。这里用 LIKE 粗筛 + 应用层打分：
  *       SQL 只负责「有没有命中」（能走索引、结果集小），
  *       「命中在标题还是正文、该排前面还是后面」在 Java 侧算 —— SQL 表达不了这个。</li>
- *   <li><b>回收站独立成组</b>，且组内条目的落点是回收站页。任务/日程/备忘页查的都是
+ *   <li><b>回收站独立成组</b>，且组内条目的落点是回收站页。任务/日程/收藏页查的都是
  *       {@code deleted=0}，把软删数据的落点写成原实体页，用户点开就是「点了没反应」。</li>
- *   <li><b>不跨类型混排</b>。按 任务 → 日程 → 备忘 → 收录 → 时间线 → 回收站 固定顺序分组，
+ *   <li><b>不跨类型混排</b>。按 任务 → 日程 → 收藏 → 收录 → 时间线 → 回收站 固定顺序分组，
  *       组内才排序。混排会带来「为什么这条排前面」的困惑，收益却很小。</li>
  *   <li><b>截断必须说出来</b>。每组返回 {@code total} 与 {@code hasMore}，前端显示
  *       「该分组还有 N 条未显示」——静默截断是本项目已经发生过的事故类型。</li>
@@ -81,7 +81,7 @@ public class SearchService {
     private static final int RECENT_BONUS = 8;
     /** 已删除的降权：只降序、不隐藏（用户选了「含回收站」，但活数据必须排在前面）。 */
     private static final int DELETED_PENALTY = 30;
-    /** 已归档备忘 / 已取消任务的降权。 */
+    /** 已归档收藏 / 已取消任务的降权。 */
     private static final int DEMOTED_PENALTY = 10;
 
     private static final String TYPE_TRASH = "trash";
@@ -152,12 +152,12 @@ public class SearchService {
                 return false;
             }
         });
-        ENTITIES.add(new EntitySpec("memo", "备忘", "memo",
+        ENTITIES.add(new EntitySpec("favorite", "收藏", "favorite",
                 "id, title, content, url, tags, grp, status, updated_at",
                 "title", "updated_at", true) {
             @Override
             String title(ResultSet rs) throws SQLException {
-                // 备忘允许「有正文没标题」，此时用正文前 60 字当标题。
+                // 收藏允许「有正文没标题」，此时用正文前 60 字当标题。
                 // 否则结果行会是一片认不出是哪条的空白条目。
                 String title = rs.getString("title");
                 if (title != null && !title.trim().isEmpty()) return title;
@@ -176,7 +176,7 @@ public class SearchService {
             @Override
             SearchTargetVO target(ResultSet rs) throws SQLException {
                 // grp 决定前端先切到哪个空间。空间不对 → 目标行不在 DOM 里 → 「点了没反应」。
-                return SearchTargetVO.memo(rs.getString("grp"));
+                return SearchTargetVO.favorite(rs.getString("grp"));
             }
 
             @Override
@@ -396,7 +396,7 @@ public class SearchService {
                 if (byScore != 0) return byScore;
                 int byTime = String.valueOf(right.updatedAt).compareTo(String.valueOf(left.updatedAt));
                 if (byTime != 0) return byTime;
-                // 跨表合并时 id 会撞（task#5 与 memo#5），所以最后必须用 entity 定序，
+                // 跨表合并时 id 会撞（task#5 与 favorite#5），所以最后必须用 entity 定序，
                 // 否则同一查询两次执行可能出现不同顺序，测试无法断言。
                 int byEntity = left.entity.compareTo(right.entity);
                 if (byEntity != 0) return byEntity;
@@ -722,7 +722,7 @@ public class SearchService {
 
         abstract SearchTargetVO target(ResultSet rs) throws SQLException;
 
-        /** 是否需要降权（已归档备忘 / 已取消任务）。只影响排序，不隐藏。 */
+        /** 是否需要降权（已归档收藏 / 已取消任务）。只影响排序，不隐藏。 */
         abstract boolean demoted(ResultSet rs) throws SQLException;
     }
 }

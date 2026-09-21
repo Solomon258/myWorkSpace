@@ -332,7 +332,7 @@ class VisionFlowTest {
         java.util.List<InboxParseWriter.ParsedItem> items = Arrays.asList(
                 new InboxParseWriter.ParsedItem("会议通知全文…", "task", 0.9, "{\"title\":\"确认参会\"}"),
                 new InboxParseWriter.ParsedItem("周三 14:00 评审", "schedule", 0.85, "{\"title\":\"评审\"}"),
-                new InboxParseWriter.ParsedItem("记得带笔记本", "memo", 0.6, "{\"title\":\"带笔记本\"}"));
+                new InboxParseWriter.ParsedItem("记得带笔记本", "favorite", 0.6, "{\"title\":\"带笔记本\"}"));
 
         java.util.List<Long> ids = parseWriter.finish(placeholderId, "web", Long.valueOf(7L), now, false, items);
 
@@ -349,7 +349,7 @@ class VisionFlowTest {
             assertThat(column(id.longValue(), "status")).isEqualTo("processed");
         }
         assertThat(column(ids.get(1).longValue(), "ai_category")).isEqualTo("schedule");
-        assertThat(column(ids.get(2).longValue(), "ai_category")).isEqualTo("memo");
+        assertThat(column(ids.get(2).longValue(), "ai_category")).isEqualTo("favorite");
 
         // 这里不断言时间线：finish() 只负责落条目，汇总流水由 VisionParseService 在
         // 一图多条时**只写一条**（三条流水会把时间线刷屏）。这条规则由
@@ -379,7 +379,7 @@ class VisionFlowTest {
         java.util.List<InboxParseWriter.ParsedItem> items = java.util.Collections.singletonList(
                 new InboxParseWriter.ParsedItem(
                         longText.substring(0, VisionParseService.MAX_RAW_LENGTH),
-                        "memo", 0.7, "{\"title\":\"长文\"}"));
+                        "favorite", 0.7, "{\"title\":\"长文\"}"));
 
         parseWriter.finish(placeholderId, "web", Long.valueOf(9L), now, true, items);
 
@@ -396,7 +396,7 @@ class VisionFlowTest {
 
         parseWriter.finish(placeholderId, "web", Long.valueOf(9L), now, false,
                 java.util.Collections.singletonList(new InboxParseWriter.ParsedItem(
-                        "短内容", "memo", 0.7, "{\"title\":\"短\"}")));
+                        "短内容", "favorite", 0.7, "{\"title\":\"短\"}")));
 
         assertThat(numberColumn(placeholderId, "raw_truncated")).isEqualTo(0L);
     }

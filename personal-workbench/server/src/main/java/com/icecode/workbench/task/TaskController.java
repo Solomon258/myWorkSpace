@@ -55,6 +55,21 @@ public class TaskController {
         return ApiResponse.success(taskService.create(request));
     }
 
+    /**
+     * 「已完成」页的按天汇总（2026-09-20）。
+     *
+     * <p>单独一个端点而不是塞进 {@code GET /tasks} 的响应里：列表接口在别处（驾驶舱 Top3、
+     * 检索、下钻）也被调用，把一个只有「已完成」页需要的聚合块挂上去，
+     * 会让那些调用方每次都白算一遍全表分组。</p>
+     *
+     * <p>路径写成 {@code /done-summary} 而不是挂在 {@code /{id}} 下面：后者的
+     * {@code @PathVariable long id} 会尝试把 "done-summary" 解析成数字并抛错。
+     * Spring 按更具体的字面量路径优先匹配，但仍然别给未来留这个坑。</p>
+     */
+    @GetMapping("/done-summary")
+    public ApiResponse<TaskDoneSummaryVO> doneSummary() {
+        return ApiResponse.success(taskService.doneSummary());
+    }
     @PatchMapping("/{id}")
     public ApiResponse<TaskVO> update(@PathVariable long id, @Valid @RequestBody TaskUpdateRequest request) {
         return ApiResponse.success(taskService.update(id, request));

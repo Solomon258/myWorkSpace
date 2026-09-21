@@ -23,7 +23,7 @@ public class EventVO {
     /** 该组共几期（不重复 = 1）。 */
     private final int repeatTotal;
     /**
-     * 这条日程的附件（deleted=0）。列表接口一并带上，理由见 MemoVO 上的同一段注释。
+     * 这条日程的附件（deleted=0）。列表接口一并带上，理由见 FavoriteVO 上的同一段注释。
      *
      * <p><b>重复日程只有首期有附件</b>（见 EventService.create 的说明），
      * 所以后面几期的 {@code attachments} 是空数组 —— 周视图因此在首期上显示徽标、

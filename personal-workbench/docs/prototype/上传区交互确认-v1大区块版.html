@@ -141,7 +141,7 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--blue);bo
 .tagcat{font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 6px}
 .tagcat.task{background:#e9f0fa;color:#315f94}
 .tagcat.schedule{background:#f0eefb;color:#534AB7}
-.tagcat.memo{background:#fdf4e6;color:#a96c1d}
+.tagcat.favorite{background:#fdf4e6;color:#a96c1d}
 .rfield{font-size:12px;color:#39424f;margin-top:3px}
 .rfield span.k{color:var(--muted)}
 .quote{margin-top:5px;padding:5px 8px;border-left:2px solid #c9bfe8;background:#f7f5fd;
@@ -196,7 +196,7 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--blue);bo
     <button data-tab="inbox" class="active">收录</button>
     <button data-tab="task">任务</button>
     <button data-tab="event">日程</button>
-    <button data-tab="memo">备忘</button>
+    <button data-tab="favorite">收藏</button>
   </nav>
 
   <div class="layout">
@@ -345,13 +345,13 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--blue);bo
         </div>
       </section>
 
-      <!-- ================= 备忘 ================= -->
-      <section class="card panel" data-panel="memo" hidden>
-        <div class="card-head">备忘页 · 新建备忘</div>
+      <!-- ================= 收藏 ================= -->
+      <section class="card panel" data-panel="favorite" hidden>
+        <div class="card-head">收藏页 · 新建收藏</div>
         <label class="field"><span class="label">标题</span>
-          <input type="text" data-fill="memoTitle" placeholder="标题（可空）"></label>
+          <input type="text" data-fill="favoriteTitle" placeholder="标题（可空）"></label>
         <label class="field"><span class="label">正文</span>
-          <textarea rows="3" data-fill="memoContent" placeholder="正文（与标题至少写一项）"></textarea></label>
+          <textarea rows="3" data-fill="favoriteContent" placeholder="正文（与标题至少写一项）"></textarea></label>
         <div class="row2">
           <label class="field"><span class="label">标签</span>
             <input type="text" placeholder="逗号分隔"></label>
@@ -369,7 +369,7 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--blue);bo
             <span class="drop-main">拖入文件，或点击选择</span>
             <span class="drop-sub">pdf · word · excel · md · json · txt · 图片</span>
           </div>
-          <p class="zone-hint">随备忘保存。</p>
+          <p class="zone-hint">随收藏保存。</p>
           <div class="files" data-files="attach"></div>
         </div>
 
@@ -389,7 +389,7 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--blue);bo
 
         <div class="submit-bar">
           <span class="submit-note" data-note>可以直接创建</span>
-          <button class="btn primary" data-submit>新建备忘</button>
+          <button class="btn primary" data-submit>新建收藏</button>
         </div>
       </section>
 
@@ -567,7 +567,7 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--blue);bo
           '<div class="quote">「我：明天下午发你」</div>' +
         '</div>' +
         '<div class="ritem" style="opacity:.62">' +
-          '<div class="ritem-top"><input type="checkbox"><span class="tagcat memo">备忘</span>' +
+          '<div class="ritem-top"><input type="checkbox"><span class="tagcat favorite">收藏</span>' +
             '<b style="font-size:12.5px">销售数据相关讨论</b></div>' +
           '<div class="rfield"><span class="k">原文：</span>那个销售数据你看下</div>' +
           '<div class="quote">「老王：那个销售数据你看下」</div>' +
@@ -579,7 +579,7 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--blue);bo
     var map = {
       task:  { taskTitle: '给老王发销售数据', taskDue: '2026-09-16', taskNote: '老王催销售数据，答应明天下午发他' },
       event: { evTitle: '与老王对齐销售数据', evDate: '2026-09-16', evStart: '14:00', evEnd: '14:30' },
-      memo:  { memoContent: '老王：那个销售数据你什么时候给我\n我：明天下午发你' }
+      favorite:  { favoriteContent: '老王：那个销售数据你什么时候给我\n我：明天下午发你' }
     }[tab];
 
     Object.keys(map).forEach(function (key) {

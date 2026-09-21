@@ -40,8 +40,8 @@ public class LocalRuleClassifyService implements ClassifyProvider {
         if (matches(text, "(今天|明天|后天|下周|周[一二三四五六日天]|\\d{1,2}\\s*[点时:：]|会议|约|对齐|评审会|站会)")) {
             category = "schedule";
             confidence = 0.84;
-        } else if (matches(text, "(记得|别忘|备忘|报销|发票|带)")) {
-            category = "memo";
+        } else if (matches(text, "(记得|别忘|收藏|报销|发票|带)")) {
+            category = "favorite";
             confidence = 0.76;
         } else if (matches(text, "(笔记|总结|学习|心得|资料|文章|思路|值得|文档|教程|模板|方法论|双链)")) {
             // 知识类：确认时写入 Obsidian Vault（未配置 Vault 则确认环节拦截并提示）
@@ -84,7 +84,7 @@ public class LocalRuleClassifyService implements ClassifyProvider {
      * <p>只覆盖 {@code repeatWeeks}，其余字段一律不动：LLM 在分类、标题、时间上通常比本地规则准，
      * 没必要把它整份结果丢掉重来。而「每」字是**确定性的文本特征**，不该赌模型这一轮发挥得如何。</p>
      *
-     * <p>只对日程生效：给任务 / 备忘填 repeatWeeks 没有意义，还会让确认卡多出一行看不懂的提示。</p>
+     * <p>只对日程生效：给任务 / 收藏填 repeatWeeks 没有意义，还会让确认卡多出一行看不懂的提示。</p>
      */
     public ClassifySuggestionVO applyRepeatHint(String raw, ClassifySuggestionVO suggestion) {
         if (suggestion == null || suggestion.getPayload() == null) return suggestion;
@@ -96,7 +96,7 @@ public class LocalRuleClassifyService implements ClassifyProvider {
 
     private boolean matches(String text, String regex) { return Pattern.compile(regex).matcher(text).find(); }
     /**
-     * 预填标题会直接写进 task/schedule_event/memo/knowledge_note，所以不能带「…」这类省略号，
+     * 预填标题会直接写进 task/schedule_event/favorite/knowledge_note，所以不能带「…」这类省略号，
      * 否则正式数据的标题里会永久留下截断符号。按 API 上限 200 字截断，用户在整理页仍可手改。
      */
     private String shortTitle(String text) { return TextUtil.clip(text, MAX_TITLE_LENGTH); }

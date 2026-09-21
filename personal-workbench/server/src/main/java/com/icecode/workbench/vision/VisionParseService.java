@@ -170,10 +170,10 @@ public class VisionParseService {
 
         List<VisionItem> items = result.getItems();
         if (items.isEmpty()) {
-            // 读出了文字但没有待办内容：留一条 memo 待确认，让用户自己决定要不要留。
+            // 读出了文字但没有待办内容：留一条 favorite 待确认，让用户自己决定要不要留。
             // 直接丢弃会让「解析成功，但页面上什么都没出现」，比留一条更让人困惑。
             VisionItem fallback = new VisionItem();
-            fallback.setCategory("memo");
+            fallback.setCategory("favorite");
             fallback.setConfidence(0.5);
             fallback.setTitle(TextUtil.clip(clipped, 200));
             items = new ArrayList<VisionItem>();

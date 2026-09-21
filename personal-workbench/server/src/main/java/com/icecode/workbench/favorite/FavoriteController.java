@@ -1,4 +1,4 @@
-package com.icecode.workbench.memo;
+package com.icecode.workbench.favorite;
 
 import java.util.List;
 
@@ -17,46 +17,46 @@ import org.springframework.web.bind.annotation.RestController;
 import com.icecode.workbench.common.ApiResponse;
 
 @RestController
-@RequestMapping("/api/v1/memos")
-public class MemoController {
+@RequestMapping("/api/v1/favorites")
+public class FavoriteController {
 
-    private final MemoService memoService;
+    private final FavoriteService favoriteService;
 
-    public MemoController(MemoService memoService) {
-        this.memoService = memoService;
+    public FavoriteController(FavoriteService favoriteService) {
+        this.favoriteService = favoriteService;
     }
 
     @GetMapping
-    public ApiResponse<List<MemoVO>> list(
+    public ApiResponse<List<FavoriteVO>> list(
             @RequestParam(required = false) String grp,
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "false") boolean archived) {
-        return ApiResponse.success(memoService.list(grp, q, archived));
+        return ApiResponse.success(favoriteService.list(grp, q, archived));
     }
 
     @PostMapping
-    public ApiResponse<MemoVO> create(@Valid @RequestBody MemoCreateRequest request) {
-        return ApiResponse.success(memoService.create(request));
+    public ApiResponse<FavoriteVO> create(@Valid @RequestBody FavoriteCreateRequest request) {
+        return ApiResponse.success(favoriteService.create(request));
     }
 
     @PatchMapping("/{id}")
-    public ApiResponse<MemoVO> update(@PathVariable long id, @Valid @RequestBody MemoUpdateRequest request) {
-        return ApiResponse.success(memoService.update(id, request));
+    public ApiResponse<FavoriteVO> update(@PathVariable long id, @Valid @RequestBody FavoriteUpdateRequest request) {
+        return ApiResponse.success(favoriteService.update(id, request));
     }
 
     @PostMapping("/{id}/pin")
-    public ApiResponse<MemoVO> togglePin(@PathVariable long id) {
-        return ApiResponse.success(memoService.togglePin(id));
+    public ApiResponse<FavoriteVO> togglePin(@PathVariable long id) {
+        return ApiResponse.success(favoriteService.togglePin(id));
     }
 
     @PostMapping("/{id}/archive")
-    public ApiResponse<MemoVO> toggleArchive(@PathVariable long id) {
-        return ApiResponse.success(memoService.toggleArchive(id));
+    public ApiResponse<FavoriteVO> toggleArchive(@PathVariable long id) {
+        return ApiResponse.success(favoriteService.toggleArchive(id));
     }
 
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable long id) {
-        memoService.delete(id);
+        favoriteService.delete(id);
         return ApiResponse.success(null);
     }
 }

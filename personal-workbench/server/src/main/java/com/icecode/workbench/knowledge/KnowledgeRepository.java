@@ -40,7 +40,7 @@ public class KnowledgeRepository {
         // 刻意不设隐式上限。这里原来写死 `LIMIT 200`，而界面上显示的是「（N 条）」——
         // 只有 N 就是全部时那句话才成立。超过 200 条之后，用户看到的是一个**假的总数**，
         // 而且更早的笔记再也翻不到（列表没有分页），属于静默丢数据。
-        // 备忘与收集箱的列表同样不设上限：本地单用户、数据量小，让界面上的数字等于真相更重要。
+        // 收藏与收集箱的列表同样不设上限：本地单用户、数据量小，让界面上的数字等于真相更重要。
         return jdbcTemplate.query("SELECT * FROM knowledge_note WHERE deleted=0 ORDER BY id DESC", rowMapper);
     }
 

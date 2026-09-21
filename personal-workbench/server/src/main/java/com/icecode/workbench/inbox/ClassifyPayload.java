@@ -9,7 +9,7 @@ public class ClassifyPayload {
     private String eventType;
     /**
      * 重复期数（「每周三做什么」这类周期安排）：1 或 null = 不重复，4 = 连续 4 周。
-     * 只对 {@code category = schedule} 有意义；任务 / 备忘即使被填了也会被忽略
+     * 只对 {@code category = schedule} 有意义；任务 / 收藏即使被填了也会被忽略
      * （确认生成时只读它来建日程，见 InboxService.createEvent）。
      */
     private Integer repeatWeeks;

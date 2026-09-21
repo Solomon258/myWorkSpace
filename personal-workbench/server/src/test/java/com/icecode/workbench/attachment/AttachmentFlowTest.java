@@ -250,7 +250,7 @@ class AttachmentFlowTest {
         attachmentService.bindAll(Arrays.asList(Long.valueOf(id)), "task", 7L);
 
         try {
-            attachmentService.bindAll(Arrays.asList(Long.valueOf(id)), "memo", 9L);
+            attachmentService.bindAll(Arrays.asList(Long.valueOf(id)), "favorite", 9L);
             org.junit.jupiter.api.Assertions.fail("应当拒绝把已归属的附件改挂到别的记录上");
         } catch (com.icecode.workbench.common.BizException exception) {
             assertThat(exception.getErrorCode()).isEqualTo(com.icecode.workbench.common.ErrorCode.ATTACHMENT_OCCUPIED);
@@ -279,10 +279,10 @@ class AttachmentFlowTest {
     // -------------------------------------------------- 转绑 / 列表带附件（2026-09-19）
 
     /**
-     * 收录条目确认生成备忘时，附件必须跟着走。
+     * 收录条目确认生成收藏时，附件必须跟着走。
      *
-     * <p>用户报的原始问题是「收录（或网页）加了附件之后，在备忘列表里看不到它」。查下来有**两层**原因，
-     * 这一条守的是更底下那层：附件当时压根没转绑 —— 生成的备忘一个附件都没有，
+     * <p>用户报的原始问题是「收录（或网页）加了附件之后，在收藏列表里看不到它」。查下来有**两层**原因，
+     * 这一条守的是更底下那层：附件当时压根没转绑 —— 生成的收藏一个附件都没有，
      * 所以只改前端也还是看不到。</p>
      */
     @Test
@@ -290,16 +290,16 @@ class AttachmentFlowTest {
         long attachmentId = upload(pngFile("费用截图.png"), null, null);
         long inboxId = createInboxItem("腾讯云费用 -198 元", attachmentId);
 
-        confirmInboxAsMemo(inboxId);
+        confirmInboxAsFavorite(inboxId);
 
-        long memoId = jdbcTemplate.queryForObject(
-                "SELECT id FROM memo WHERE source_inbox_id=?", Long.class, Long.valueOf(inboxId)).longValue();
+        long favoriteId = jdbcTemplate.queryForObject(
+                "SELECT id FROM favorite WHERE source_inbox_id=?", Long.class, Long.valueOf(inboxId)).longValue();
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT owner_type FROM attachment WHERE id=?", String.class, Long.valueOf(attachmentId)))
-                .isEqualTo("memo");
+                .isEqualTo("favorite");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT owner_id FROM attachment WHERE id=?", Long.class, Long.valueOf(attachmentId)))
-                .isEqualTo(memoId);
+                .isEqualTo(favoriteId);
 
         // 转绑是「搬走」而不是「再挂一份」：收录条目自己不再持有它。
         // 若不校验这一条，「复制一份」的实现也能让上面两行全绿，而结果是同一个附件
@@ -322,17 +322,17 @@ class AttachmentFlowTest {
      * 所以这一条钉的是「列表路径的返回里就有 attachments」。</p>
      */
     @Test
-    void memoListCarriesItsAttachments() throws Exception {
+    void favoriteListCarriesItsAttachments() throws Exception {
         long attachmentId = upload(pngFile("费用截图.png"), null, null);
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                        .post("/api/v1/memos").session(session)
+                        .post("/api/v1/favorites").session(session)
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                         .content("{\"title\":\"独一无二的标题XZQ\",\"content\":\"正文\",\"attachmentIds\":["
                                 + attachmentId + "]}"))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/v1/memos").param("q", "独一无二的标题XZQ").session(session))
+        mockMvc.perform(get("/api/v1/favorites").param("q", "独一无二的标题XZQ").session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(1))
                 .andExpect(jsonPath("$.data[0].attachments.length()").value(1))
@@ -346,12 +346,12 @@ class AttachmentFlowTest {
     @Test
     void recordsWithoutAttachmentsCarryAnEmptyArray() throws Exception {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                        .post("/api/v1/memos").session(session)
+                        .post("/api/v1/favorites").session(session)
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                         .content("{\"title\":\"没有附件ZQW\",\"content\":\"正文\"}"))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/v1/memos").param("q", "没有附件ZQW").session(session))
+        mockMvc.perform(get("/api/v1/favorites").param("q", "没有附件ZQW").session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].attachments.length()").value(0));
     }
@@ -366,7 +366,7 @@ class AttachmentFlowTest {
     void transferringFromAnOwnerWithoutAttachmentsIsANoOp() throws Exception {
         long otherId = upload(pngFile("别人的图.png"), "task", 88L);
 
-        int moved = attachmentService.transferOwner("inbox_item", 12345L, "memo", 777L);
+        int moved = attachmentService.transferOwner("inbox_item", 12345L, "favorite", 777L);
 
         assertThat(moved).isZero();
         assertThat(jdbcTemplate.queryForObject(
@@ -425,19 +425,19 @@ class AttachmentFlowTest {
     }
 
     /**
-     * 把收录条目确认成备忘。
+     * 把收录条目确认成收藏。
      *
      * <p>先把状态置成 {@code processed}：新收录的条目是 {@code pending}，而
      * {@code InboxService.validateConfirm} 只放行 processed / failed。
      * 这里直接改状态而不是跑一次 AI 整理 —— 本测试要验的是**附件转绑**，
      * 让整理器的实现细节（以及它要不要联网）掺进来只会让它变得又慢又脆。</p>
      */
-    private void confirmInboxAsMemo(long inboxId) throws Exception {
+    private void confirmInboxAsFavorite(long inboxId) throws Exception {
         jdbcTemplate.update("UPDATE inbox_item SET status='processed' WHERE id=?", Long.valueOf(inboxId));
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .post("/api/v1/inbox/{id}/confirm", Long.valueOf(inboxId)).session(session)
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                        .content("{\"category\":\"memo\",\"title\":\"腾讯云云服务支付 198 元\"}"))
+                        .content("{\"category\":\"favorite\",\"title\":\"腾讯云云服务支付 198 元\"}"))
                 .andExpect(status().isOk());
     }
 

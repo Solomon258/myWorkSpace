@@ -4,7 +4,7 @@ package com.icecode.workbench.attachment;
 class AttachmentRecord {
 
     long id;
-    /** task / schedule_event / memo / knowledge_note / inbox_item；为 null 表示「已上传、还没绑定实体」 */
+    /** task / schedule_event / favorite / knowledge_note / inbox_item；为 null 表示「已上传、还没绑定实体」 */
     String ownerType;
     Long ownerId;
     /** 落盘文件名（sha256 前 16 位 + 后缀），永不来自用户原文件名 */

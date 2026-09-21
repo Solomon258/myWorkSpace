@@ -220,7 +220,7 @@ class TaskFlowTest {
     /**
      * 创建时留空 → 按关键词自动判定；显式传 life → 用传进来的值。
      *
-     * <p>判定复用 {@code MemoService.autoGroup}（工作关键词命中判 work，否则 life），
+     * <p>判定复用 {@code FavoriteService.autoGroup}（工作关键词命中判 work，否则 life），
      * 也就是**判定规则只有一份实现**。这里两条例子里，「买奶粉」是生活、
      * 「评审方案」命中工作关键词 —— 如果哪天把判定抄成第二份，这两条会先红。</p>
      */

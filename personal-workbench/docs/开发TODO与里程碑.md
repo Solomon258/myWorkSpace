@@ -24,7 +24,7 @@
     ↓
 收集箱 → 整理 → 确认 → 任务（完整主链路）
     ↓
-每次只增加 1 个模块：日程 → 备忘 → 番茄/时间线
+每次只增加 1 个模块：日程 → 收藏 → 番茄/时间线
     ↓
 设置、备份、可选 AI/Obsidian
     ↓
@@ -49,7 +49,7 @@ Windows 免安装包 + 干净机验收
 | 核心 | 整理确认 | 是 |
 | 核心 | 任务 | 是 |
 | 增量 | 日程 | 是 |
-| 增量 | 备忘 | 是 |
+| 增量 | 收藏 | 是 |
 | 增量 | 时间线 | 是 |
 | 组件 | 番茄钟 | 是 |
 | 可选能力 | 外部 LLM 整理 | v1.0 建适配器但不作为启用前提；本地规则整理器始终可用 |
@@ -75,7 +75,7 @@ Windows 免安装包 + 干净机验收
 ### 1.2 当前缺失（更新于检查点 A）
 
 - M3 起的业务页面尚未连接真实后端接口
-- 任务、收集箱整理、日程、备忘、番茄钟、时间线和完整驾驶舱尚待开发
+- 任务、收集箱整理、日程、收藏、番茄钟、时间线和完整驾驶舱尚待开发
 - 没有裁剪后的 Windows JRE 8 运行时
 - 没有最终 ZIP
 
@@ -121,7 +121,7 @@ E:\4_code\myWorkspace\personal-workbench\
 | M3 | 任务与最小驾驶舱 | 页面能真实创建/流转/顺延任务 | 1.5 | M2 |
 | M4 | 收集箱与整理闭环 | 录入→整理→确认→任务完整跑通 | 2.0 | M3 |
 | M5 | 日程增量 | 日程 CRUD、按日展示、冲突警告 | 1.0 | M4 |
-| M6 | 备忘增量 | 工作/生活空间、检索、置顶、归档 | 1.0 | M5 |
+| M6 | 收藏增量 | 工作/生活空间、检索、置顶、归档 | 1.0 | M5 |
 | M7 | 番茄、时间线、完整驾驶舱 | 7 个页面模块全部真实化 | 1.0 | M6 |
 | M8 | 设置、备份与可选增强 | 自动备份、配置、AI/Obsidian 边界完成 | 1.5 | M7 |
 | M9 | Windows 免安装包与验收 | 可交给同事的 ZIP | 2.5 | M8 |
@@ -259,7 +259,7 @@ personal-workbench/
 - [x] `V1__init_schema.sql`：完整创建 12 张业务表
 - [x] `V2__add_index_and_config.sql`：索引和基础配置
 - [x] `V3__add_demo_markers.sql`：示例数据标记和索引
-- [x] 表：`inbox_item`、`task`、`schedule_event`、`memo`、`pomodoro`、`activity_log`
+- [x] 表：`inbox_item`、`task`、`schedule_event`、`favorite`、`pomodoro`、`activity_log`
 - [x] 表：`knowledge_note`、`daily_plan`、`daily_plan_item`、`wechat_msg_log`、`ai_job`、`app_config`
 - [x] 所有日期字段存统一文本格式，由 Java 侧生成
 - [x] 软删除、外键、CHECK、唯一约束、必要索引与开发文档一致
@@ -324,7 +324,7 @@ personal-workbench/
 - [x] 初始化成功后幂等写入 4 条收集箱条目
 - [x] 写入 4 条任务，其中 1 条逾期
 - [x] 写入 3 条今日日程
-- [x] 写入 4 条备忘
+- [x] 写入 4 条收藏
 - [x] 写入 3 条时间线示例
 - [x] 用户可见示例带 `is_demo=1`，支持后续精准清理
 - [x] 初始化重复调用不重复插入；部分写入状态会先清理示例再完整重建
@@ -421,7 +421,7 @@ personal-workbench/
 
 - [x] 将 demo 的 `aiClassify()` 规则移植到 Java
 - [x] 输出类别、置信度、结构化 payload
-- [x] 类别：task / schedule / memo；knowledge 已确认推迟到 v1.1
+- [x] 类别：task / schedule / favorite；knowledge 已确认推迟到 v1.1
 - [x] 时间表达解析至少支持：今天、明天、后天、下周、周几、上午/下午、HH:mm
 - [x] 置信度 `< 0.70` 标记待人工确认
 - [x] 整理失败只更新状态为 failed，原始内容不丢
@@ -430,11 +430,11 @@ personal-workbench/
 ## M4-T03 确认生成正式实体
 
 - [x] 用户可以修改类别和字段
-- [x] 改分类时按类别生成对应实体（confirm() 内按 category 分支建 task / schedule_event / memo / knowledge_note）
+- [x] 改分类时按类别生成对应实体（confirm() 内按 category 分支建 task / schedule_event / favorite / knowledge_note）
 - [x] 前端按类别联动显隐字段：优先级仅「任务」、日期仅「任务/日程」、开始时间仅「日程」（US-2.3 / 产品设计说明 P276；2026-09-11 补齐）
 - [x] 确认任务：插 task + 更新 inbox 状态为 archived
 - [x] 确认日程：插 schedule_event + 更新 inbox
-- [x] 确认备忘：插 memo + 更新 inbox
+- [x] 确认收藏：插 favorite + 更新 inbox
 - [x] 确认知识：不进 v1.0，待 v1.1 Vault 写入能力启用后再出现
 - [x] “更新 inbox + 生成实体”必须在同一事务
 - [x] 重复确认必须幂等，不能生成两个任务
@@ -562,11 +562,11 @@ personal-workbench/
 
 ---
 
-# M6：备忘增量
+# M6：收藏增量
 
 **目标**：实现工作/生活速查库。
 
-## M6-T01 备忘后端
+## M6-T01 收藏后端
 
 - [ ] 创建、修改、软删除
 - [ ] work / life 空间
@@ -578,7 +578,7 @@ personal-workbench/
 - [ ] 标题、内容、标签、URL 四字段 LIKE 检索
 - [ ] 排序：置顶在前，其余按更新时间倒序
 
-## M6-T02 备忘前端
+## M6-T02 收藏前端
 
 - [ ] 空间布局：全部独占首行，工作/生活次行并列
 - [ ] 容器色：全部 `#eef4fa`、工作 `#eaf3ed`、生活 `#fbede6`
@@ -730,7 +730,7 @@ personal-workbench/
 - [x] 建议运行时版本不低于已有 Docker 的 8u342 基线（8u504 > 8u342）
 - [x] 按开发文档 §0.4 分三档裁剪（裁剪后 94.1MB，存于 `dist/runtime/`）
 - [x] 禁止删 `java.sql`、安全证书、时区数据、XML 等运行必需内容（保留 server/jvm.dll、rt.jar、charsets.jar、sunec/sunjce、localedata/cldrdata）
-- [x] 裁剪后跑完整功能冒烟，不只跑 `java -version`（发布包冒烟：启动/迁移/初始化/备忘/时间线/关机全通过）
+- [x] 裁剪后跑完整功能冒烟，不只跑 `java -version`（发布包冒烟：启动/迁移/初始化/收藏/时间线/关机全通过）
 
 ## M9-T02 完成构建脚本
 
@@ -773,7 +773,7 @@ personal-workbench/
 - [x] Controller/API 测试通过
 - [x] 端到端主链路测试通过
 - [x] 首页本地加载 ≤ 1s（实测 **10.5ms**，发布包 + 正式 JVM 参数）
-- [x] 常规接口 P95 ≤ 300ms（实测驾驶舱 p95=**70ms**，memos/tasks/activity/settings p95 ≤70ms；Hikari 池化前驾驶舱曾达 2000ms，见决策 7）
+- [x] 常规接口 P95 ≤ 300ms（实测驾驶舱 p95=**70ms**，favorites/tasks/activity/settings p95 ≤70ms；Hikari 池化前驾驶舱曾达 2000ms，见决策 7）
 - [x] RSS ≤ 250MB（实测 **180.6MB**，-Xmx256m + MaxMetaspaceSize=128m + SerialGC）
 - [ ] 连续运行 24h 无 Metaspace OOM（留观察期）
 
@@ -792,7 +792,7 @@ personal-workbench/
 - [ ] ≤60s 打开首次配置
 - [ ] 初始化
 - [ ] 录入 → 整理 → 确认 → 生成任务
-- [ ] 创建备忘和日程
+- [ ] 创建收藏和日程
 - [ ] 完成一个番茄
 - [ ] 停止、重启，数据仍在
 - [ ] 手动备份并恢复
@@ -892,7 +892,7 @@ personal-workbench/
 │       │   ├── inbox/
 │       │   ├── task/
 │       │   ├── schedule/
-│       │   ├── memo/
+│       │   ├── favorite/
 │       │   ├── pomodoro/
 │       │   ├── timeline/
 │       │   ├── setting/
@@ -961,7 +961,7 @@ personal-workbench/
 ### 决策 2：Obsidian 写入是否进入 v1.0 — **已确认 A**
 
 - v1.0 只保留配置字段和扩展接口，实际 Vault 写入放 v1.1。
-- v1.0 整理类别只有 task / schedule / memo。
+- v1.0 整理类别只有 task / schedule / favorite。
 - 原因：普通同事首选版本不依赖 Obsidian，优先保证核心模块和备份可靠。
 
 ### 决策 3：开发构建环境 — **已确认**
@@ -979,8 +979,8 @@ personal-workbench/
 
 - 用户明确要求“去掉所有时区相关的功能”。已移除：首次配置页的时区选择、设置页的时区卡片、`PUT /api/v1/settings/timezone` 端点、`SettingsVO.timezone` 字段、顶栏“用户名 · 时区”中的时区部分。
 - 内部日期边界仍固定使用 `Asia/Shanghai`（`InitRequest.timezone` 默认值），仅作为不可见的内部机制，不暴露任何设置入口。
-- 同批 UI 反馈已落实：日程支持编辑（复用既有 PATCH 接口）；时间线改为原型方案 A（渐变脊柱纵轴 + 左右交错发光节点）；备忘“全部”独占首行、“工作/生活”次行各占一半占满整行；“显示已归档”勾选框样式修复；番茄钟入口改为顶栏深色芯片 + 居中蒙层科幻面板（含进度环），与原型 `demo/index.html` 一致。
-- 后续追加（2026-09-08 晚）：① 设置从页签栏移至右上角齿轮按钮（data-tab="settings" 保留冒烟配对，激活态蓝底）；② 备忘空间工作/生活固定同一行，备忘卡片按分类着色（工作绿/生活暖，左色条 + 渐变晕染 + 类型 pill）；③ 时间线备忘节点按分类着色（memo:work 绿 / memo:life 暖），activity_log 经 V4 迁移增加 category 列；④ 设置页 SaaS 化重构（图标分区卡 + 标签化字段 + 危险红卡）；⑤ 备忘卡片美化（柔和阴影、悬停浮起、操作按钮头部右侧幽灵样式悬停浮现、链接芯片化）。
+- 同批 UI 反馈已落实：日程支持编辑（复用既有 PATCH 接口）；时间线改为原型方案 A（渐变脊柱纵轴 + 左右交错发光节点）；收藏“全部”独占首行、“工作/生活”次行各占一半占满整行；“显示已归档”勾选框样式修复；番茄钟入口改为顶栏深色芯片 + 居中蒙层科幻面板（含进度环），与原型 `demo/index.html` 一致。
+- 后续追加（2026-09-08 晚）：① 设置从页签栏移至右上角齿轮按钮（data-tab="settings" 保留冒烟配对，激活态蓝底）；② 收藏空间工作/生活固定同一行，收藏卡片按分类着色（工作绿/生活暖，左色条 + 渐变晕染 + 类型 pill）；③ 时间线收藏节点按分类着色（favorite:work 绿 / favorite:life 暖），activity_log 经 V4 迁移增加 category 列；④ 设置页 SaaS 化重构（图标分区卡 + 标签化字段 + 危险红卡）；⑤ 收藏卡片美化（柔和阴影、悬停浮起、操作按钮头部右侧幽灵样式悬停浮现、链接芯片化）。
 
 ### 决策 7：SQLite 改为 HikariCP 连接池 — **已实施（2026-09-08）**
 

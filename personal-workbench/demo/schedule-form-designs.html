@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>日程新增表单 · 视觉与对齐方案（设计稿）</title>
+<!--
+  ⚠️ 这是**设计稿**，不是产品代码。未改动 server/src/main/resources/static/ 下任何文件。
+  「现状」面板里的 CSS 是从 style.css 原样抄来的（composer / c-row / tp / media-row），
+  目的是让问题可见；三套候选方案全部复用项目既有 design token，可直接落地。
+-->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f3f6fa;--surface:#fff;--surface2:#edf3f9;--border:#dfe7ef;--text:#263142;--muted:#63748a;
+  --blue:#4f79a9;--blue-dark:#315f94;--red:#a32d2d;--amber:#a96c1d;--green:#39745b;--r:13px;--placeholder:#8fa0b3;
+  --ai-blue:#0F9BFF;--ai-blue-deep:#0A76CC;--ai-blue-soft:#EAF6FF;--ai-blue-tint:#D6EDFF;--ai-blue-line:#A9DBFF;
+  --ev-meeting-bg:#eaf7f2;--ev-meeting-line:#9fe1cb;--ev-meeting-bar:#1d9e75;--ev-meeting-tx:#04342c;
+  --ev-deep-bg:#eaf3fc;--ev-deep-line:#b5d4f4;--ev-deep-bar:#378add;--ev-deep-tx:#042c53;
+  --ev-other-bg:#f7f6f2;--ev-other-line:#d3d1c7;--ev-other-bar:#888780;--ev-other-tx:#2c2c2a;
+  --warn:#d63a3a;
+}
+body{background:var(--bg);color:var(--text);line-height:1.55;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Microsoft YaHei",sans-serif}
+.page{max-width:1200px;margin:auto;padding:26px 26px 60px}
+h1{font-size:23px;font-weight:650;letter-spacing:-.3px}
+h2{font-size:16px;font-weight:650}
+p{font-size:13px;color:var(--muted)}
+
+/* ---------- 页头 ---------- */
+.intro{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:16px}
+.intro .lead{margin-top:6px;max-width:640px}
+.switcher{display:flex;gap:6px;padding:5px;background:#fff;border:1px solid var(--border);border-radius:13px;flex:none}
+.switcher button{border:0;background:transparent;border-radius:9px;padding:8px 14px;color:var(--muted);
+  font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.switcher button.active{background:#e9f1fa;color:var(--blue-dark);font-weight:600}
+
+/* ---------- 工具条 ---------- */
+.toolbar{display:flex;align-items:center;gap:16px;background:#fff;border:1px solid var(--border);
+  border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:12.5px;color:var(--muted)}
+.toolbar label{display:inline-flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
+.toolbar input{width:auto;min-height:auto;margin:0}
+.toolbar .kbd{font-size:11.5px;padding:2px 7px;border-radius:99px;background:var(--surface2);color:var(--muted)}
+.toolbar .sp{flex:1}
+
+/* ---------- 方案说明条 ---------- */
+.note{display:flex;align-items:center;justify-content:space-between;gap:20px;background:#fff;
+  border:1px solid var(--border);border-radius:14px;padding:13px 16px;margin-bottom:14px}
+.note strong{font-size:14px}
+.note span.d{font-size:12px;color:var(--muted)}
+.traits{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.traits i{font-style:normal;font-size:11px;padding:3px 9px;border-radius:999px;background:var(--surface2);color:#616670}
+.traits i.rec{background:#e6f2ec;color:var(--green);font-weight:600}
+
+/* ---------- 视图切换 ---------- */
+.view{display:none}.view.active{display:block}
+
+/* ---------- 舞台（模拟 .app 内容区 1120px） ---------- */
+.stage{width:100%;max-width:1084px}
+.stage.guides :is(input,select,.tp,.tp-chips,.seg,.tset,.media-add,.media-attach){outline:1px dashed rgba(214,58,58,.5)}
+.stage.guides .c-label{outline:1px dashed rgba(214,58,58,.28)}
+
+/* ---------- 项目真实基础样式（照抄） ---------- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px}
+.row{display:flex;align-items:center;gap:10px}
+.btn{min-height:44px;border:1px solid #cbd8e6;border-radius:9px;background:#fff;color:#52657b;padding:8px 14px;
+  cursor:pointer;font:inherit;transition:background .16s,border-color .16s}
+.btn:hover{background:var(--surface2)}
+.btn.primary{background:var(--blue-dark);border-color:var(--blue-dark);color:#fff}
+.btn.primary:hover{background:#2a527f}
+.btn.sm{min-height:34px;padding:5px 10px;font-size:12px}
+.btn.danger{color:var(--red)}
+input,select,textarea{width:100%;min-height:44px;border:1px solid #ccd8e5;border-radius:9px;padding:10px 12px;
+  font-size:16px;color:var(--text);background:#fff;font-family:inherit}
+
+/* ===== 现状：composer / c-row / tp / media-row —— 原样照抄 style.css ===== */
+.now .composer{margin-bottom:14px}
+.now .composer-toggle{display:flex;align-items:center;gap:8px;width:100%;min-height:40px;padding:8px 14px;
+  border:1px dashed #c7d3e2;border-radius:11px;background:var(--surface);color:#5d6f86;font:inherit;font-size:13.5px;
+  cursor:pointer;text-align:left}
+.now .composer-toggle.open{border-style:solid;border-color:#dbe6f2;background:#f7f9fc;color:var(--blue-dark)}
+.now .composer-toggle .c-plus{font-size:17px;font-weight:500;line-height:1;color:#9aa8b8}
+.now .composer-toggle .c-sub{margin-left:auto;font-size:11.5px;color:#a9b4c2}
+.now .composer-toggle .c-caret{font-size:11px;color:#a9b4c2;transform:rotate(180deg)}
+.now .composer-body{display:grid;gap:9px;margin-top:10px;padding:14px 15px;background:#f7f9fc;
+  border:1px solid #e6edf5;border-radius:12px}
+.now .composer-body input,.now .composer-body select{min-height:38px;padding:7px 10px;font-size:13.5px}
+.now .composer-body .c-title{font-size:14px}
+.now .composer-body input:not([type=checkbox]):not([type=radio]),.now .composer-body select,
+.now .c-row input:not([type=checkbox]){border-color:var(--ai-blue-line)}
+.now .composer-body input:focus,.now .composer-body select:focus{outline:none;border-color:var(--ai-blue);
+  box-shadow:0 0 0 3px rgba(15,155,255,.14)}
+/* ↓↓↓ 这就是「元素未对齐」的现场：flex-wrap + 全部 width:auto ↓↓↓ */
+.now .composer-body .c-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.now .composer-body .c-row input:not([type=checkbox]),.now .composer-body .c-row select{width:auto}
+.now .composer-body .c-hint{margin:0;font-size:11.5px;color:#96a3b4;line-height:1.5}
+.now .media-row{display:flex;align-items:center;gap:7px;width:100%}
+.now .media-gap{flex:1;min-width:0}
+.now .media-row .btn{flex-shrink:0}
+.now .media-row .btn[data-media-extract]{border-color:var(--ai-blue-line);background:var(--ai-blue-soft);color:var(--ai-blue-deep)}
+.now .media-add{position:relative;width:34px;height:34px;flex:0 0 auto;display:grid;place-items:center;padding:0;
+  border:1px solid var(--ai-blue-line);border-radius:10px;background:var(--ai-blue-soft);color:var(--ai-blue-deep);
+  cursor:pointer;box-shadow:0 0 0 3px rgba(15,155,255,.10)}
+.now .media-add .media-ai{position:absolute;top:-5px;right:-6px;padding:1px 3px;border-radius:4px;
+  background:var(--ai-blue-deep);color:#fff;font-size:9px;font-weight:700;line-height:1.15;border:1.5px solid #fff}
+.now .media-attach{display:inline-flex;align-items:center;gap:5px;min-height:34px;padding:5px 10px;border:1px solid #cbd8e6;
+  border-radius:9px;background:#fff;color:#52657b;font:inherit;font-size:12px;cursor:pointer}
+.now .tp{display:inline-grid;gap:4px;flex-shrink:0;vertical-align:top;justify-items:stretch}
+.now .tp-chips{display:flex;gap:2px}
+.now .tp-chip{flex:1 1 0;min-width:22px;min-height:0;padding:1px 0;font-size:11px;line-height:1.5;cursor:pointer;
+  color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:5px}
+.now .tp-chip.active{background:#e7eef6;border-color:var(--blue);color:var(--blue-dark);font-weight:500}
+.now .q{width:24px;height:24px;flex:none;display:inline-flex;align-items:center;justify-content:center;border:0;
+  background:transparent;cursor:pointer;padding:0}
+.now .qi{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;
+  border:1px solid #c3cfdd;color:#8496ab;font-size:10.5px;line-height:1}
+
+/* ---------- 问题标注 ---------- */
+.pin{position:absolute;z-index:5;display:flex;align-items:center;gap:6px}
+.pin b{display:grid;place-items:center;width:19px;height:19px;border-radius:50%;background:var(--warn);color:#fff;
+  font-size:11px;font-weight:700;flex:none;box-shadow:0 1px 4px rgba(214,58,58,.4)}
+.pin em{font-style:normal;font-size:11.5px;color:var(--warn);background:#fff;border:1px solid #f0c9c9;
+  border-radius:6px;padding:2px 7px;white-space:nowrap}
+.mark{position:relative}
+.mark .ring{position:absolute;border:1.5px solid var(--warn);border-radius:11px;pointer-events:none}
+.legend{display:grid;gap:8px;margin-top:14px}
+.legend .li{display:flex;gap:9px;align-items:flex-start;background:#fff;border:1px solid var(--border);
+  border-left:3px solid var(--warn);border-radius:10px;padding:10px 13px}
+/* ⚠️ 必须是 > b（直接子元素）—— 写成后代选择器会把 .li 里所有 <b>（含小标题）一起
+   压成 19px 白字圆点，小标题直接消失。 */
+.legend .li > b{flex:none;display:grid;place-items:center;width:19px;height:19px;border-radius:50%;
+  background:var(--warn);color:#fff;font-size:11px;margin-top:1px}
+.legend .li div{font-size:12.5px;color:#3f4d5e}
+.legend .li div code{font-size:11.5px;background:#f1f5f9;padding:1px 5px;border-radius:4px;color:#5d6f86;
+  font-family:ui-monospace,Consolas,"Courier New",monospace}
+
+/* ============================================================
+   三套候选方案的公共控件（全部复用项目 token）
+   ============================================================ */
+/* 字段单元格：label 上置 + 控件，栅格对齐 */
+.c-grid{display:grid;gap:12px}
+.c-cell{display:grid;gap:6px;align-content:start;min-width:0}
+.c-label{font-size:11.5px;color:var(--muted);line-height:1.2;letter-spacing:.2px}
+.c-body input,.c-body select{min-height:38px;padding:7px 11px;font-size:13.5px;border-color:var(--ai-blue-line)}
+.c-body input:focus,.c-body select:focus{outline:none;border-color:var(--ai-blue);box-shadow:0 0 0 3px rgba(15,155,255,.14)}
+.c-body .c-hint{margin:0;font-size:11.5px;color:#96a3b4;line-height:1.5}
+
+/* 类型：分段控件（替代三选一下拉） */
+.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:3px;background:#eef3f9;
+  border:1px solid #e0e8f2;border-radius:10px;min-height:38px}
+.seg button{border:1px solid transparent;border-radius:7px;background:transparent;color:#5d6f86;font:inherit;
+  font-size:12.5px;cursor:pointer;padding:0 6px;display:flex;align-items:center;justify-content:center;gap:6px;transition:.15s}
+.seg button:hover{color:var(--blue-dark)}
+.seg button.on{background:#fff;color:var(--blue-dark);font-weight:600;border-color:#d7e3f0;box-shadow:0 1px 3px rgba(49,95,148,.10)}
+.seg button .dot{width:7px;height:7px;border-radius:2px;flex:none}
+.dot.m{background:var(--ev-meeting-bar)}.dot.d{background:var(--ev-deep-bar)}.dot.o{background:var(--ev-other-bar)}
+
+/* 时间组 */
+.tp{display:inline-grid;gap:4px;justify-items:stretch;min-width:0}
+.tp-chips{display:flex;gap:2px}
+.tp-chip{flex:1 1 0;min-width:22px;padding:1px 0;font-size:11px;line-height:1.5;cursor:pointer;color:var(--muted);
+  background:#fff;border:1px solid var(--border);border-radius:5px;font-family:inherit}
+.tp-chip:hover{border-color:var(--blue);color:var(--blue-dark)}
+.tp-chip.active{background:#e7eef6;border-color:var(--blue);color:var(--blue-dark);font-weight:500}
+
+/* 内联时间条（方案 C 的核心）：必须定义在**全局**，不能挂在 .pC 下 ——
+   编辑弹层不在 .pC 作用域里，挂上去弹层里 .tset 退化成 inline span，
+   时间框与 chips 会各占一行（第一版就踩到了）。 */
+.tset{display:flex;align-items:center;gap:5px;height:38px;flex:none}
+.tset input[type=time]{width:104px;height:38px;flex:none;padding:0 9px;font-size:13.5px;color:var(--text);
+  background:#fff;border:1px solid var(--ai-blue-line);border-radius:9px;margin:0}
+.tset input[type=time]:focus{outline:none;border-color:var(--ai-blue);box-shadow:0 0 0 3px rgba(15,155,255,.14)}
+.tset .tp-chips{flex:none}
+.tset .tp-chip{width:26px;min-width:26px;height:26px;flex:none;border-radius:6px}
+.dash{color:#a4b0be;font-size:13px;flex:none;padding:0 1px}
+.c-allin{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+
+/* 媒体行 */
+.media-row{display:flex;align-items:center;gap:7px;width:100%}
+.media-gap{flex:1;min-width:0}
+.media-add{position:relative;width:34px;height:34px;flex:0 0 auto;display:grid;place-items:center;padding:0;
+  border:1px solid var(--ai-blue-line);border-radius:10px;background:var(--ai-blue-soft);color:var(--ai-blue-deep);
+  cursor:pointer;box-shadow:0 0 0 3px rgba(15,155,255,.10)}
+.media-add .media-ai{position:absolute;top:-5px;right:-6px;padding:1px 3px;border-radius:4px;
+  background:var(--ai-blue-deep);color:#fff;font-size:9px;font-weight:700;line-height:1.15;border:1.5px solid #fff}
+.media-attach{display:inline-flex;align-items:center;gap:5px;min-height:34px;padding:5px 10px;border:1px solid #cbd8e6;
+  border-radius:9px;background:#fff;color:#52657b;font:inherit;font-size:12px;cursor:pointer}
+.media-attach:hover{background:var(--surface2)}
+.btn.ai{border-color:var(--ai-blue-line);background:var(--ai-blue-soft);color:var(--ai-blue-deep)}
+.btn.ai:hover{background:var(--ai-blue-tint);border-color:var(--ai-blue)}
+
+/* composer 外壳（三套共用，只有内部排布不同） */
+.composer-toggle{display:flex;align-items:center;gap:8px;width:100%;min-height:40px;padding:8px 14px;
+  border:1px solid #dbe6f2;border-radius:11px;background:#f7f9fc;color:var(--blue-dark);font:inherit;font-size:13.5px;
+  cursor:pointer;text-align:left}
+.composer-toggle .c-plus{font-size:17px;font-weight:500;line-height:1;color:#9aa8b8}
+.composer-toggle .c-sub{margin-left:auto;font-size:11.5px;color:#a9b4c2}
+.composer-toggle .c-caret{font-size:11px;color:#a9b4c2;transform:rotate(180deg)}
+.c-body{display:grid;margin-top:10px;padding:14px 15px;background:#f7f9fc;border:1px solid #e6edf5;border-radius:12px}
+.c-foot{display:flex;align-items:center;gap:10px}
+.c-foot .grow{flex:1;min-width:0}
+
+/* ===== 方案 A：字段栅格 ===== */
+.pA .c-body{gap:13px}
+/* 列宽写死而不是 1fr 等分：等分会把「日期」拉到 600px+，反而更丑。写死 + justify-content:start
+   → 列边界明确、控件宽度合理，右侧留白当呼吸。 */
+.pA .c-grid-3{grid-template-columns:340px 168px 186px;justify-content:start}
+.pA .c-grid-time{grid-template-columns:118px 118px minmax(0,1fr)}
+.pA .c-cell .tp{justify-self:start;width:118px}
+.pA .c-cell input[type=date],.pA .c-cell select{width:100%}
+.pA .c-title{font-size:14.5px;font-weight:500}
+.pA .c-foot .btn.primary{min-height:38px;padding:8px 22px;font-size:13.5px}
+.pA .c-foot .btn.ai,.pA .c-foot .media-attach{min-height:34px}
+
+/* ===== 方案 B：分组卡片 ===== */
+.pB .c-body{gap:10px;background:#f2f6fb;border-color:#e3ebf5}
+.pB .grp{background:#fff;border:1px solid #e6edf5;border-radius:11px;padding:12px 13px;display:grid;gap:10px}
+.pB .grp-h{display:flex;align-items:baseline;gap:8px}
+.pB .grp-h b{font-size:12px;color:#3f5872;font-weight:650}
+.pB .grp-h span{font-size:11px;color:#9aa8b8}
+.pB .c-grid-2{grid-template-columns:168px 220px;justify-content:start}
+.pB .c-grid-time{grid-template-columns:118px auto 118px;align-items:end;justify-content:start}
+.pB .c-cell .tp{justify-self:start;width:118px}
+.pB .seg{min-height:36px;max-width:340px}
+.pB .c-foot{padding-top:2px}
+.pB .c-foot .btn.primary{min-height:38px;padding:8px 22px;font-size:13.5px}
+.pB .c-title{font-size:14.5px;font-weight:500}
+/* 「至」不靠 margin 硬凑高度：用两行 grid —— 第一行占位、高度等于上面的 label（含间距），
+   第二行与时间框等高（38px）并居中。这样它与时间框严格同轴，改字号也不会错位。 */
+/* ⚠️ 「至」必须包在 <span> 里并显式 grid-row:2 —— grid 容器的**匿名文本项**会被自动
+   放到第一行，直接写裸文字的话它就跑到 label 那一行去了（第一版就是这样）。 */
+.pB .to-sep{align-self:start;display:grid;grid-template-rows:20px 38px;align-items:center;justify-items:center;
+  font-size:12px;color:#a4b0be}
+.pB .to-sep span{grid-row:2}
+
+/* ===== 方案 C：内联时间条 ===== */
+.pC .c-body{gap:12px}
+.pC .c-grid-main{grid-template-columns:minmax(240px,1fr) 152px 186px}
+.pC .c-grid-sub{grid-template-columns:auto auto minmax(0,1fr);align-items:end}
+.pC .tset{display:flex;align-items:center;gap:5px;height:38px}
+.pC .c-label-inline{font-size:11.5px;color:var(--muted);flex:none;padding-right:1px}
+.pC .tset input[type=time]{width:104px;height:38px;flex:none;padding:0 9px;font-size:13.5px;
+  border-color:var(--ai-blue-line);color:var(--text);background:#fff}
+.pC .tset input[type=time]:focus{outline:none;border-color:var(--ai-blue);box-shadow:0 0 0 3px rgba(15,155,255,.14)}
+.pC .tset .tp-chips{flex:none}
+.pC .tset .tp-chip{width:26px;min-width:26px;height:26px;flex:none;border-radius:6px}
+.pC .dash{color:#a4b0be;font-size:13px;flex:none;padding:0 1px}
+.pC .c-allin{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.pC .inline-field{display:flex;align-items:center;gap:6px}
+.pC .seg-inline{display:flex;gap:3px;padding:3px;background:#eef3f9;border:1px solid #e0e8f2;border-radius:10px;
+  height:38px;flex:none}
+.pC .seg-inline button{border:1px solid transparent;border-radius:7px;background:transparent;color:#5d6f86;font:inherit;
+  font-size:12.5px;padding:0 13px;cursor:pointer;display:flex;align-items:center;gap:6px;flex:none;white-space:nowrap}
+.pC .seg-inline button.on{background:#fff;color:var(--blue-dark);font-weight:600;border-color:#d7e3f0;box-shadow:0 1px 3px rgba(49,95,148,.10)}
+.pC .c-title{font-size:14.5px;font-weight:500}
+.pC .c-foot .btn.primary{min-height:38px;padding:8px 22px;font-size:13.5px}
+
+/* ---------- 编辑弹层（三套同源） ---------- */
+.mask{background:rgba(31,42,58,.34);border-radius:16px;padding:20px;display:flex;justify-content:center}
+.memo-modal{display:flex;flex-direction:column;width:min(660px,100%);background:var(--surface);border-radius:16px;
+  padding:16px 24px 18px;box-shadow:0 24px 64px rgba(38,49,66,.24)}
+.mm-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.mm-title{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.4px}
+.mm-x{width:32px;height:32px;border:0;border-radius:8px;background:transparent;color:#96a3b4;font-size:18px;
+  line-height:1;cursor:pointer}
+.mm-field{border-color:var(--border);border-radius:9px;color:var(--text);background:#fff;min-height:38px;
+  padding:0 11px;font-size:13px;outline:none}
+.mm-field:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(79,121,169,.13)}
+.mm-title-input{font-size:18px;font-weight:600;padding:10px 12px;margin-bottom:12px;min-height:0}
+.mm-note{margin:0 0 10px;font-size:11.5px;color:var(--muted);line-height:1.6}
+.mm-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:12px;border-top:1px solid #e6edf5;margin-top:auto}
+.mm-btns{margin-left:auto;display:flex;gap:8px}
+
+/* 弹层 · 现状 */
+.eNow .mm-row{display:grid;grid-template-columns:minmax(0,1fr) 118px;gap:10px;margin-bottom:12px}
+.eNow .mm-cell{display:block}
+.eNow .mm-label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:5px}
+.eNow .mm-row .mm-field{height:38px}
+.eNow .mm-row.mm-even{grid-template-columns:repeat(2,minmax(0,1fr))}
+.eNow .tp{justify-self:stretch;width:100%}
+
+/* 弹层 · 方案 A' */
+/* ⚠️ 列宽是按**内容宽**算的：.memo-modal 是 660px 的 border-box，减两侧 24px padding 只剩 564px，
+   再减 12px×2 的 gap 才是三列可用的 540px。类型列必须 ≥206px（三段按钮里「深度块」最宽，
+   圆点 7 + 缝 6 + 三字 37.5 + 内边距 12 ≈ 62.5px/段 ×3 + 段间隙），否则会折成「深/度/块」。 */
+.mm-grid{display:grid;gap:12px;margin-bottom:12px}
+.eA .mm-3{grid-template-columns:minmax(0,1fr) 146px 164px}
+.eA .mm-2{grid-template-columns:150px 150px minmax(0,1fr);align-items:end}
+.eA .mm-cell{display:grid;gap:5px;align-content:start;min-width:0}
+.eA .mm-cell .tp{justify-self:start;width:150px}
+.eA .mm-field{width:100%}
+.eA .mm-row-sep,.eB .mm-row-sep{align-self:start;display:grid;grid-template-rows:23px 38px;align-items:center;
+  justify-items:center;font-size:12px;color:#a4b0be}
+.eA .mm-row-sep span,.eB .mm-row-sep span{grid-row:2}
+/* cell 已用 gap 排间距，再把 .mm-label 自带的 margin-bottom 归零，否则 label 与控件的间距会变成 10px
+   （5px margin + 5px gap），上面那条 23px 的占位就对不上了。 */
+.eA .mm-cell .mm-label,.eB .mm-cell .mm-label,.eC .mm-cell .mm-label{margin-bottom:0}
+
+/* 弹层 · 方案 B' */
+.eB .mm-grp{background:#f7fafd;border:1px solid #e8eef6;border-radius:11px;padding:11px 12px;margin-bottom:10px;display:grid;gap:9px}
+.eB .mm-grp-h{font-size:11.5px;color:#7b8a9d;font-weight:600;letter-spacing:.3px}
+.eB .mm-2{grid-template-columns:156px minmax(0,1fr)}
+.eB .mm-3{grid-template-columns:150px auto 150px;align-items:end;justify-content:start}
+.eB .mm-cell{display:grid;gap:5px;align-content:start;min-width:0}
+.eB .mm-cell .tp{justify-self:start;width:150px}
+/* .eB .mm-row-sep 不留重复定义：同特异性下后定义的会覆盖回 align-self:end，「至」就又掉到 chips 行了 */
+
+/* 弹层 · 方案 C（内联时间条）。三列是「日期 / 重复 / 类型」，与 A 的顺序不同，
+   所以单独一套列宽 —— 类型列必须给足，否则三段按钮里的「深度块」会折成三行。 */
+/* .mm-grid 的 display:grid 已提到公共段（见上），这里只列方案 C 自己的列宽。 */
+.eC .mm-3{grid-template-columns:146px 164px minmax(0,1fr)}
+.eC .mm-cell{display:grid;gap:5px;align-content:start;min-width:0}
+.eC .mm-field{width:100%}
+.eC .mm-time-row{grid-template-columns:minmax(0,1fr)}
+.eC .seg{min-height:38px}
+
+/* ---------- 对比表 ---------- */
+.table-wrap{margin-top:26px;background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:10px 14px;text-align:left;border-bottom:1px solid #eef2f7;vertical-align:top}
+th{background:#f7fafd;font-size:11.5px;color:var(--muted);font-weight:600;letter-spacing:.3px;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td b{color:var(--blue-dark)}
+.yes{color:var(--green);font-weight:600}
+.no{color:var(--warn);font-weight:600}
+.mid{color:var(--amber);font-weight:600}
+.sec-h{display:flex;align-items:center;gap:10px;margin:26px 0 12px}
+.sec-h h2{font-size:15px}
+.sec-h .line{flex:1;height:1px;background:var(--border)}
+.hint-box{background:#fffaf0;border:1px solid #f0e0c0;border-radius:12px;padding:13px 16px;margin-top:16px;font-size:12.5px;color:#7a5c22}
+.hint-box b{color:#8a4e0b}
+@media(max-width:900px){
+  .intro{flex-direction:column;align-items:flex-start}
+  .note{flex-direction:column;align-items:flex-start}
+  .traits{justify-content:flex-start}
+  .pA .c-grid-3,.pB .c-grid-2,.pC .c-grid-main,.eA .mm-3,.eB .mm-2{grid-template-columns:minmax(0,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="intro">
+    <div>
+      <h1>日程新增表单 · 视觉与对齐方案</h1>
+      <p class="lead">这是<b>纯设计稿</b>，尚未改动任何产品代码。左侧「现状」面板用的是 <code>style.css</code> 里 <b>原样抄来的</b> composer / c-row / tp 规则，所以问题是真的；右边三套候选全部复用项目既有 token，可直接落地。</p>
+    </div>
+    <div class="switcher">
+      <button class="active" data-v="now">现状 · 问题</button>
+      <button data-v="a">A 字段栅格</button>
+      <button data-v="b">B 分组卡片</button>
+      <button data-v="c">C 内联时间条</button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <label><input type="checkbox" id="guides"> 显示控件外框（对齐基准线）</label>
+    <span class="sp"></span>
+    <span class="kbd">内容区宽度 1084px（＝ .app 1120px − 两侧 padding）</span>
+  </div>
+
+  <!-- ==================== 现状 ==================== -->
+  <section class="view active" id="v-now">
+    <div class="note">
+      <div><strong>现状 · 日程新增（展开态）</strong><br><span class="d">实测：五个控件合计只占 550px，容器 1018px，右侧空出 <b>436px</b>；时间组（63px 高）比同行控件（38px）高出 <b>25px</b>，顶边与底边都参差。</span></div>
+      <div class="traits"><i>flex-wrap</i><i>width:auto</i><i>无字段标签</i><i>主按钮被淹没</i></div>
+    </div>
+
+    <div class="stage now">
+      <article class="card">
+        <div class="row" style="align-items:flex-start">
+          <section class="composer" style="flex:1;min-width:0;margin-bottom:0">
+            <button class="composer-toggle open" type="button">
+              <span class="c-plus">＋</span><span>加入日程</span>
+              <span class="c-sub">回车快速加入</span><span class="c-caret">▾</span>
+            </button>
+            <div class="composer-body">
+              <input class="c-title" value="产品评审会" maxlength="200">
+              <div class="c-row mark" data-marks>
+                <select><option>会议</option><option>深度块</option><option>其他</option></select>
+                <span class="tp"><input type="time" value="15:00"><span class="tp-chips"><button class="tp-chip">00</button><button class="tp-chip">15</button><button class="tp-chip active">30</button><button class="tp-chip">45</button></span></span>
+                <span class="tp"><input type="time" value="16:00"><span class="tp-chips"><button class="tp-chip">00</button><button class="tp-chip">15</button><button class="tp-chip active">30</button><button class="tp-chip">45</button></span></span>
+                <input type="date" value="2026-09-20">
+                <select><option>不重复</option><option>每周 · 连续 4 周</option></select>
+              </div>
+              <div class="media-row">
+                <button class="media-add" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg><span class="media-ai">AI</span></button>
+                <span class="media-gap"></span>
+                <button class="media-attach" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>附件</button>
+                <button class="btn" type="button" data-media-extract style="min-height:34px;padding:5px 10px;font-size:12px">识别填表</button>
+                <button class="btn primary" type="button" style="min-height:34px;padding:5px 10px;font-size:12px">加入</button>
+                <button class="q" type="button"><span class="qi">?</span></button>
+              </div>
+              <p class="c-hint">日期默认填今天；清空日期则生成待定日程，它会落到下面的「待定时间」区。<button class="q" type="button" style="vertical-align:middle"><span class="qi">?</span></button></p>
+            </div>
+          </section>
+          <button class="btn" type="button" style="min-height:44px;width:44px;padding:0;display:grid;place-items:center;flex:none">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.6 15.6 21 21"></path></svg>
+          </button>
+        </div>
+      </article>
+    </div>
+
+    <p style="font-size:12.5px;color:var(--muted);margin:16px 0 8px">
+      实测（下方 shot-log 同源）：五个控件宽度 83/94/94/144/135px，合计 550px，容器 1018px →
+      <b style="color:var(--warn)">右侧空 436px</b>；控件的顶边跨度 <b style="color:var(--warn)">13px</b>、底边跨度
+      <b style="color:var(--warn)">12px</b> —— 图上 ①②③ 打点处即对应下面这几条：
+    </p>
+    <div class="legend">
+      <div class="li"><b>1</b><div><b>没有字段标签</b>：类型 / 开始 / 结束 / 日期 / 重复 全靠位置猜。两个 <code>type=time</code> 长得一模一样，看不出哪个是开始、哪个是结束。这是「看不清」的第一来源，也最容易填错。</div></div>
+      <div class="li"><b>2</b><div><b>高度不齐</b>：<code>.tp</code> 是 <code>inline-grid</code>，里面是「时间框 + 一排 chips」两行，实测高 <b>63px</b>，旁边的 select / date 只有 <b>38px</b>。父级 <code>align-items:center</code> 让同行控件垂直居中，于是时间组上下各凸出一截 —— 实测这一行控件的<b>顶边跨度 13px、底边跨度 12px</b>。</div></div>
+      <div class="li"><b>3</b><div><b>宽度各行其是</b>：<code>.c-row</code> 是 <code>flex-wrap</code> + 全部 <code>width:auto</code>。实测五档宽度依次是 <b>83 / 94 / 94 / 144 / 135px</b>（「会议」83px、「不重复」135px）—— 按内容宽度贴左排完只占 <b>550px</b>，<b>右侧空出 436px</b>，整行进不了栅格。</div></div>
+      <div class="li"><b>4</b><div><b>折行点随机</b>：因为是 <code>flex-wrap</code>，窗口一窄就在任意位置断开，可能断在「开始 / 结束」中间，把一段时间拆到两行。布局不可预测。</div></div>
+      <div class="li"><b>5</b><div><b>主按钮被淹没</b>：「加入」和 ＋AI / 附件 / 识别填表 / 问号 挤在同一行，字号、高度全一样（34px），视觉上没有主次，回车之外的点击路径很难一眼找到。</div></div>
+      <div class="li"><b>6</b><div><b>编辑弹层同样的问题</b>：<code>.mm-row.mm-even</code> 是「两列等宽」，「类型」只有三个短选项却占掉半行；「开始 / 结束」那行又因为 <code>.tp</code> 比「类型 / 日期」行高，两行不等高。</div></div>
+    </div>
+
+    <div class="sec-h"><h2>编辑弹层 · 现状</h2><span class="line"></span></div>
+    <div class="mask eNow" style="max-width:1084px">
+      <div class="memo-modal">
+        <div class="mm-head"><span class="mm-title">编辑日程</span><button class="mm-x" type="button">×</button></div>
+        <input class="mm-field mm-title-input" value="产品评审会">
+        <div class="mm-row mm-even">
+          <label class="mm-cell"><span class="mm-label">类型</span><select class="mm-field"><option>会议</option><option>深度块</option><option>其他</option></select></label>
+          <label class="mm-cell"><span class="mm-label">日期</span><input class="mm-field" type="date" value="2026-09-20"></label>
+        </div>
+        <div class="mm-row mm-even">
+          <label class="mm-cell"><span class="mm-label">开始</span><span class="tp"><input class="mm-field" type="time" value="15:00"><span class="tp-chips"><button class="tp-chip">00</button><button class="tp-chip">15</button><button class="tp-chip active">30</button><button class="tp-chip">45</button></span></span></label>
+          <label class="mm-cell"><span class="mm-label">结束</span><span class="tp"><input class="mm-field" type="time" value="16:00"><span class="tp-chips"><button class="tp-chip">00</button><button class="tp-chip">15</button><button class="tp-chip active">30</button><button class="tp-chip">45</button></span></span></label>
+        </div>
+        <p class="mm-note">清空日期会把它放回「待定时间」区。</p>
+        <div class="mm-foot">
+          <span></span>
+          <button class="btn sm danger" type="button">删除</button>
+          <span class="mm-btns"><button class="btn sm" type="button">取消</button><button class="btn sm primary" type="button">保存日程</button></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 方案 A ==================== -->
+  <section class="view" id="v-a">
+    <div class="note">
+      <div><strong>A · 字段栅格 / Aligned Grid</strong><br><span class="d">把 c-row 从 flex-wrap 换成三列栅格，每个字段配上标签、统一 38px 高度与受控宽度；主按钮独立到右下角。改动最小，直击「不齐」。</span></div>
+      <div class="traits"><i class="rec">推荐</i><i>纯 CSS</i><i>JS 零改动</i><i>标签齐备</i></div>
+    </div>
+
+    <div class="stage pA">
+      <article class="card">
+        <div class="row" style="align-items:flex-start">
+          <section class="composer" style="flex:1;min-width:0">
+            <button class="composer-toggle" type="button">
+              <span class="c-plus">＋</span><span>加入日程</span>
+              <span class="c-sub">回车快速加入</span><span class="c-caret">▾</span>
+            </button>
+            <div class="c-body">
+              <div class="c-cell"><span class="c-label">日程标题</span><input class="c-title" value="产品评审会" placeholder="日程标题，回车加入"></div>
+              <div class="c-grid c-grid-3">
+                <div class="c-cell">
+                  <span class="c-label">类型</span>
+                  <div class="seg" data-seg>
+                    <button class="on" type="button"><span class="dot m"></span>会议</button>
+                    <button type="button"><span class="dot d"></span>深度块</button>
+                    <button type="button"><span class="dot o"></span>其他</button>
+                  </div>
+                </div>
+                <div class="c-cell"><span class="c-label">日期</span><input type="date" value="2026-09-20"></div>
+                <div class="c-cell"><span class="c-label">重复</span><select><option>不重复</option><option>每周 · 连续 4 周</option></select></div>
+              </div>
+              <div class="c-grid c-grid-time">
+                <div class="c-cell"><span class="c-label">开始</span><span class="tp"><input type="time" value="15:00"><span class="tp-chips" data-chips><button class="tp-chip">00</button><button class="tp-chip">15</button><button class="tp-chip active">30</button><button class="tp-chip">45</button></span></span></div>
+                <div class="c-cell"><span class="c-label">结束</span><span class="tp"><input type="time" value="16:00"><span class="tp-chips" data-chips><button class="tp-chip">00</button><button class="tp-chip">15</button><button class="tp-chip active">30</button><button class="tp-chip">45</button></span></span></div>
+                <div class="c-cell">
+                  <span class="c-label">图片与附件 <span style="color:#b6c2cf">（可拖入 / 粘贴）</span></span>
+                  <div class="media-row">
+                    <button class="media-add" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg><span class="media-ai">AI</span></button>
+                    <button class="media-attach" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>附件</button>
+                    <button class="btn ai" type="button" style="min-height:34px;padding:5px 11px;font-size:12px">识别填表</button>
+                  </div>
+                </div>
+              </div>
+              <p class="c-hint">日期默认填今天；清空日期则生成待定日程，它会落到下面的「待定时间」区。时间重叠只提醒，不阻止保存。</p>
+              <div class="c-foot">
+                <span class="grow"></span>
+                <button class="btn" type="button" style="min-height:38px">清空</button>
+                <button class="btn primary" type="button">加入日程</button>
+              </div>
+            </div>
+          </section>
+          <button class="btn" type="button" style="min-height:44px;width:44px;padding:0;display:grid;place-items:center;flex:none">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.6 15.6 21 21"></path></svg>
+          </button>
+        </div>
+      </article>
+    </div>
+
+    <div class="sec-h"><h2>方案 A · 编辑弹层（同源）</h2><span class="line"></span></div>
+    <div class="mask eA" style="max-width:1084px">
+      <div class="memo-modal">
+        <div class="mm-head"><span class="mm-title">编辑日程</span><button class="mm-x" type="button">×</button></div>
+        <input class="mm-field mm-title-input" value="产品评审会">
+        <div class="mm-grid mm-3">
+          <div class="mm-cell">
+            <span class="mm-label">类型</span>
+            <div class="seg" data-seg style="min-height:36px">
+              <button class="on" type="button"><span class="dot m"></span>会议</button>
+              <button type="button"><span class="dot d"></span>深度块</button>
+              <button type="button"><span class="dot o"></span>其他</button>
+            </div>
+          </div>
+          <div class="mm-cell"><span class="mm-label">日期</span><input class="mm-field" type="date" value="2026-09-20"></div>
+          <div class="mm-cell"><span class="mm-label">重复</span><select class="mm-field"><option>不重复</option><option>每周 · 连续 4 周</option></select></div>
+        </div>
+        <div class="mm-grid mm-2">
+          <div class="mm-cell"><span class="mm-label">开始</span><span class="tp"><input class="mm-field" type="time" value="15:00"><span class="tp-chips" data-chips><button class="tp-chip">00</button><button class="tp-chip">15</button><button class="tp-chip active">30</button><button class="tp-chip">45</button></span></span></div>
+          <div class="mm-cell"><span class="mm-label">结束</span><span class="tp"><input class="mm-field" type="time" value="16:00"><span class="tp-chips" data-chips><button class="tp-chip">00</button><button class="tp-chip">15</button><button class="tp-chip active">30</button><button class="tp-chip">45</button></span></span></div>
+          <div class="mm-cell"><span class="mm-label">附件 <span style="color:#b6c2cf">改动即时生效</span></span><button class="media-attach" type="button" style="height:38px;width:100%;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>添加附件</button></div>
+        </div>
+        <p class="mm-note">清空日期会把它放回「待定时间」区。</p>
+        <div class="mm-foot">
+          <button class="btn sm" type="button" style="border-color:transparent;background:transparent;color:#8a94a6">移至</button>
+          <button class="btn sm danger" type="button">删除</button>
+          <span class="mm-btns"><button class="btn sm" type="button">取消</button><button class="btn sm primary" type="button">保存日程</button></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend" style="margin-top:20px">
+      <div class="li" style="border-left-color:var(--green)"><b style="background:var(--green)">✓</b><div><b>对齐怎么解决的</b>：<code>.c-row</code> 改为 <code>display:grid</code> 三列（<code>1fr 168px 186px</code>），列宽由栅格决定而不是内容决定 → 五个控件有了共同的列边界；每个字段加 <code>.c-label</code> 占同一行高 → 顶边严格齐平。</div></div>
+      <div class="li" style="border-left-color:var(--green)"><b style="background:var(--green)">✓</b><div><b>时间组不再撑高同行</b>：时间单独占一行（不跟 select / date 混排），并且固定 <code>118px</code> 宽，chips 与时间框严格同宽。同一行只有「开始 / 结束 / 媒体区」三格，两个时间格内容等高，天然齐平。</div></div>
+      <div class="li" style="border-left-color:var(--green)"><b style="background:var(--green)">✓</b><div><b>类型换成三段控件</b>：三选一用按钮组替代下拉，少一次点击、选项常显，并且用日程卡片的类型色（绿 / 蓝 / 灰）做小方块，跟周视图里的卡片颜色对上。</div></div>
+      <div class="li" style="border-left-color:var(--green)"><b style="background:var(--green)">✓</b><div><b>主按钮有了位置</b>：「加入日程」独立成底栏右侧的主按钮（<code>.btn.primary</code>），左侧放次要动作。回车提交与点击提交都保留。</div></div>
+      <div class="li" style="border-left-color:var(--amber)"><b style="background:var(--amber)">!</b><div><b>代价</b>：实测展开区 <b>340px</b>，比现状（216px）高 <b>124px</b> —— 多了一行标签 + 一行底栏。换来的是「一眼看清 + 不会填错」。窄屏（≤640px）栅格自动塌回单列。</div></div>
+    </div>
+  </section>
+
+  <!-- ==================== 方案 B ==================== -->
+  <section class="view" id="v-b">
+    <div class="note">
+      <div><strong>B · 分组卡片 / Grouped Cards</strong><br><span class="d">按语义把表单切成「做什么 / 什么时候 / 附带什么」三张浅底小卡，每组自带标题与副说明。信息层级最强，也最耐扩展。</span></div>
+      <div class="traits"><i>视觉最好</i><i>层级清晰</i><i>占高最大</i><i>易扩展</i></div>
+    </div>
+
+    <div class="stage pB">
+      <article class="card">
+        <div class="row" style="align-items:flex-start">
+          <section class="composer" style="flex:1;min-width:0">
+            <button class="composer-toggle" type="button">
+              <span class="c-plus">＋</span><span>加入日程</span>
+              <span class="c-sub">回车快速加入</span><span class="c-caret">▾</span>
+            </button>
+            <div class="c-body">
+              <div class="grp">
+                <div class="grp-h"><b>做什么</b><span>先说清楚这件事</span></div>
+                <input class="c-title" value="产品评审会" placeholder="日程标题，回车加入">
+                <div class="seg" data-seg>
+                  <button class="on" type="button"><span class="dot m"></span>会议</button>
+                  <button type="button"><span class="dot d"></span>深度块</button>
+                  <button type="button"><span class="dot o"></span>其他</button>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-h"><b>什么时候</b><span>日期留空 = 先进「待定时间」</span></div>
+                <div class="c-grid c-grid-2">
+                  <div class="c-cell"><span class="c-label">日期</span><input type="date" value="2026-09-20"></div>
+                  <div class="c-cell"><span class="c-label">重复</span><select><option>不重复</option><option>每周 · 连续 4 周</option></select></div>
+                </div>
+                <div class="c-grid c-grid-time">
+                  <div class="c-cell"><span class="c-label">开始</span><span class="tp"><input type="time" value="15:00"><span class="tp-chips" data-chips><button class="tp-chip">00</button><button class="tp-chip">15</button><button class="tp-chip active">30</button><button class="tp-chip">45</button></span></span></div>
+                  <div class="to-sep"><span>至</span></div>
+                  <div class="c-cell"><span class="c-label">结束</span><span class="tp"><input type="time" value="16:00"><span class="tp-chips" data-chips><button class="tp-chip">00</button><button class="tp-chip">15</button><button class="tp-chip active">30</button><button class="tp-chip">45</button></span></span></div>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-h"><b>附带什么</b><span>图片可直接拖进来或粘贴</span></div>
+                <div class="media-row">
+                  <button class="media-add" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg><span class="media-ai">AI</span></button>
+                  <button class="media-attach" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>附件</button>
+                  <button class="btn ai" type="button" style="min-height:34px;padding:5px 11px;font-size:12px">识别填表</button>
+                </div>
+              </div>
+              <div class="c-foot">
+                <p class="c-hint" style="flex:1">时间重叠只提醒，不阻止保存。</p>
+                <button class="btn primary" type="button">加入日程</button>
+              </div>
+            </div>
+          </section>
+          <button class="btn" type="button" style="min-height:44px;width:44px;padding:0;display:grid;place-items:center;flex:none">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.6 15.6 21 21"></path></svg>
+          </button>
+        </div>
+      </article>
+    </div>
+
+    <div class="sec-h"><h2>方案 B · 编辑弹层（同源）</h2><span class="line"></span></div>
+    <div class="mask eB" style="max-width:1084px">
+      <div class="memo-modal">
+        <div class="mm-head"><span class="mm-title">编辑日程</span><button class="mm-x" type="button">×</button></div>
+        <input class="mm-field mm-title-input" value="产品评审会">
+        <div class="mm-grp">
+          <div class="mm-grp-h">什么时候</div>
+          <div class="mm-grid mm-2">
+            <div class="mm-cell"><span class="mm-label">日期</span><input class="mm-field" type="date" value="2026-09-20"></div>
+            <div class="mm-cell"><span class="mm-label">重复</span><select class="mm-field"><option>不重复</option><option>每周 · 连续 4 周</option></select></div>
+          </div>
+          <div class="mm-grid mm-3">
+            <div class="mm-cell"><span class="mm-label">开始</span><span class="tp"><input class="mm-field" type="time" value="15:00"><span class="tp-chips" data-chips><button class="tp-chip">00</button><button class="tp-chip">15</button><button class="tp-chip active">30</button><button class="tp-chip">45</button></span></span></div>
+            <div class="mm-row-sep"><span>至</span></div>
+            <div class="mm-cell"><span class="mm-label">结束</span><span class="tp"><input class="mm-field" type="time" value="16:00"><span class="tp-chips" data-chips><button class="tp-chip">00</button><button class="tp-chip">15</button><button class="tp-chip active">30</button><button class="tp-chip">45</button></span></span></div>
+          </div>
+        </div>
+        <div class="mm-grp">
+          <div class="mm-grp-h">附带什么</div>
+          <button class="media-attach" type="button" style="height:38px;width:140px;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>添加附件</button>
+        </div>
+        <p class="mm-note">清空日期会把它放回「待定时间」区。</p>
+        <div class="mm-foot">
+          <button class="btn sm danger" type="button">删除</button>
+          <span class="mm-btns"><button class="btn sm" type="button">取消</button><button class="btn sm primary" type="button">保存日程</button></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend" style="margin-top:20px">
+      <div class="li" style="border-left-color:var(--green)"><b style="background:var(--green)">✓</b><div><b>一眼看懂要填什么</b>：三组标题本身就是填写路径，比纯控件排列的认知负担低得多，尤其适合半个月才加一次日程的场景。</div></div>
+      <div class="li" style="border-left-color:var(--green)"><b style="background:var(--green)">✓</b><div><b>对齐同样彻底</b>：每张卡内部仍是栅格 + label，卡与卡之间靠 10px 间距分组，不需要「所有控件一条水平线」这种脆弱的全局约束。</div></div>
+      <div class="li" style="border-left-color:var(--green)"><b style="background:var(--green)">✓</b><div><b>最好扩展</b>：以后加「地点」「参会人」「关联任务」，各归其组即可，不会把某一行挤爆。</div></div>
+      <div class="li" style="border-left-color:var(--amber)"><b style="background:var(--amber)">!</b><div><b>代价</b>：实测展开区 <b>533px</b>，比现状（216px）高 <b>317px</b> —— 三张卡片各有标题与副说明，信息清楚但确实占地方。日常「只填个标题就回车」的用户会觉得三道关卡略重。另外编辑弹层里再套卡片，和备忘弹层的观感差异会拉大。</div></div>
+    </div>
+  </section>
+
+  <!-- ==================== 方案 C ==================== -->
+  <section class="view" id="v-c">
+    <div class="note">
+      <div><strong>C · 内联时间条 / Inline Time Strip</strong><br><span class="d">把 chips 从时间框「下方」移到「右侧」，整条时间严格 38px 单行高 —— 与 select / date 完全等高，这是三套里唯一做到「所有控件同一水平线」的方案。</span></div>
+      <div class="traits"><i>最紧凑</i><i>严格单行等高</i><i>chips 常显</i><i>改动最大</i></div>
+    </div>
+
+    <div class="stage pC">
+      <article class="card">
+        <div class="row" style="align-items:flex-start">
+          <section class="composer" style="flex:1;min-width:0">
+            <button class="composer-toggle" type="button">
+              <span class="c-plus">＋</span><span>加入日程</span>
+              <span class="c-sub">回车快速加入</span><span class="c-caret">▾</span>
+            </button>
+            <div class="c-body c-body-lite">
+              <div class="c-grid c-grid-main">
+                <div class="c-cell"><span class="c-label">日程标题</span><input class="c-title" value="产品评审会" placeholder="日程标题，回车加入"></div>
+                <div class="c-cell"><span class="c-label">日期</span><input type="date" value="2026-09-20"></div>
+                <div class="c-cell"><span class="c-label">重复</span><select><option>不重复</option><option>每周 · 连续 4 周</option></select></div>
+              </div>
+              <div class="c-grid c-grid-sub">
+                <div class="c-cell">
+                  <span class="c-label">时间</span>
+                  <div class="c-allin">
+                    <span class="tset"><input type="time" value="15:00"><span class="tp-chips" data-chips><button class="tp-chip">00</button><button class="tp-chip">15</button><button class="tp-chip active">30</button><button class="tp-chip">45</button></span></span>
+                    <span class="dash">—</span>
+                    <span class="tset"><input type="time" value="16:00"><span class="tp-chips" data-chips><button class="tp-chip">00</button><button class="tp-chip">15</button><button class="tp-chip active">30</button><button class="tp-chip">45</button></span></span>
+                  </div>
+                </div>
+                <div class="c-cell">
+                  <span class="c-label">类型</span>
+                  <div class="seg-inline" data-seg>
+                    <button class="on" type="button"><span class="dot m"></span>会议</button>
+                    <button type="button"><span class="dot d"></span>深度块</button>
+                    <button type="button"><span class="dot o"></span>其他</button>
+                  </div>
+                </div>
+                <div class="c-cell">
+                  <span class="c-label">图片与附件 <span style="color:#b6c2cf">（可拖入 / 粘贴）</span></span>
+                  <div class="media-row">
+                    <button class="media-add" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg><span class="media-ai">AI</span></button>
+                    <button class="media-attach" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>附件</button>
+                    <button class="btn ai" type="button" style="min-height:34px;padding:5px 11px;font-size:12px">识别填表</button>
+                  </div>
+                </div>
+              </div>
+              <div class="c-foot">
+                <p class="c-hint" style="flex:1">日期默认填今天；清空则进「待定时间」。时间重叠只提醒，不阻止保存。</p>
+                <button class="btn primary" type="button">加入日程</button>
+              </div>
+            </div>
+          </section>
+          <button class="btn" type="button" style="min-height:44px;width:44px;padding:0;display:grid;place-items:center;flex:none">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.6 15.6 21 21"></path></svg>
+          </button>
+        </div>
+      </article>
+    </div>
+
+    <div class="sec-h"><h2>方案 C · 编辑弹层（同源）</h2><span class="line"></span></div>
+    <div class="mask eC" style="max-width:1084px">
+      <div class="memo-modal">
+        <div class="mm-head"><span class="mm-title">编辑日程</span><button class="mm-x" type="button">×</button></div>
+        <input class="mm-field mm-title-input" value="产品评审会">
+        <div class="mm-grid mm-3">
+          <div class="mm-cell"><span class="mm-label">日期</span><input class="mm-field" type="date" value="2026-09-20"></div>
+          <div class="mm-cell"><span class="mm-label">重复</span><select class="mm-field"><option>不重复</option><option>每周 · 连续 4 周</option></select></div>
+          <div class="mm-cell">
+            <span class="mm-label">类型</span>
+            <div class="seg" data-seg style="min-height:38px">
+              <button class="on" type="button"><span class="dot m"></span>会议</button>
+              <button type="button"><span class="dot d"></span>深度块</button>
+              <button type="button"><span class="dot o"></span>其他</button>
+            </div>
+          </div>
+        </div>
+        <div class="mm-grid mm-time-row">
+          <div class="mm-cell">
+            <span class="mm-label">时间</span>
+            <div class="c-allin">
+              <span class="tset"><input type="time" class="mm-field" style="width:104px" value="15:00"><span class="tp-chips" data-chips><button class="tp-chip">00</button><button class="tp-chip">15</button><button class="tp-chip active">30</button><button class="tp-chip">45</button></span></span>
+              <span class="dash">—</span>
+              <span class="tset"><input type="time" class="mm-field" style="width:104px" value="16:00"><span class="tp-chips" data-chips><button class="tp-chip">00</button><button class="tp-chip">15</button><button class="tp-chip active">30</button><button class="tp-chip">45</button></span></span>
+            </div>
+          </div>
+        </div>
+        <p class="mm-note">清空日期会把它放回「待定时间」区。</p>
+        <div class="mm-foot">
+          <button class="btn sm danger" type="button">删除</button>
+          <span class="mm-btns"><button class="btn sm" type="button">取消</button><button class="btn sm primary" type="button">保存日程</button></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend" style="margin-top:20px">
+      <div class="li" style="border-left-color:var(--green)"><b style="background:var(--green)">✓</b><div><b>唯一做到「同一水平线」</b>：时间条总高 38px（<code>input 38px</code> + chips 26px 垂直居中），与 select / date / 分段控件完全等高，再也不需要对「时间组凸出一截」做特殊补偿。</div></div>
+      <div class="li" style="border-left-color:var(--green)"><b style="background:var(--green)">✓</b><div><b>省下一整行高度</b>：chips 不再各自占一行，实测展开区 <b>209px</b> —— 比方案 A（340px）矮 131px，甚至比现状（216px）还矮 7px，却比现状整齐得多。</div></div>
+      <div class="li" style="border-left-color:var(--green)"><b style="background:var(--green)">✓</b><div><b>保留了非整刻手输</b>：原生 <code>type=time</code> 仍在，chips 只是快捷方式。项目里「chips 必须常显」这条约束没有破。</div></div>
+      <div class="li" style="border-left-color:var(--amber)"><b style="background:var(--amber)">!</b><div><b>代价</b>：一行里 = 时间框 104 + chips 4×26 + 缝 ≈ 224px，两条合计约 470px，加上类型分段控件需要约 780px 可用宽度。<b>窄于 900px 时必须折成两行</b>，「同一水平线」在窄屏无法保持。另外 DOM 与 CSS 都要动（<code>.tp</code> 从 <code>inline-grid</code> 改 <code>flex</code>），需要回归扫描。</div></div>
+    </div>
+  </section>
+
+  <!-- ==================== 对比 ==================== -->
+  <div class="sec-h"><h2>四套方案横向对比</h2><span class="line"></span></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>方案</th><th>对齐解决度</th><th>展开区高度<br><span style="font-weight:400;color:#9aa8b8">（1018px 内容宽实测）</span></th><th>改动范围</th><th>窄屏表现</th><th>适合的场景</th></tr></thead>
+      <tbody>
+        <tr><td><b>现状</b></td><td class="no">未解决</td><td>216px</td><td>—</td><td>折行点随机</td><td>—</td></tr>
+        <tr><td><b>A 字段栅格</b><br><span style="color:var(--muted)">推荐</span></td><td class="yes">高<br><span style="color:var(--muted);font-weight:400">标签齐平、列边界统一</span></td><td><b>340px</b><br><span style="color:var(--amber)">+124px</span></td><td>只改 CSS<br><span style="color:var(--muted)">HTML 加 label，id 全不动</span></td><td class="yes">好<br><span style="color:var(--muted);font-weight:400">栅格自动塌单列</span></td><td>日常使用、要求风险最低</td></tr>
+        <tr><td><b>B 分组卡片</b></td><td class="yes">高</td><td><b>533px</b><br><span style="color:var(--warn)">+317px</span></td><td>CSS + HTML 包裹分组</td><td class="yes">好</td><td>字段会继续增加、看重可读性</td></tr>
+        <tr><td><b>C 内联时间条</b></td><td class="yes">最高<br><span style="color:var(--muted);font-weight:400">所有控件严格等高</span></td><td><b>209px</b><br><span class="yes">−7px，比现状还矮</span></td><td>CSS + HTML + <code>.tp</code> 结构</td><td class="mid">一般<br><span style="color:var(--muted);font-weight:400">&lt;900px 需折行</span></td><td>高频录入、在意空间占用</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="hint-box">
+    <b>建议的落地顺序</b>：先上 <b>A</b>（纯 CSS + 加标签，风险最小、能立刻消掉「不齐」和「看不出哪个是开始」两个最大痛点）；
+    如果你更在意信息可分步阅读、以后还要加「地点 / 参会人」，选 <b>B</b>；
+    如果你觉得展开态太高、且屏幕常年 ≥1280px，选 <b>C</b>。
+    三套可以混用 —— 比如 <b>A 的栅格 + C 的内联时间条</b>，就是「既齐又矮」的组合（本页 C 面板实际已经是这个组合的形态）。
+    <br><br>
+    另外两处顺带的小改动，无论选哪套都建议一起做：<b>①「加入」独立成底栏主按钮</b>；<b>②类型用日程卡片的类型色</b>（绿 / 蓝 / 灰），和周视图里卡片颜色对上，扫一眼就知道这条会显示成什么颜色。
+  </div>
+</div>
+
+<script>
+function showView(id,btn){
+  document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});
+  document.querySelector('#v-'+id).classList.add('active');
+  document.querySelectorAll('.switcher button').forEach(function(x){x.classList.remove('active')});
+  btn.classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+document.querySelectorAll('.switcher button').forEach(function(b){
+  b.addEventListener('click',function(){showView(b.dataset.v,b)});
+});
+document.getElementById('guides').addEventListener('change',function(e){
+  document.querySelectorAll('.stage').forEach(function(s){s.classList.toggle('guides',e.target.checked)});
+});
+document.addEventListener('click',function(e){
+  var inner=e.target.closest('.seg button, .seg-inline button');
+  if(inner){
+    var box=inner.closest('[data-seg]');
+    box.querySelectorAll('button').forEach(function(b){b.classList.remove('on')});
+    inner.classList.add('on');
+    return;
+  }
+  var chip=e.target.closest('.tp-chip');
+  if(chip){
+    var g=chip.closest('[data-chips]');
+    g.querySelectorAll('.tp-chip').forEach(function(c){c.classList.remove('active')});
+    chip.classList.add('active');
+  }
+});
+/* 现状面板的编号圆点：①② 贴在出问题的控件顶边中点，③ 贴在右侧空白区。
+   详细说明在下方清单里 —— 圆点只带编号，避免气泡把控件本身盖住（第一版就是盖住了）。 */
+function pins(){
+  var row=document.querySelector('.now .c-row');
+  if(!row)return;
+  var host=row.closest('.composer-body').parentElement; /* .composer */
+  if(getComputedStyle(host).position==='static')host.style.position='relative';
+  host.querySelectorAll('.pin').forEach(function(p){p.remove()});
+  var h=host.getBoundingClientRect();
+
+  function put(el,num,dy){
+    if(!el)return;
+    var r=el.getBoundingClientRect();
+    var p=document.createElement('span');
+    p.className='pin';
+    p.style.left=(r.left-h.left+r.width/2)+'px';
+    p.style.top=(r.top-h.top+(dy||-2))+'px';
+    p.innerHTML='<b>'+num+'</b>';
+    host.appendChild(p);
+  }
+  put(row.children[0],1);          /* 类型 select —— 没有字段标签 */
+  put(row.children[1],2);          /* 第一个 .tp —— 比同行高 24px */
+
+  /* ③「右侧空 436px」：贴在 .c-row 右端（.c-row 是 flex 块级容器，右端即容器右缘） */
+  var rr=row.getBoundingClientRect();
+  var p3=document.createElement('span');
+  p3.className='pin';
+  p3.style.left=(rr.right-h.left-30)+'px';
+  p3.style.top=(rr.top-h.top+19)+'px';
+  p3.innerHTML='<b>3</b>';
+  host.appendChild(p3);
+}
+window.addEventListener('load',pins);
+window.addEventListener('resize',pins);
+</script>
+</body>
+</html>

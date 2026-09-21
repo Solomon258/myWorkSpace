@@ -1,7 +1,7 @@
 package com.icecode.workbench.vision;
 
 /**
- * 视觉模型从一张图里读出的一条待办/日程/备忘。
+ * 视觉模型从一张图里读出的一条待办/日程/收藏。
  *
  * <p>与 {@code ClassifyPayload} 的区别：那个是「分类器的输出」（一条文本 → 一个分类），
  * 这个是「视觉解析的输出」（一张图 → **多条**条目）。图片里天然会有好几件事
@@ -10,7 +10,7 @@ package com.icecode.workbench.vision;
  */
 public class VisionItem {
 
-    /** task / schedule / memo / knowledge。 */
+    /** task / schedule / favorite / knowledge。 */
     private String category;
     /** 0–1。视觉模型对清晰截图的置信度普遍偏高，所以它**不参与**自动批量确认。 */
     private double confidence;

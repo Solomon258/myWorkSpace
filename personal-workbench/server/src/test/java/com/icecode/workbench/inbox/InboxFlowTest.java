@@ -44,7 +44,7 @@ class InboxFlowTest {
         jdbcTemplate.update("DELETE FROM daily_plan_item");
         jdbcTemplate.update("DELETE FROM pomodoro");
         jdbcTemplate.update("DELETE FROM activity_log");
-        jdbcTemplate.update("DELETE FROM memo");
+        jdbcTemplate.update("DELETE FROM favorite");
         jdbcTemplate.update("DELETE FROM schedule_event");
         jdbcTemplate.update("DELETE FROM task");
         jdbcTemplate.update("DELETE FROM inbox_item");
@@ -181,12 +181,12 @@ class InboxFlowTest {
         long id = createInbox("记得给小李的方案写评审意见");
         mockMvc.perform(post("/api/v1/inbox/classify").session(session)).andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/inbox/{id}/confirm", id).session(session)
-                        .contentType("application/json").content("{\"category\":\"memo\"}"))
+                        .contentType("application/json").content("{\"category\":\"favorite\"}"))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/inbox/{id}/confirm", id).session(session)
-                        .contentType("application/json").content("{\"category\":\"memo\"}"))
+                        .contentType("application/json").content("{\"category\":\"favorite\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.alreadyConfirmed").value(true));
-        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM memo WHERE source_inbox_id=?", Integer.class, id)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM favorite WHERE source_inbox_id=?", Integer.class, id)).isEqualTo(1);
     }
 
     @Test
@@ -402,7 +402,7 @@ class InboxFlowTest {
 
         String body = "{\"items\":["
                 + "{\"inboxId\":" + first + ",\"confirm\":{\"category\":\"task\",\"title\":\"开会\",\"priority\":\"P2\"}},"
-                + "{\"inboxId\":" + second + ",\"confirm\":{\"category\":\"memo\",\"title\":\"买东西\"}}"
+                + "{\"inboxId\":" + second + ",\"confirm\":{\"category\":\"favorite\",\"title\":\"买东西\"}}"
                 + "]}";
         mockMvc.perform(post("/api/v1/inbox/confirm-items").session(session)
                         .contentType("application/json").content(body))
@@ -410,7 +410,7 @@ class InboxFlowTest {
                 .andExpect(jsonPath("$.data.length()").value(2));
 
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM task", Integer.class)).isEqualTo(1);
-        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM memo", Integer.class)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM favorite", Integer.class)).isEqualTo(1);
     }
 
     /** 超过 50 条要报 1002 并说明上限 —— 一次几百条的确认会把池里的 4 个连接全占死。 */

@@ -1,6 +1,6 @@
-package com.icecode.workbench.memo;
+package com.icecode.workbench.favorite;
 
-class MemoRecord {
+class FavoriteRecord {
     long id;
     String title;
     String content;

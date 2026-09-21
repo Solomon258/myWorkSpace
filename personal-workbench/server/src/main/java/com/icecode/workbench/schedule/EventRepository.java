@@ -224,7 +224,7 @@ public class EventRepository {
     /**
      * 用户输入里的通配符必须当成普通字符：带通配符的 LIKE 会把「搜 %」变成「搜全部」，
      * 用户看到的是「搜什么都返回全部」，而日志里没有任何异常。
-     * 与 {@code TaskRepository} / {@code MemoRepository} 里的同名方法一致。
+     * 与 {@code TaskRepository} / {@code FavoriteRepository} 里的同名方法一致。
      */
     private static String escapeLike(String value) {
         return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");

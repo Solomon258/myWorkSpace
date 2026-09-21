@@ -186,6 +186,77 @@ public class TaskRepository {
         jdbcTemplate.update("INSERT INTO activity_log(log_type, content, created_at, is_demo) VALUES (?,?,?,0)", type, content, now);
     }
 
+    /**
+     * 「已完成」页按天汇总（2026-09-20）：只统计<b>真正完成</b>的（{@code status='done'}），
+     * 按 {@code completed_at} 的日期部分分组，倒序返回。
+     *
+     * <p>⚠️ {@code completed_at} 在 V1 里是**可空**的（建表语句只有 {@code completed_at TEXT}），
+     * 而且「已取消」的任务它恰好是 NULL（见 {@code TaskService.changeStatus}）。
+     * 所以这里必须显式 {@code completed_at IS NOT NULL}：漏了它，那些 NULL 会被
+     * {@code substr(NULL,1,10)} 归成一个 NULL 组，前端按日期分组时会多出一组认不出的东西。
+     * 同理不能用 {@code updated_at} 兜底 —— 那会把「今天只是改过」的完成项也算成「今天完成的」，
+     * 静默虚报数字，而用户在界面上完全看不出来。</p>
+     *
+     * <p>{@code substr(completed_at,1,10)} 依赖 {@code completed_at} 是
+     * {@code yyyy-MM-dd HH:mm:ss} 文本（{@code TimeUtil.now} 的格式）—— 与
+     * {@code ORDER BY COALESCE(updated_at, created_at) DESC} 靠字典序排是同一套前提。</p>
+     */
+    public List<DoneDayRow> findDoneByDay() {
+        return jdbcTemplate.query(
+                "SELECT substr(completed_at,1,10) AS day,"
+                        + " COUNT(*) AS cnt,"
+                        + " SUM(CASE WHEN priority='P0' THEN 1 ELSE 0 END) AS p0,"
+                        + " SUM(CASE WHEN priority='P1' THEN 1 ELSE 0 END) AS p1,"
+                        + " SUM(CASE WHEN is_deep_work=1 THEN 1 ELSE 0 END) AS deepcnt,"
+                        + " MIN(substr(completed_at,12,5)) AS first_at,"
+                        + " MAX(substr(completed_at,12,5)) AS last_at"
+                        + " FROM task"
+                        + " WHERE deleted=0 AND status='done' AND completed_at IS NOT NULL"
+                        + " GROUP BY substr(completed_at,1,10)"
+                        + " ORDER BY day DESC",
+                new RowMapper<DoneDayRow>() {
+                    @Override
+                    public DoneDayRow mapRow(ResultSet rs, int rowNum) throws SQLException {
+                        DoneDayRow row = new DoneDayRow();
+                        row.day = rs.getString("day");
+                        row.count = rs.getInt("cnt");
+                        row.p0 = rs.getInt("p0");
+                        row.p1 = rs.getInt("p1");
+                        row.deep = rs.getInt("deepcnt");
+                        row.firstAt = rs.getString("first_at");
+                        row.lastAt = rs.getString("last_at");
+                        return row;
+                    }
+                });
+    }
+
+    /**
+     * 某一天取消的条数（2026-09-20）。取消时 {@code completed_at} 被置为 NULL，
+     * 只有 {@code updated_at} 留着那一刻，所以这里按 {@code updated_at} 的日期取。
+     *
+     * <p>口径上的取舍：{@code updated_at} 是「最后被改动」，对一条已取消且之后再没动过的任务
+     * 就等于取消时刻 —— 这是它唯一能被追溯到的位置。它单独成数、不并入完成数
+     * （见 {@link TaskDoneDayVO#getCanceledCount}），所以即便偶有偏差也不会污染主数字。</p>
+     */
+    public int countCanceledOn(String day) {
+        Integer value = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM task"
+                        + " WHERE deleted=0 AND status='canceled' AND substr(COALESCE(updated_at, created_at),1,10)=?",
+                Integer.class, day);
+        return value == null ? 0 : value.intValue();
+    }
+
+    /** 按天汇总查询的行载体（只在本 Repository 与 {@code TaskService} 之间传递）。 */
+    public static class DoneDayRow {
+        public String day;
+        public int count;
+        public int p0;
+        public int p1;
+        public int deep;
+        public String firstAt;
+        public String lastAt;
+    }
+
     private static boolean notBlank(String value) {
         return value != null && !value.trim().isEmpty();
     }

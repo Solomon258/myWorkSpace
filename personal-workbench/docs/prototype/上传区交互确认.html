@@ -147,7 +147,7 @@ body{margin:0;background:var(--bg);color:var(--text);
 .tagcat{font-size:10px;font-weight:700;border-radius:4px;padding:1px 5px;flex:0 0 auto;margin-top:1px}
 .tagcat.task{background:#e9f0fa;color:#315f94}
 .tagcat.schedule{background:#f0eefb;color:#534AB7}
-.tagcat.memo{background:#fdf4e6;color:#a96c1d}
+.tagcat.favorite{background:#fdf4e6;color:#a96c1d}
 .ri-t{flex:1;min-width:0}
 .ri-meta{font-size:11px;color:var(--ink-soft);margin-left:5px}
 .ri-q{font-size:11px;color:#8a84a8;padding-left:46px;line-height:1.5;margin-bottom:3px;
@@ -196,7 +196,7 @@ body{margin:0;background:var(--bg);color:var(--text);
     <button data-tab="inbox" class="active">收录</button>
     <button data-tab="task">任务</button>
     <button data-tab="event">日程</button>
-    <button data-tab="memo">备忘</button>
+    <button data-tab="favorite">收藏</button>
   </nav>
 
   <div class="layout">
@@ -294,14 +294,14 @@ body{margin:0;background:var(--bg);color:var(--text);
         </div>
       </section>
 
-      <!-- ================= 备忘 ================= -->
-      <section class="card panel" data-panel="memo" hidden>
-        <div class="card-head">备忘页</div>
+      <!-- ================= 收藏 ================= -->
+      <section class="card panel" data-panel="favorite" hidden>
+        <div class="card-head">收藏页</div>
         <div class="cbox" data-drop>
           <div class="ff"><label>标题</label>
-            <input class="f-in" data-fill="memoTitle" placeholder="标题（可空）"></div>
+            <input class="f-in" data-fill="favoriteTitle" placeholder="标题（可空）"></div>
           <div class="ff"><label>正文</label>
-            <textarea class="f-area" rows="2" data-fill="memoContent" placeholder="正文（与标题至少写一项）；图片可直接拖进来"></textarea></div>
+            <textarea class="f-area" rows="2" data-fill="favoriteContent" placeholder="正文（与标题至少写一项）；图片可直接拖进来"></textarea></div>
           <div class="ff f2">
             <div><label>标签</label><input class="f-in" placeholder="逗号分隔"></div>
             <div><label>空间</label>
@@ -319,7 +319,7 @@ body{margin:0;background:var(--bg);color:var(--text);
               附件
               <span class="cnt" hidden></span>
             </button>
-            <button class="go" data-submit>新建备忘</button>
+            <button class="go" data-submit>新建收藏</button>
           </div>
           <div class="status" data-status></div>
         </div>
@@ -552,11 +552,11 @@ body{margin:0;background:var(--bg);color:var(--text);
   }
 
   /* ---------- 解析结果 ---------- */
-  var CAT_NAME = { task: '任务', schedule: '日程', memo: '备忘', knowledge: '知识' };
+  var CAT_NAME = { task: '任务', schedule: '日程', favorite: '收藏', knowledge: '知识' };
   var RESULT_POOL = [
     [ { cat: 'task', title: '给老王发销售数据', meta: '9-16 推算', def: true,
         quote: '我：明天下午发你' },
-      { cat: 'memo', title: '销售数据相关讨论',
+      { cat: 'favorite', title: '销售数据相关讨论',
         quote: '老王：那个销售数据你看下' } ],
     [ { cat: 'schedule', title: '周五 14:00 项目评审会', meta: '9-18', def: true,
         quote: '@所有人 周五下午两点评审，会议室 B' },
@@ -607,7 +607,7 @@ body{margin:0;background:var(--bg);color:var(--text);
       task:  { taskTitle: '给老王发销售数据', taskDue: '2026-09-16',
                taskNote: '老王催销售数据，答应明天下午发他' },
       event: { evTitle: '与老王对齐销售数据', evDate: '2026-09-16', evStart: '14:00', evEnd: '14:30' },
-      memo:  { memoContent: '老王：那个销售数据你什么时候给我\n我：明天下午发你' }
+      favorite:  { favoriteContent: '老王：那个销售数据你什么时候给我\n我：明天下午发你' }
     }[panel.dataset.panel];
     if (!map) return;
 

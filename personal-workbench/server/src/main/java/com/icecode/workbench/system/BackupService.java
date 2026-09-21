@@ -40,7 +40,7 @@ public class BackupService {
     private static final int KEEP_PRE_RESTORE = 5;
     private static final Pattern SAFE_NAME = Pattern.compile("^[A-Za-z0-9._-]+\\.db$");
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
-    private static final String[] VERIFY_TABLES = {"task", "memo", "inbox_item", "schedule_event", "pomodoro"};
+    private static final String[] VERIFY_TABLES = {"task", "favorite", "inbox_item", "schedule_event", "pomodoro"};
 
     private final JdbcTemplate jdbcTemplate;
     private final Path dataDir;

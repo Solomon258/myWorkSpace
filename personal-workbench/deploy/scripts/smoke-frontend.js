@@ -32,7 +32,7 @@ const htmlIds = new Set();
 for (const match of html.matchAll(/id="([^"]+)"/g)) htmlIds.add(match[1]);
 const jsIds = new Set();
 for (const match of appJs.matchAll(/\$\("([^"]+)"\)/g)) jsIds.add(match[1]);
-// 动态 id（edit-xxx、confirm-xxx、memo-edit-xxx 等带前缀模板）跳过前缀匹配校验
+// 动态 id（edit-xxx、confirm-xxx、favorite-edit-xxx 等带前缀模板）跳过前缀匹配校验
 for (const id of jsIds) {
   if (!htmlIds.has(id)) fail("app.js 引用了不存在的 DOM id：" + id);
 }
@@ -40,7 +40,7 @@ const missing = [...jsIds].filter((id) => !htmlIds.has(id));
 if (missing.length === 0) ok("全部 " + jsIds.size + " 个静态 DOM id 引用均存在");
 
 // 3. 模板字符串里的动态 id 前缀（如 edit-${task.id}）必须有对应生成处
-for (const prefix of ["edit-", "confirm-category-", "confirm-title-", "confirm-due-", "confirm-priority-", "confirm-start-", "memo-edit-"]) {
+for (const prefix of ["edit-", "confirm-category-", "confirm-title-", "confirm-due-", "confirm-priority-", "confirm-start-", "favorite-edit-"]) {
   const produced = appJs.includes('id="' + prefix) || appJs.includes("id=\"" + prefix);
   if (!produced) fail("动态 id 前缀未在渲染函数中生成：" + prefix);
 }

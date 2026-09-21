@@ -27,7 +27,7 @@ public class EventController {
     }
 
     /**
-     * 三种形态共用一个入口，而不是各开一个子路径：与备忘（{@code GET /api/v1/memos?q=}）和
+     * 三种形态共用一个入口，而不是各开一个子路径：与收藏（{@code GET /api/v1/favorites?q=}）和
      * 任务（{@code GET /api/v1/tasks?keyword=}）保持同一形态 —— 列表与检索是同一个资源。
      *
      * <ol>

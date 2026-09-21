@@ -32,7 +32,7 @@
     <div class="gs-foot"><span><kbd>↑</kbd><kbd>↓</kbd> 选择结果</span><span><kbd>Tab</kbd> 收起 / 展开预览</span><span><kbd>Enter</kbd> 打开并定位</span><span><kbd>Esc</kbd> 关闭</span><span class="gs-foot-hint">回收站里的结果会跳到回收站页</span></div>
   </div>
   <nav class="tabs" aria-label="工作台导航">
-    <button class="active" data-tab="dashboard">驾驶舱</button><button data-tab="inbox">收录 <span class="badge" id="inboxBadge" style="display:none"></span></button><button data-tab="tasks">任务</button><button data-tab="schedule">日程</button><button data-tab="memos">备忘</button><button data-tab="timeline">时间线</button><button data-tab="knowledge">知识</button>
+    <button class="active" data-tab="dashboard">驾驶舱</button><button data-tab="inbox">收录 <span class="badge" id="inboxBadge" style="display:none"></span></button><button data-tab="tasks">任务</button><button data-tab="schedule">日程</button><button data-tab="favorites">收藏</button><button data-tab="timeline">时间线</button><button data-tab="knowledge">知识</button>
     <!-- 「回收站」放在页签栏**最右边**，而且是一枚只带图标的按钮（2026-09-14，用户定的形态）。
          .tabs-spacer 是把它顶到右边的那根弹簧：写 margin-left:auto 也行，但那样
          「右侧留白」和「左侧间距」会耦合在一起，窄屏想单独收紧就没得调。
@@ -100,14 +100,19 @@
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
                 <span class="media-ai" aria-hidden="true">AI</span>
               </button>
-              <span class="media-gap"></span>
               <button class="media-attach" type="button" data-media-attach>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
                 附件<span class="media-cnt hidden" data-media-count></span>
               </button>
+              <!-- 问号跟着「附件」走（2026-09-20 用户要求这一行与日程页完全一致）：它讲的就是
+                   图片与附件这一行，挂到行尾会让「新建任务」不再是最后一个。
+                   ⚠️ 用左对齐的 .qt，**不要**加 r 类：问号一旦从行尾挪到行首，右对齐的
+                      320px 气泡会从容器左边翻出去（日程页挪位时漏改，实测左侧出屏 52px）。 -->
+              <button class="q" type="button" aria-label="说明：图片与附件这一行"><span class="qi">?</span><span class="qt"><span class="qt-title">图片与附件</span><i>「＋AI」让 AI 读出图中内容</i><i>「识别填表」把读出的内容填进表单，不会直接建任务</i><i>图片可直接拖进来或粘贴</i></span></button>
+              <!-- .media-gap 吃掉中间余量：左半边是 ＋/附件/问号，右半边是 识别填表/新建任务 -->
+              <span class="media-gap"></span>
               <button class="btn" type="button" data-media-extract data-scope="task" data-category="task">识别填表</button>
               <button class="btn primary" id="createTaskButton">新建任务</button>
-              <button class="q" type="button" aria-label="说明：图片与附件这一行"><span class="qi">?</span><span class="qt r"><span class="qt-title">图片与附件</span><i>「＋AI」让 AI 读出图中内容</i><i>「识别填表」把读出的内容填进表单，不会直接建任务</i><i>图片可直接拖进来或粘贴</i></span></button>
             </div>
           </div>
         </section>
@@ -188,13 +193,16 @@
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
             <span class="media-ai" aria-hidden="true">AI</span>
           </button>
-          <span class="media-gap"></span>
           <button class="media-attach" type="button" data-media-attach>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
             附件<span class="media-cnt hidden" data-media-count></span>
           </button>
+          <!-- 问号跟着「附件」走（2026-09-20）：这一行没有「识别填表」（单行输入，没有表单可填），
+               所以问号之后接空隙、「收录」贴右。对齐口径与其余三页一致。
+               ⚠️ .qt 不加 r 类，理由见任务页同处的注释（问号在行首时右对齐气泡会出屏）。 -->
+          <button class="q" type="button" aria-label="说明：图片、附件与回车行为"><span class="qi">?</span><span class="qt"><span class="qt-title">这一行是干什么的</span><i>回车即收录并自动整理</i><i>「＋AI」让 AI 读出图中内容</i><i>图片可直接拖进来或粘贴</i></span></button>
+          <span class="media-gap"></span>
           <button class="btn primary" id="inboxAddButton">收录</button>
-          <button class="q" type="button" aria-label="说明：图片、附件与回车行为"><span class="qi">?</span><span class="qt r"><span class="qt-title">这一行是干什么的</span><i>回车即收录并自动整理</i><i>「＋AI」让 AI 读出图中内容</i><i>图片可直接拖进来或粘贴</i></span></button>
         </div>
       </div>
     </article>
@@ -223,20 +231,48 @@
             <span class="c-sub">回车快速加入</span><span class="c-caret" aria-hidden="true">▾</span>
           </button>
           <div class="composer-body" id="composerBodyEvent" data-media-scope="event">
-            <input id="eventTitle" class="c-title" maxlength="200" placeholder="日程标题，回车加入">
-            <div class="c-row">
-              <select id="eventType"><option value="meeting">会议</option><option value="deep_block">深度块</option><option value="other">其他</option></select>
-              <!-- 时间框统一包一层 .tp：原生 time 的分钟是 60 项列表，下面这排 .tp-chips
-                   由 app.js 的 bindTimeChips() 注入「00 / 15 / 30 / 45」。原生框保留，非整刻时间仍可手输。 -->
-              <span class="tp"><input type="time" id="eventStart" aria-label="开始时间"><span class="tp-chips"></span></span>
-              <span class="tp"><input type="time" id="eventEnd" aria-label="结束时间"><span class="tp-chips"></span></span>
-              <input type="date" id="eventDate">
-              <!-- 「每周三做什么」这类周期安排：一次占住连续 4 周。生成的是 4 条**独立**日程，
-                   所以之后单独改某一期不会动到其余几期。 -->
-              <select id="eventRepeat">
-                <option value="1">不重复</option>
-                <option value="4">每周 · 连续 4 周</option>
-              </select>
+            <!-- 日程表单骨架（2026-09-20 按用户指定的排版重排）。三行结构：
+                 ① 重复 / 类型   ② 日期 / 开始 / 结束   ③ 左 ＋·附件·问号、右 识别填表·加入。
+                 ⚠️ 每格是「上排 24px + 下排 38px」两层：上排放标签或分钟快捷片，下排放控件。
+                    两排各自等高，下面那排控件框才会落在同一条水平线上 —— 此前 .c-row 是
+                    flex-wrap + 全部 width:auto，五个控件贴左排完只占 550px（容器 1018px，
+                    右侧空 436px），且 .tp 比同行的 select / date 高 25px，顶边底边都参差。 -->
+            <div class="sf-title-cell">
+              <span class="sf-top">日程标题</span>
+              <input id="eventTitle" class="c-title sf-input sf-title" maxlength="200" placeholder="日程标题，回车加入">
+            </div>
+            <div class="sf-grid">
+              <!-- 第一行：类型 + 重复（2026-09-20 用户要求「类型放在重复左边」） -->
+              <div class="sf-cell">
+                <span class="sf-top">类型</span>
+                <select id="eventType" class="sf-input"><option value="meeting">会议</option><option value="deep_block">深度块</option><option value="other">其他</option></select>
+              </div>
+              <div class="sf-cell">
+                <span class="sf-top">重复</span>
+                <!-- 「每周三做什么」这类周期安排：一次占住连续 4 周。生成的是 4 条**独立**日程，
+                     所以之后单独改某一期不会动到其余几期。 -->
+                <select id="eventRepeat" class="sf-input">
+                  <option value="1">不重复</option>
+                  <option value="4">每周 · 连续 4 周</option>
+                </select>
+              </div>
+              <!-- 第二行：日期 + 开始 + 结束。
+                   ⚠️ 开始 / 结束**不写文字标签**，上排直接就是分钟快捷片（用户指定的排版）；
+                      谁是开始谁是结束靠左右位置区分，读屏用户由 input 上的 aria-label 承担。
+                   ⚠️ .tp 这层容器不能删：app.js 的 bindTimeChips() 靠 input.closest(".tp") 找
+                      chips。style.css 里用 display:contents 把它摊平，于是 .tp-chips 落在上排、
+                      input 落在下排 —— **顺序反了快捷片就跑到时间框下面去了**。
+                      原生 time 框保留：分钟是 60 项列表不好选，但非整刻时间仍要能手输。 -->
+              <div class="sf-cell">
+                <span class="sf-top">日期</span>
+                <input type="date" id="eventDate" class="sf-input">
+              </div>
+              <div class="sf-cell">
+                <span class="tp"><span class="tp-chips"></span><input type="time" id="eventStart" class="sf-input" aria-label="开始时间"></span>
+              </div>
+              <div class="sf-cell">
+                <span class="tp"><span class="tp-chips"></span><input type="time" id="eventEnd" class="sf-input" aria-label="结束时间"></span>
+              </div>
             </div>
             <div class="media-strip" data-media-strip></div>
             <div class="media-row">
@@ -244,14 +280,20 @@
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
                 <span class="media-ai" aria-hidden="true">AI</span>
               </button>
-              <span class="media-gap"></span>
               <button class="media-attach" type="button" data-media-attach>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
                 附件<span class="media-cnt hidden" data-media-count></span>
               </button>
+              <!-- 问号跟着「附件」走：它讲的就是图片与附件这一行。原来挂在整行最右端，
+                   那样「加入」就不是最右了。
+                   ⚠️ 2026-09-20 修正对齐类：问号挪到行首之后仍带着 `.qt r`（贴右边缘），
+                      320px 气泡于是从容器左边翻出去 —— 实测左侧出屏 52px，只有悬停截图看得见，
+                      静态断言查不出。这里与其余三页统一成左对齐的 `.qt`。 -->
+              <button class="q" type="button" aria-label="说明：图片与附件这一行"><span class="qi">?</span><span class="qt"><span class="qt-title">图片与附件</span><i>「＋AI」让 AI 读出图中内容</i><i>「识别填表」把读出的内容填进表单，不会直接建日程</i><i>图片可直接拖进来或粘贴</i></span></button>
+              <!-- .media-gap 吃掉中间余量：左半边是 ＋/附件/问号，右半边是 识别填表/加入 -->
+              <span class="media-gap"></span>
               <button class="btn" type="button" data-media-extract data-scope="event" data-category="schedule">识别填表</button>
               <button class="btn primary" id="eventAddButton">加入</button>
-              <button class="q" type="button" aria-label="说明：图片与附件这一行"><span class="qi">?</span><span class="qt r"><span class="qt-title">图片与附件</span><i>「＋AI」让 AI 读出图中内容</i><i>「识别填表」把读出的内容填进表单，不会直接建日程</i><i>图片可直接拖进来或粘贴</i></span></button>
             </div>
             <p class="c-hint">日期默认填今天；清空日期则生成待定日程，它会落到下面的「待定时间」区。<button class="q" type="button" aria-label="说明：日期、重复与时间校验规则"><span class="qi">?</span><span class="qt"><span class="qt-title">几个注意点</span><i>默认填今天，与正在看哪一周无关，免得在别的周里误建</i><i>选「连续 4 周」会一次生成 4 期独立日程，改一期不影响其余</i><i>结束早于开始会提示不支持跨日</i><i>时间重叠只提醒，不阻止保存</i></span></button></p>
           </div>
@@ -278,32 +320,32 @@
     <div id="eventResults" class="hidden"></div>
     <article class="card"><h3><span class="hrow">待定时间<button class="q" type="button" aria-label="说明：待定时间怎么排进日程"><span class="qi">?</span><span class="qt">时间还没定下来的日程先放在这里。填上日期并保存，它就会自动排进那一天。</span></button></span> <span class="muted" id="pendingCount"></span></h3><div id="pendingEventList"></div></article>
   </section>
-  <section class="view memo-theme-all" id="view-memos">
+  <section class="view favorite-theme-all" id="view-favorites">
     <!-- 这一行原本是「空间 [全部|工作|生活]」，2026-09-18 按用户要求去掉左侧的「空间」二字：
          三个按钮本身就是自解释的（工作 / 生活 / 全部），标签只是把控件往右推了 25px（两字宽度）
          + 10px 缝 = 35px。删掉后分段控件顶到内容区左边缘，与下面 .card 的左边界对齐。
-         ⚠️ 不要再加回文字标签：无障碍语义由 .memo-switch 上的 role="tablist" + aria-label="备忘空间"
+         ⚠️ 不要再加回文字标签：无障碍语义由 .favorite-switch 上的 role="tablist" + aria-label="收藏空间"
          承担，也不要用 aria-hidden 的隐藏文本来「补」一个标签（视觉上等于没删）。 -->
-    <div class="memo-switch-wrap">
-      <div class="memo-switch" role="tablist" aria-label="备忘空间">
-        <button class="memo-choice all active" data-grp="all" title="统一查看工作与生活的全部记录">全部</button>
-        <button class="memo-choice work" data-grp="work" title="方案、项目、链接与公司信息">工作</button>
-        <button class="memo-choice life" data-grp="life" title="家庭、采买、通勤与日常参考">生活</button>
+    <div class="favorite-switch-wrap">
+      <div class="favorite-switch" role="tablist" aria-label="收藏空间">
+        <button class="favorite-choice all active" data-grp="all" title="统一查看工作与生活的全部记录">全部</button>
+        <button class="favorite-choice work" data-grp="work" title="方案、项目、链接与公司信息">工作</button>
+        <button class="favorite-choice life" data-grp="life" title="家庭、采买、通勤与日常参考">生活</button>
       </div>
     </div>
     <article class="card">
-      <div class="row search-row" id="memoSearchRow">
-        <section class="composer" id="memoComposer">
-          <button class="composer-toggle" id="composerToggleMemo" type="button" aria-expanded="false" aria-controls="composerBodyMemo">
-            <span class="c-plus" aria-hidden="true">＋</span><span>新建备忘</span>
+      <div class="row search-row" id="favoriteSearchRow">
+        <section class="composer" id="favoriteComposer">
+          <button class="composer-toggle" id="composerToggleFavorite" type="button" aria-expanded="false" aria-controls="composerBodyFavorite">
+            <span class="c-plus" aria-hidden="true">＋</span><span>新建收藏</span>
             <span class="c-sub">Ctrl + Enter 保存</span><span class="c-caret" aria-hidden="true">▾</span>
           </button>
-          <div class="composer-body" id="composerBodyMemo" data-media-scope="memo">
-            <input id="memoTitle" class="c-title" maxlength="200" placeholder="标题（可留空）">
-            <textarea id="memoContent" maxlength="4000" rows="3" placeholder="正文（可留空）"></textarea>
+          <div class="composer-body" id="composerBodyFavorite" data-media-scope="favorite">
+            <input id="favoriteTitle" class="c-title" maxlength="200" placeholder="标题（可留空）">
+            <textarea id="favoriteContent" maxlength="4000" rows="3" placeholder="正文（可留空）"></textarea>
             <div class="c-row">
-              <input id="memoTags" class="grow" maxlength="500" placeholder="标签，逗号分隔">
-              <select id="memoGrp"><option value="auto">分组：自动</option><option value="work">工作</option><option value="life">生活</option></select>
+              <input id="favoriteTags" class="grow" maxlength="500" placeholder="标签，逗号分隔">
+              <select id="favoriteGrp"><option value="auto">分组：自动</option><option value="work">工作</option><option value="life">生活</option></select>
             </div>
             <div class="media-strip" data-media-strip></div>
             <div class="media-row">
@@ -311,48 +353,50 @@
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
                 <span class="media-ai" aria-hidden="true">AI</span>
               </button>
-              <span class="media-gap"></span>
               <button class="media-attach" type="button" data-media-attach>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
                 附件<span class="media-cnt hidden" data-media-count></span>
               </button>
-              <button class="btn" type="button" data-media-extract data-scope="memo" data-category="memo">识别填表</button>
-              <button class="btn primary" id="memoAddButton">保存备忘</button>
-              <button class="q" type="button" aria-label="说明：图片与附件这一行"><span class="qi">?</span><span class="qt r"><span class="qt-title">图片与附件</span><i>「＋AI」让 AI 读出图中内容</i><i>「识别填表」把读出的内容填进表单，不会直接存备忘</i><i>图片可直接拖进来或粘贴</i></span></button>
+              <!-- 问号跟着「附件」走（2026-09-20），理由与任务页同处一致；.qt 不加 r 类。 -->
+              <button class="q" type="button" aria-label="说明：图片与附件这一行"><span class="qi">?</span><span class="qt"><span class="qt-title">图片与附件</span><i>「＋AI」让 AI 读出图中内容</i><i>「识别填表」把读出的内容填进表单，不会直接存收藏</i><i>图片可直接拖进来或粘贴</i></span></button>
+              <span class="media-gap"></span>
+              <button class="btn" type="button" data-media-extract data-scope="favorite" data-category="favorite">识别填表</button>
+              <button class="btn primary" id="favoriteAddButton">保存收藏</button>
             </div>
-            <p class="mc-hint">Ctrl + Enter 保存；标题和正文至少写一项。<button class="q" type="button" aria-label="说明：备忘的保存与标题规则"><span class="qi">?</span><span class="qt"><span class="qt-title">保存与标题规则</span><i>正文里回车是换行，Ctrl + Enter 才保存</i><i>标题留空时自动取正文前 24 字</i><i>标签用逗号分隔；留空则按内容自动归类</i></span></button></p>
+            <p class="mc-hint">Ctrl + Enter 保存；标题和正文至少写一项。<button class="q" type="button" aria-label="说明：收藏的保存与标题规则"><span class="qi">?</span><span class="qt"><span class="qt-title">保存与标题规则</span><i>正文里回车是换行，Ctrl + Enter 才保存</i><i>标题留空时自动取正文前 24 字</i><i>标签用逗号分隔；留空则按内容自动归类</i></span></button></p>
           </div>
         </section>
-        <input id="memoSearch" class="search-input hidden" maxlength="100" placeholder="搜索当前空间">
-        <button class="q" type="button" aria-label="说明：备忘搜索的范围"><span class="qi">?</span><span class="qt r"><span class="qt-title">备忘搜索的范围</span>按标题 / 内容 / 标签 / 链接<strong>全文</strong>检索当前空间<i>已归档的备忘要勾「显示已归档」才会出现</i></span></button>
+        <input id="favoriteSearch" class="search-input hidden" maxlength="100" placeholder="搜索当前空间">
+        <button class="q" type="button" aria-label="说明：收藏搜索的范围"><span class="qi">?</span><span class="qt r"><span class="qt-title">收藏搜索的范围</span>按标题 / 内容 / 标签 / 链接<strong>全文</strong>检索当前空间<i>已归档的收藏要勾「显示已归档」才会出现</i></span></button>
         <!-- 「显示已归档」只在搜索展开时露面。它管的是**常驻列表**（不只是搜索这一次），
-             收起后没有入口就会翻不到归档备忘；更糟的是勾上再收起，列表里混着归档备忘却
+             收起后没有入口就会翻不到归档收藏；更糟的是勾上再收起，列表里混着归档收藏却
              看不到开关在哪——所以勾选生效时补一个「含归档」标签兜住（点一下直接关掉）。 -->
-        <label class="archived-toggle hidden" id="memoArchivedLabel" for="memoShowArchived"><input type="checkbox" id="memoShowArchived">显示已归档</label>
-        <button class="archived-chip hidden" id="memoArchivedChip" type="button" title="当前列表含已归档备忘，点一下关掉">含归档</button>
-        <button class="search-btn" id="memoSearchBtn" type="button" aria-label="搜索备忘" aria-expanded="false">
+        <label class="archived-toggle hidden" id="favoriteArchivedLabel" for="favoriteShowArchived"><input type="checkbox" id="favoriteShowArchived">显示已归档</label>
+        <button class="archived-chip hidden" id="favoriteArchivedChip" type="button" title="当前列表含已归档收藏，点一下关掉">含归档</button>
+        <button class="search-btn" id="favoriteSearchBtn" type="button" aria-label="搜索收藏" aria-expanded="false">
           <svg class="sb-glass" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.6 15.6 21 21"></path></svg>
           <svg class="sb-close" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"></path></svg>
           <span class="sb-dot" aria-hidden="true"></span>
         </button>
       </div>
     </article>
-    <!-- 备忘页原来没有这条提示条：输入框一直露在外面，关键词本身就是提示。现在收起态会把
+    <!-- 收藏页原来没有这条提示条：输入框一直露在外面，关键词本身就是提示。现在收起态会把
          输入框藏起来，没有这条就变成「列表是筛过的但看不出为什么」——必须补上。 -->
-    <div class="filter-note hidden" id="memoSearchNote"></div>
-    <div id="memoList" class="memo-grid"></div>
+    <div class="filter-note hidden" id="favoriteSearchNote"></div>
+    <div id="favoriteList" class="favorite-grid"></div>
   </section>
   <section class="view" id="view-timeline">
     <article class="card"><h3><span class="hrow">活动时间线<button class="q" type="button" aria-label="说明：时间线记录了什么"><span class="qi">?</span><span class="qt">收录、整理确认、任务完成、番茄都会在这里留下足迹，按日分组展示最近 500 条。</span></button></span> <span class="muted" id="logCount"></span></h3></article>
     <div id="timelineList"></div>
   </section>
   <section class="view" id="view-knowledge">
-    <article class="card">
-      <h3><span class="hrow">收藏文章<button class="q" type="button" aria-label="说明：收藏后会发生什么"><span class="qi">?</span><span class="qt"><span class="qt-title">收藏后会发生什么</span><i>自动抓出标题、作者和正文</i><i>按课程归档到 Obsidian，并录入下面的知识库</i><i>支持得到分享链接，或微信里整段分享文案</i><i>重复收藏不会覆盖，会另存一个新文件</i></span></button></span></h3>
+    <article class="card collect-card" id="collectCard">
+      <h3><span class="hrow">收藏文章<button class="q" type="button" aria-label="说明：收藏后会发生什么"><span class="qi">?</span><span class="qt"><span class="qt-title">收藏后会发生什么</span><i>自动抓出标题、作者和正文</i><i>按课程归档到 Obsidian，并录入下面的知识库</i><i>支持得到分享链接、微信分享文案，也可以把卡片直接拖进来</i><i>重复收藏不会覆盖，会另存一个新文件</i><i>只抓到试读时不会写入 —— 会告诉你去哪儿补登录 Cookie</i></span></button></span></h3>
       <div class="kb-chat-row">
         <input type="text" id="collectInput" maxlength="2000" placeholder="粘贴分享链接或文案">
         <button class="btn primary" id="collectButton">收藏</button>
       </div>
+      <p class="collect-drop-hint" id="collectDropHint">也可以把得到的分享卡片从微信里直接拖到这张卡片上</p>
     </article>
     <article class="card kb-chat-card">
       <h3>知识库问答 <span class="muted" id="kbIndexInfo"></span></h3>
@@ -415,6 +459,10 @@
         <div class="set-field"><label for="setVaultPath"><span class="hrow">Vault 路径<button class="q" type="button" aria-label="说明：配置 Vault 后会发生什么"><span class="qi">?</span><span class="qt"><span class="qt-title">配置后会怎样</span><i>整理确认时选「知识」会把条目写入该库的 00-Inbox 目录</i><i>「知识」页签可直接对库内全部笔记问答</i><i>只追加写入，不动已有文件</i></span></button></span></label><div class="set-row2"><input id="setVaultPath" maxlength="300" placeholder="D:\notes\vault"><button class="btn primary" id="saveVaultButton">保存路径</button></div><p class="set-note" id="vaultStatus">正在检测 Vault 状态…</p></div>
       </article>
       <article class="set-card">
+        <div class="set-card-head"><div class="set-ico" style="background:#f7ecd9;color:#8a5a1d">得</div><div><h3>得到（收藏文章取全文）</h3><p>分享页对未登录访问只给前约 20% 正文；带上你的登录态，已购文章才抓得到全文</p></div></div>
+        <div class="set-field"><label for="setDedaoCookie"><span class="hrow">登录 Cookie<button class="q" type="button" aria-label="说明：Cookie 怎么拿、为什么要、安不安全"><span class="qi">?</span><span class="qt"><span class="qt-title">三件事</span><i>怎么拿：浏览器登录得到 → F12 → 网络 → 点任一 dedao.cn 请求 → 复制「请求标头」里 Cookie 那一行的值</i><i>为什么要：分享页对未登录访问只下发约 20% 正文，带上登录态才会给已购文章的全文</i><i>安全：只存在本机数据库，不会回传，也不会出现在接口响应里</i></span></button></span></label><div class="set-row2"><input type="password" id="setDedaoCookie" maxlength="4000" placeholder="留空保持不变"><button class="btn primary" id="saveDedaoCookieButton">保存</button></div><p class="set-note" id="dedaoCookieHint">未配置：收藏文章只能拿到试读部分。</p></div>
+      </article>
+      <article class="set-card">
         <div class="set-card-head"><div class="set-ico" style="background:#e6f4f1;color:#0f6e56">备</div><div><h3>数据安全</h3><p>每日 02:00 自动备份，保留最近 14 份，可随时恢复</p></div></div>
         <div class="set-field"><button class="btn primary" id="backupNowButton">立即备份</button></div>
         <div id="backupList"></div>
@@ -452,85 +500,85 @@
     </div>
   </div>
 </div>
-<!-- 备忘编辑弹层（2026-09-17）。原来是卡片内联的 .edit-panel，#memo-edit-{id}，
-     宽度被 .memo-grid 的列宽锁死：1120px 容器下三列、单卡约 353px，扣掉卡片与面板两级
+<!-- 收藏编辑弹层（2026-09-17）。原来是卡片内联的 .edit-panel，#favorite-edit-{id}，
+     宽度被 .favorite-grid 的列宽锁死：1120px 容器下三列、单卡约 353px，扣掉卡片与面板两级
      内边距后正文只有约 285×80px（rows="3"），而 maxlength 是 4000 —— 是面积不够，不是配色问题。
      ⚠️ 三条硬约束：
      ① 容器只能放在 <main> 之外：弹层用 position:fixed，放进 .view 里会被祖先的
-        transform / overflow 造出包含块并裁切（.memo-card 有 transition:transform，
+        transform / overflow 造出包含块并裁切（.favorite-card 有 transition:transform，
         将来谁给它加一个 transform，弹层就会被关在卡片里）；
-     ② 全局唯一一份，不再按卡片各渲染一份 —— 打开时把那条备忘的值灌进来即可；
-     ③ 这套类名（.memo-mask / .memo-modal / .mm-*）**类名沿自备忘，但现在是通用弹层骨架** ——
+     ② 全局唯一一份，不再按卡片各渲染一份 —— 打开时把那条收藏的值灌进来即可；
+     ③ 这套类名（.editor-mask / .editor-modal / .mm-*）**类名沿自收藏，但现在是通用弹层骨架** ——
         2026-09-18 起任务与日程的编辑也搬了进来（见下面两个容器），三处共用同一份 CSS，
-        各弹层的差异只走变体类（.mm-auto / .mm-even / .mm-checks），不要再复制第二套。 -->
-<div class="memo-mask" id="memoEditorMask" role="dialog" aria-modal="true" aria-labelledby="memoEditorHeading">
-  <div class="memo-modal">
-    <div class="mm-head">
-      <span class="mm-title" id="memoEditorHeading">编辑备忘</span>
-      <button class="mm-x" type="button" id="memoEditorClose" aria-label="关闭编辑弹层">×</button>
+        各弹层的差异只走变体类（.em-auto / .em-even / .em-checks），不要再复制第二套。 -->
+<div class="editor-mask" id="favoriteEditorMask" role="dialog" aria-modal="true" aria-labelledby="favoriteEditorHeading">
+  <div class="editor-modal">
+    <div class="em-head">
+      <span class="em-title" id="favoriteEditorHeading">编辑收藏</span>
+      <button class="em-x" type="button" id="favoriteEditorClose" aria-label="关闭编辑弹层">×</button>
     </div>
-    <input class="mm-field mm-title-input" id="memoEditTitle" maxlength="200" placeholder="标题（可留空）" aria-label="标题">
-    <textarea class="mm-field mm-body-input" id="memoEditContent" maxlength="4000" placeholder="正文（可留空）" aria-label="正文"></textarea>
-    <div class="mm-row">
-      <input class="mm-field" id="memoEditTags" maxlength="500" placeholder="标签，逗号分隔" aria-label="标签">
-      <select class="mm-field" id="memoEditGrp" aria-label="空间"><option value="work">工作</option><option value="life">生活</option></select>
+    <input class="em-field em-title-input" id="favoriteEditTitle" maxlength="200" placeholder="标题（可留空）" aria-label="标题">
+    <textarea class="em-field em-body-input" id="favoriteEditContent" maxlength="4000" placeholder="正文（可留空）" aria-label="正文"></textarea>
+    <div class="em-row">
+      <input class="em-field" id="favoriteEditTags" maxlength="500" placeholder="标签，逗号分隔" aria-label="标签">
+      <select class="em-field" id="favoriteEditGrp" aria-label="空间"><option value="work">工作</option><option value="life">生活</option></select>
     </div>
     <!-- 附件区（2026-09-19）：弹层里能看到、能加、能删。
          ⚠️ 这里复用录入区那套上传机制（data-media-scope / data-media-strip / data-media-attach），
             所以点击选文件、拖进来、Ctrl+V 粘图、上传进度、失败重试全部是现成的，不另写一套。
          ⚠️ 附件区的改动**立即生效、不受「取消」影响** —— 用户在弹层里加附件这句话本身就是提交意图，
             没有第二个提交动作可以等。这件事必须写在界面上，别让它变成一次静默的意外。 -->
-    <div class="mm-atts-wrap" data-media-scope="edit-memo">
-      <span class="mm-label">附件 <span class="mm-att-hint">改动即时生效，不受「取消」影响</span></span>
+    <div class="em-atts-wrap" data-media-scope="edit-favorite">
+      <span class="em-label">附件 <span class="em-att-hint">改动即时生效，不受「取消」影响</span></span>
       <div class="media-strip" data-media-strip></div>
       <button class="media-attach" type="button" data-media-attach>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
         添加附件<span class="media-cnt hidden" data-media-count></span>
       </button>
     </div>
-    <div class="mm-foot">
-      <span class="mm-count" id="memoEditCount">0 / 4000</span>
-      <span class="mm-kbd">Ctrl + Enter 保存 · Esc 取消</span>
-      <span class="mm-btns">
-        <button class="btn sm" type="button" id="memoEditorCancel">取消</button>
-        <button class="btn sm primary" type="button" id="memoEditorSave">保存备忘</button>
+    <div class="em-foot">
+      <span class="em-count" id="favoriteEditCount">0 / 4000</span>
+      <span class="em-kbd">Ctrl + Enter 保存 · Esc 取消</span>
+      <span class="em-btns">
+        <button class="btn sm" type="button" id="favoriteEditorCancel">取消</button>
+        <button class="btn sm primary" type="button" id="favoriteEditorSave">保存收藏</button>
       </span>
     </div>
   </div>
 </div>
 <!-- 任务编辑弹层（2026-09-18）。原来是与日程共用的卡片内联 .edit-panel（#edit-{id}）：
      卡片约 273~350px 宽、下面还压着一整行 5 个操作按钮，字段只能挤成单列，
-     备注更是一个单行 input（maxlength 1000）。现在与备忘同一套骨架，点卡片上的「编辑」打开。
+     备注更是一个单行 input（maxlength 1000）。现在与收藏同一套骨架，点卡片上的「编辑」打开。
      字段与原来的内联表单一一对应：标题 / 优先级 / 截止日期 / 备注 / 深度工作 / 阻塞他人。 -->
-<div class="memo-mask" id="taskEditorMask" role="dialog" aria-modal="true" aria-labelledby="taskEditorHeading">
-  <div class="memo-modal">
-    <div class="mm-head">
-      <span class="mm-title" id="taskEditorHeading">编辑任务</span>
-      <button class="mm-x" type="button" id="taskEditorClose" aria-label="关闭编辑弹层">×</button>
+<div class="editor-mask" id="taskEditorMask" role="dialog" aria-modal="true" aria-labelledby="taskEditorHeading">
+  <div class="editor-modal">
+    <div class="em-head">
+      <span class="em-title" id="taskEditorHeading">编辑任务</span>
+      <button class="em-x" type="button" id="taskEditorClose" aria-label="关闭编辑弹层">×</button>
     </div>
-    <input class="mm-field mm-title-input" id="taskEditTitle" maxlength="200" placeholder="标题" aria-label="标题">
-    <div class="mm-row mm-even">
-      <label class="mm-cell"><span class="mm-label">优先级</span><select class="mm-field" id="taskEditPriority" aria-label="优先级"><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option></select></label>
-      <label class="mm-cell"><span class="mm-label">截止日期</span><input class="mm-field" type="date" id="taskEditDue" aria-label="截止日期"></label>
+    <input class="em-field em-title-input" id="taskEditTitle" maxlength="200" placeholder="标题" aria-label="标题">
+    <div class="em-row em-even">
+      <label class="em-cell"><span class="em-label">优先级</span><select class="em-field" id="taskEditPriority" aria-label="优先级"><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option></select></label>
+      <label class="em-cell"><span class="em-label">截止日期</span><input class="em-field" type="date" id="taskEditDue" aria-label="截止日期"></label>
     </div>
-    <textarea class="mm-field mm-body-input" id="taskEditNote" maxlength="1000" placeholder="备注（可留空）" aria-label="备注"></textarea>
-    <div class="checks mm-checks">
+    <textarea class="em-field em-body-input" id="taskEditNote" maxlength="1000" placeholder="备注（可留空）" aria-label="备注"></textarea>
+    <div class="checks em-checks">
       <label><input type="checkbox" id="taskEditDeep"> 深度工作</label>
       <label><input type="checkbox" id="taskEditBlocking"> 阻塞他人</label>
     </div>
-    <!-- 附件区：与备忘弹层同一套（见那边更长的注释）。 -->
-    <div class="mm-atts-wrap" data-media-scope="edit-task">
-      <span class="mm-label">附件 <span class="mm-att-hint">改动即时生效，不受「取消」影响</span></span>
+    <!-- 附件区：与收藏弹层同一套（见那边更长的注释）。 -->
+    <div class="em-atts-wrap" data-media-scope="edit-task">
+      <span class="em-label">附件 <span class="em-att-hint">改动即时生效，不受「取消」影响</span></span>
       <div class="media-strip" data-media-strip></div>
       <button class="media-attach" type="button" data-media-attach>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
         添加附件<span class="media-cnt hidden" data-media-count></span>
       </button>
     </div>
-    <div class="mm-foot">
-      <span class="mm-count" id="taskEditCount">0 / 1000</span>
-      <span class="mm-kbd">Ctrl + Enter 保存 · Esc 取消</span>
-      <span class="mm-btns">
+    <div class="em-foot">
+      <span class="em-count" id="taskEditCount">0 / 1000</span>
+      <span class="em-kbd">Ctrl + Enter 保存 · Esc 取消</span>
+      <span class="em-btns">
         <button class="btn sm" type="button" id="taskEditorCancel">取消</button>
         <button class="btn sm primary" type="button" id="taskEditorSave">保存任务</button>
       </span>
@@ -542,40 +590,40 @@
      ⚠️「移至 / 删除」原本在内联面板的操作条里，弹层化之后移到底栏左侧 —— 不能顺手丢掉：
         日程卡片只有 136px、本身放不下任何按钮，删掉操作条就等于这两件事没有入口。
         「移至」按当前那一期的 id 渲染，所以底栏左侧是个空容器，打开时由 app.js 注入。
-     ⚠️ 下拉必须向上弹（style.css 的 .mm-foot .move-menu），否则会被弹层的 overflow:hidden 裁掉。
+     ⚠️ 下拉必须向上弹（style.css 的 .em-foot .move-menu），否则会被弹层的 overflow:hidden 裁掉。
      类型选项由 openEventEditor 按 eventTypeName() 重建，这里写的是同样的三档。 -->
-<div class="memo-mask" id="eventEditorMask" role="dialog" aria-modal="true" aria-labelledby="eventEditorHeading">
-  <div class="memo-modal mm-auto">
-    <div class="mm-head">
-      <span class="mm-title" id="eventEditorHeading">编辑日程<span class="mm-hint" id="eventEditHint"></span></span>
-      <button class="mm-x" type="button" id="eventEditorClose" aria-label="关闭编辑弹层">×</button>
+<div class="editor-mask" id="eventEditorMask" role="dialog" aria-modal="true" aria-labelledby="eventEditorHeading">
+  <div class="editor-modal em-auto">
+    <div class="em-head">
+      <span class="em-title" id="eventEditorHeading">编辑日程<span class="em-hint" id="eventEditHint"></span></span>
+      <button class="em-x" type="button" id="eventEditorClose" aria-label="关闭编辑弹层">×</button>
     </div>
-    <input class="mm-field mm-title-input" id="eventEditTitle" maxlength="200" placeholder="标题" aria-label="标题">
-    <div class="mm-row mm-even">
-      <label class="mm-cell"><span class="mm-label">类型</span><select class="mm-field" id="eventEditType" aria-label="类型"><option value="meeting">会议</option><option value="deep_block">深度块</option><option value="other">其他</option></select></label>
-      <label class="mm-cell"><span class="mm-label">日期</span><input class="mm-field" type="date" id="eventEditDate" aria-label="日期"></label>
+    <input class="em-field em-title-input" id="eventEditTitle" maxlength="200" placeholder="标题" aria-label="标题">
+    <div class="em-row em-even">
+      <label class="em-cell"><span class="em-label">类型</span><select class="em-field" id="eventEditType" aria-label="类型"><option value="meeting">会议</option><option value="deep_block">深度块</option><option value="other">其他</option></select></label>
+      <label class="em-cell"><span class="em-label">日期</span><input class="em-field" type="date" id="eventEditDate" aria-label="日期"></label>
     </div>
-    <div class="mm-row mm-even">
-      <label class="mm-cell"><span class="mm-label">开始</span><span class="tp"><input class="mm-field" type="time" id="eventEditStart" aria-label="开始时间"><span class="tp-chips"></span></span></label>
-      <label class="mm-cell"><span class="mm-label">结束</span><span class="tp"><input class="mm-field" type="time" id="eventEditEnd" aria-label="结束时间"><span class="tp-chips"></span></span></label>
+    <div class="em-row em-even">
+      <label class="em-cell"><span class="em-label">开始</span><span class="tp"><input class="em-field" type="time" id="eventEditStart" aria-label="开始时间"><span class="tp-chips"></span></span></label>
+      <label class="em-cell"><span class="em-label">结束</span><span class="tp"><input class="em-field" type="time" id="eventEditEnd" aria-label="结束时间"><span class="tp-chips"></span></span></label>
     </div>
-    <p class="mm-note hidden" id="eventEditRepeatNote"></p>
-    <p class="mm-note hidden" id="eventEditPendingNote">填上日期并保存，它就会从「待定时间」区排进那一天。</p>
-    <p class="mm-note">清空日期会把它放回「待定时间」区。</p>
-    <!-- 附件区：与备忘弹层同一套。重复日程只有**首期**能挂附件（其余期本来就是空的，
+    <p class="em-note hidden" id="eventEditRepeatNote"></p>
+    <p class="em-note hidden" id="eventEditPendingNote">填上日期并保存，它就会从「待定时间」区排进那一天。</p>
+    <p class="em-note">清空日期会把它放回「待定时间」区。</p>
+    <!-- 附件区：与收藏弹层同一套。重复日程只有**首期**能挂附件（其余期本来就是空的，
          不是漏了）—— 这一点在 style.css / EventVO 里都有说明，界面上不再多写一句。 -->
-    <div class="mm-atts-wrap" data-media-scope="edit-event">
-      <span class="mm-label">附件 <span class="mm-att-hint">改动即时生效，不受「取消」影响</span></span>
+    <div class="em-atts-wrap" data-media-scope="edit-event">
+      <span class="em-label">附件 <span class="em-att-hint">改动即时生效，不受「取消」影响</span></span>
       <div class="media-strip" data-media-strip></div>
       <button class="media-attach" type="button" data-media-attach>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
         添加附件<span class="media-cnt hidden" data-media-count></span>
       </button>
     </div>
-    <div class="mm-foot">
-      <span class="mm-left" id="eventEditorMoveWrap"></span>
+    <div class="em-foot">
+      <span class="em-left" id="eventEditorMoveWrap"></span>
       <button class="btn sm danger" type="button" id="eventEditorDelete">删除</button>
-      <span class="mm-btns">
+      <span class="em-btns">
         <button class="btn sm" type="button" id="eventEditorCancel">取消</button>
         <button class="btn sm primary" type="button" id="eventEditorSave">保存日程</button>
       </span>
@@ -593,6 +641,17 @@
     <button class="av-nav av-prev hidden" type="button" id="avPrev" aria-label="上一张">‹</button>
     <button class="av-nav av-next hidden" type="button" id="avNext" aria-label="下一张">›</button>
   </div>
+</div>
+<!-- 诗词全屏展示（2026-09-20）。
+     放在 <main> 之外、与 .att-viewer 同级：它要盖住整页（含顶栏），
+     放在 .app 里就会被 .app 的层叠上下文关住。
+     ⚠️ 祖先里不能有 transform / filter / backdrop-filter —— 会给 position:fixed 造出包含块
+     （与 .poem-rail 同一条约束，见 style.css）。
+     内容全部由 poems.js 填充；这里的空壳只为「元素一定存在」——
+     poems.js 的初始化不会因为少一个 id 而整块失效。 -->
+<div class="pfs hidden" id="poemFullscreen" role="dialog" aria-modal="true" aria-label="诗词全屏展示">
+  <button class="pfs-close" type="button" id="pfsClose" data-pfs-close aria-label="退出全屏（Esc）" title="退出全屏（Esc）"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.6 3.6l8.8 8.8M12.4 3.6l-8.8 8.8"/></svg></button>
+  <div class="pfs-inner" id="pfsInner"></div>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="/api.js"></script>

@@ -89,10 +89,10 @@ public class TrashService {
                 return when + " · " + eventTypeName(rs.getString("event_type"));
             }
         });
-        ENTITIES.put("memo", new EntitySpec("memo", "id, title, content, grp") {
+        ENTITIES.put("favorite", new EntitySpec("favorite", "id, title, content, grp") {
             @Override
             String title(ResultSet rs) throws SQLException {
-                // 备忘常常只有正文没有标题。此时用正文当标题，
+                // 收藏常常只有正文没有标题。此时用正文当标题，
                 // 否则回收站里会出现一片认不出是哪条的空白条目。
                 String title = rs.getString("title");
                 if (title != null && !title.trim().isEmpty()) return title;

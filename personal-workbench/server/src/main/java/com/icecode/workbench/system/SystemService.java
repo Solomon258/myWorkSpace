@@ -14,7 +14,7 @@ import com.icecode.workbench.common.ErrorCode;
 @Service
 public class SystemService {
 
-    private static final String[] DEMO_TABLES = {"inbox_item", "task", "schedule_event", "memo", "activity_log"};
+    private static final String[] DEMO_TABLES = {"inbox_item", "task", "schedule_event", "favorite", "activity_log"};
 
     private final JdbcTemplate jdbcTemplate;
     private final ApplicationContext applicationContext;
@@ -52,14 +52,14 @@ public class SystemService {
         int total = 0;
 
         // SQLite 开启了外键校验（DataSourceConfig#enforceForeignKeys=true）。
-        // 用户基于「示例」收件条目整理出的真实数据（任务/备忘/日程/知识/微信消息），
+        // 用户基于「示例」收件条目整理出的真实数据（任务/收藏/日程/知识/微信消息），
         // 会通过 source_inbox_id 引用示例 inbox_item；直接 DELETE 示例 inbox_item 会触发
         // SQLITE_CONSTRAINT_FOREIGNKEY，使整笔事务回滚、清空失败。先断开这些外键关联
         // （仅解关联、保留真实数据本身），再删除示例行。
         String demoInboxIds = "SELECT id FROM inbox_item WHERE is_demo=1";
         jdbcTemplate.update("UPDATE task SET source_inbox_id=NULL WHERE source_inbox_id IN (" + demoInboxIds + ")");
         jdbcTemplate.update("UPDATE schedule_event SET source_inbox_id=NULL WHERE source_inbox_id IN (" + demoInboxIds + ")");
-        jdbcTemplate.update("UPDATE memo SET source_inbox_id=NULL WHERE source_inbox_id IN (" + demoInboxIds + ")");
+        jdbcTemplate.update("UPDATE favorite SET source_inbox_id=NULL WHERE source_inbox_id IN (" + demoInboxIds + ")");
         jdbcTemplate.update("UPDATE knowledge_note SET source_inbox_id=NULL WHERE source_inbox_id IN (" + demoInboxIds + ")");
         jdbcTemplate.update("UPDATE wechat_msg_log SET inbox_item_id=NULL WHERE inbox_item_id IN (" + demoInboxIds + ")");
 

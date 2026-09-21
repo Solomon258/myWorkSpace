@@ -32,6 +32,17 @@ import com.icecode.workbench.common.ErrorCode;
  * （这不是巧合，它就是课程在得到的官方命名），所以「按作者分文件夹」可以做到精确匹配
  * 而不是猜。这些字段是 2026-09-14 用一个真实分享链接实测确认的。
  *
+ * <h3>正文为什么可能只有一小半（2026-09-20 查清）</h3>
+ *
+ * <p>分享页内联的 {@code articleInfo.content} <b>在匿名请求下只包含试读部分</b>：
+ * 实测 16 段 / 1023 字，末段本身是完整句子（不是被截断的半个字）。
+ * 判据是服务端的两个权限位见 {@link #hasAuthority}；匿名时 {@code userStatus = 0}。
+ *
+ * <p>已验证拿不到全文的三条路（都实测过）：{@code /share/packet}、{@code /share/trialReading}、
+ * 老版 {@code m.igetget.com/share/course/pay/detail}（后者是 Vue 空壳，正文字符数为 0）。
+ * 得到的 {@code acceptClass（领取红包）} 在已登录时只做 {@code location.reload()} ——
+ * 权限由服务端凭会话判定，<b>前端与后端都绕不过去</b>，唯一的路是带上用户自己的登录态。
+ *
  * <p>直连即可，不需要代理；移动端 UA 返回的内容与桌面端一致，但用移动端 UA 更贴近真实分享场景。
  */
 @Service
@@ -64,7 +75,21 @@ public class DedaoShareParser {
      * 绝不返回半成品 —— 调用方拿到对象就意味着 title 一定非空。
      */
     public ArticleMeta parse(String url) {
-        String html = fetch(url);
+        return parse(url, null);
+    }
+
+    /**
+     * 带登录态抓取。
+     *
+     * <p>{@code cookie} 是用户在设置里粘贴的浏览器 Cookie 整串。为空 = 匿名请求，
+     * 此时服务端只下发试读正文，返回对象的 {@link ArticleMeta#trialOnly} 为 true。
+     *
+     * <p><b>为什么不在这里读配置</b>：解析器保持「纯函数」形态（输入 URL + 凭据，
+     * 输出元信息），配置从哪来由调用方决定 —— 这样单测可以直接喂样本，
+     * 不必为了测试去造一个配置表。
+     */
+    public ArticleMeta parse(String url, String cookie) {
+        String html = fetch(url, cookie);
         if (html == null) {
             throw new BizException(ErrorCode.ARTICLE_PARSE_FAILED,
                     "打不开这个链接，请确认它能在手机浏览器里正常打开");
@@ -102,9 +127,28 @@ public class DedaoShareParser {
             author = text(lecturers.get(0), "name");
         }
         String content = extractContent(state);
-        LOGGER.info("解析得到分享成功：{} / {} / {} / 正文 {} 字",
-                collection, author, title, content.length());
-        return new ArticleMeta("dedao", title, collection, author, url, content);
+        boolean authority = hasAuthority(packet);
+        LOGGER.info("解析得到分享成功：{} / {} / {} / 正文 {} 字 / 阅读权限 {}（userStatus={}）",
+                collection, author, title, content.length(), authority, state.path("userStatus").asInt(-1));
+        return new ArticleMeta("dedao", title, collection, author, url, content, !authority);
+    }
+
+    /**
+     * 服务端是否给了阅读权限 —— 没有就只拿到了试读正文。
+     *
+     * <p>两个字段取并集，与得到前端 {@code packet.js} 里的 {@code hasAuthority()} 判断一致：
+     * <pre>
+     *   packetInfo.has_authority                    → 已购买 / 已领取红包 的通用位
+     *   packetInfo.red_packet_data.red_packet_authority → 知识红包的领取位
+     * </pre>
+     *
+     * <p>2026-09-20 用真实分享链接实测：匿名请求这三个位置分别是 {@code false / false / userStatus=0}，
+     * 正文只有 1023 字（16 段）。页面那句「本篇内容剩余80%，继续学习」是前端写死的字符串
+     * （每个分享页都显示 80%），不是真实比例。
+     */
+    private boolean hasAuthority(JsonNode packet) {
+        if (packet.path("has_authority").asBoolean(false)) return true;
+        return packet.path("red_packet_data").path("red_packet_authority").asBoolean(false);
     }
 
     /**
@@ -156,7 +200,7 @@ public class DedaoShareParser {
 
     // ------------------------------------------------------------------ 抓取
 
-    private String fetch(String url) {
+    private String fetch(String url, String cookie) {
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) new URL(url.trim()).openConnection();
@@ -167,6 +211,11 @@ public class DedaoShareParser {
             connection.setRequestProperty("User-Agent", MOBILE_UA);
             connection.setRequestProperty("Accept", "text/html,application/xhtml+xml");
             connection.setRequestProperty("Accept-Language", "zh-CN,zh;q=0.9");
+            // 带上用户自己的登录态：服务端据此决定 has_authority，从而下发全文而不是试读。
+            // 整串原样透传 —— 逐项解析再拼回去只会因为同名 / 域不匹配而漏掉关键项。
+            if (cookie != null && !cookie.trim().isEmpty()) {
+                connection.setRequestProperty("Cookie", cookie.trim());
+            }
             int status = connection.getResponseCode();
             if (status != HttpURLConnection.HTTP_OK) {
                 LOGGER.warn("抓取得到分享页返回 {}：{}", status, url);

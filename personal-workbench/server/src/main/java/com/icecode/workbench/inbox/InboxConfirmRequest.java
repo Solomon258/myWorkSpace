@@ -9,7 +9,7 @@ import javax.validation.constraints.Size;
 public class InboxConfirmRequest {
 
     @NotBlank(message = "分类不能为空")
-    @Pattern(regexp = "task|schedule|memo|knowledge", message = "分类只能填 任务(task) / 日程(schedule) / 备忘(memo) / 知识(knowledge)")
+    @Pattern(regexp = "task|schedule|favorite|knowledge", message = "分类只能填 任务(task) / 日程(schedule) / 收藏(favorite) / 知识(knowledge)")
     private String category;
 
     @Size(max = 200, message = "标题不能超过 200 字")

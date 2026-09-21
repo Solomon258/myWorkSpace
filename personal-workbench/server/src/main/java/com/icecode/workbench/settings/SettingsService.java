@@ -41,6 +41,16 @@ public class SettingsService {
      */
     public static final String KEY_AI_VISION_LOCAL_ONLY = "ai.vision_local_only";
     public static final String KEY_OBSIDIAN_VAULT = "obsidian.vault_path";
+    /**
+     * 得到的登录 Cookie（浏览器里复制的那一整串）。
+     *
+     * <p>为什么需要它：得到的分享页对<b>匿名</b>请求只下发试读正文（2026-09-20 实测 1023 字，
+     * 约为全文的 20%），带登录态请求才会对已购 / 已领取的文章下发全文。
+     * 详见 {@code DedaoShareParser} 的类注释与 {@code ArticleCollectService.trialOnlyMessage}。
+     *
+     * <p>与 API Key 同级对待：只落在本机 SQLite，接口不回传明文，只回「配没配」。
+     */
+    public static final String KEY_DEDAO_COOKIE = "dedao.cookie";
 
     private final AppConfigRepository configRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
@@ -53,8 +63,10 @@ public class SettingsService {
         Map<String, String> config = configRepository.findValues(
                 AuthConstants.CONFIG_USERNAME,
                 KEY_AI_ENABLED, KEY_AI_BASE_URL, KEY_AI_MODEL, KEY_AI_API_KEY,
-                KEY_AI_VISION_MODEL, KEY_AI_VISION_LOCAL_ONLY, KEY_OBSIDIAN_VAULT);
+                KEY_AI_VISION_MODEL, KEY_AI_VISION_LOCAL_ONLY, KEY_OBSIDIAN_VAULT,
+                KEY_DEDAO_COOKIE);
         String apiKey = config.get(KEY_AI_API_KEY);
+        String dedaoCookie = config.get(KEY_DEDAO_COOKIE);
         return new SettingsVO(
                 config.get(AuthConstants.CONFIG_USERNAME),
                 Boolean.parseBoolean(config.get(KEY_AI_ENABLED)),
@@ -64,7 +76,45 @@ public class SettingsService {
                 apiKey != null && !apiKey.isEmpty(),
                 emptyToNull(config.get(KEY_OBSIDIAN_VAULT)),
                 emptyToNull(config.get(KEY_AI_VISION_MODEL)),
-                Boolean.parseBoolean(config.get(KEY_AI_VISION_LOCAL_ONLY)));
+                Boolean.parseBoolean(config.get(KEY_AI_VISION_LOCAL_ONLY)),
+                dedaoCookie != null && !dedaoCookie.trim().isEmpty());
+    }
+
+    /**
+     * 保存得到登录 Cookie。传空串表示清除（用户换账号 / 想撤掉凭据时用）。
+     *
+     * <p>做一道「看起来不像 Cookie」的轻校验：用户很容易把地址栏、User-Agent 甚至
+     * 整页 HTML 复制进来，那时如果默默存下，下一次收藏失败的原因会指向「Cookie 过期」，
+     * 而真正的问题是复制错了东西 —— 在保存这一刻拦住能省一整轮排查。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public SettingsVO saveDedaoCookie(DedaoCookieRequest request) {
+        String cookie = normalizeCookie(request.getCookie());
+        if (cookie != null && cookie.indexOf('=') < 0) {
+            throw new BizException(ErrorCode.INVALID_PARAMETER,
+                    "这段文本看起来不是浏览器 Cookie：它应当是 name=value; name2=value2 的形态。"
+                            + "请在浏览器里登录得到后，按 F12 打开开发者工具 → 网络 → 点任一 dedao.cn 请求 → "
+                            + "在「请求标头」里找到 Cookie 那一行，复制它的值。");
+        }
+        configRepository.save(KEY_DEDAO_COOKIE, cookie == null ? "" : cookie, now());
+        return get();
+    }
+
+    /**
+     * 归一化用户粘贴的内容：去掉首尾空白，并把整行请求头一起复制过来的情况兜住。
+     *
+     * <p>从开发者工具复制时，很容易连 {@code Cookie: } 这个前缀一起带走；
+     * 原样塞进请求头会变成 {@code Cookie: Cookie: a=b}，服务端认不出来，而且失败得很安静。
+     */
+    private String normalizeCookie(String raw) {
+        String value = trimToNull(raw);
+        if (value == null) return null;
+        if (value.regionMatches(true, 0, "cookie:", 0, 7)) value = value.substring(7).trim();
+        // CSV / 表格里粘贴常常带一层引号
+        if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+            value = value.substring(1, value.length() - 1).trim();
+        }
+        return value.isEmpty() ? null : value;
     }
 
     @Transactional(rollbackFor = Exception.class)

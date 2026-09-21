@@ -24,7 +24,7 @@ public class TaskVO {
     private final String updatedAt;
     private final String completedAt;
     private final boolean demo;
-    /** 这条任务的附件（deleted=0）。列表接口一并带上，理由见 MemoVO 上的同一段注释。 */
+    /** 这条任务的附件（deleted=0）。列表接口一并带上，理由见 FavoriteVO 上的同一段注释。 */
     private final List<AttachmentVO> attachments;
 
     public TaskVO(long id, String title, String description, String priority, String status, String due,

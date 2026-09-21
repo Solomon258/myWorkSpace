@@ -142,7 +142,7 @@ personal-workbench/
 │       │   │   ├── inbox/      InboxController.java, InboxService.java, ClassifyService.java
 │       │   │   ├── task/       TaskController.java, TaskService.java, TaskRepository.java
 │       │   │   ├── event/      EventController.java, EventService.java
-│       │   │   ├── memo/       MemoController.java, MemoService.java
+│       │   │   ├── favorite/       FavoriteController.java, FavoriteService.java
 │       │   │   ├── pomo/       PomoController.java, PomoService.java
 │       │   │   ├── activity/   ActivityController.java, ActivityService.java
 │       │   │   ├── plan/       PlanController.java, PlanService.java, RuleEngine.java
@@ -246,8 +246,8 @@ CREATE TABLE schedule_event (
 );
 CREATE INDEX idx_event_date ON schedule_event(event_date, start_time);
 
--- ============ 备忘 ============
-CREATE TABLE memo (
+-- ============ 收藏 ============
+CREATE TABLE favorite (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     title           TEXT    NOT NULL,
     content         TEXT,
@@ -261,8 +261,8 @@ CREATE TABLE memo (
     created_at      TEXT    NOT NULL,
     updated_at      TEXT
 );
-CREATE INDEX idx_memo_status ON memo(status, pinned DESC);
-CREATE INDEX idx_memo_grp ON memo(grp, status);
+CREATE INDEX idx_favorite_status ON favorite(status, pinned DESC);
+CREATE INDEX idx_favorite_grp ON favorite(grp, status);
 
 -- ============ 番茄钟 ============
 CREATE TABLE pomodoro (
@@ -356,7 +356,7 @@ CREATE TABLE app_config (
 
 ```sql
 CREATE INDEX idx_task_deleted ON task(deleted);
-CREATE INDEX idx_memo_deleted ON memo(deleted);
+CREATE INDEX idx_favorite_deleted ON favorite(deleted);
 CREATE INDEX idx_inbox_deleted ON inbox_item(deleted);
 
 INSERT OR IGNORE INTO app_config(config_key, config_value) VALUES
@@ -380,7 +380,7 @@ INSERT OR IGNORE INTO app_config(config_key, config_value) VALUES
 - 收集箱 4 条（其中 1 条 `source='wecom'`、1 条 `type='voice'`）
 - 任务 4 条，**其中 1 条 `due_date = 昨天`（逾期）**
 - 日程 3 条（今天）
-- 备忘 4 条（1 条 `pinned=1`）
+- 收藏 4 条（1 条 `pinned=1`）
 - 时间线 3 条
 
 同时提供 `DELETE /api/v1/system/demo-data` 一键清空示例数据。
@@ -589,16 +589,16 @@ public class DataSourceConfig {
 
 > `type` 取值：`meeting` / `deep_block` / `other`。时间重叠时**警告但不阻止**（返回 `warnings` 字段）。
 
-### 4.7 备忘
+### 4.7 收藏
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/v1/memos?grp=&status=&keyword=` | 列表；`keyword` 覆盖标题/内容/标签/链接 |
-| POST | `/api/v1/memos` | 新建 |
-| PATCH | `/api/v1/memos/{id}` | 编辑 |
-| POST | `/api/v1/memos/{id}/pin` | 切换置顶 |
-| POST | `/api/v1/memos/{id}/archive` | 归档 / 恢复 |
-| DELETE | `/api/v1/memos/{id}` | 软删除 |
+| GET | `/api/v1/favorites?grp=&status=&keyword=` | 列表；`keyword` 覆盖标题/内容/标签/链接 |
+| POST | `/api/v1/favorites` | 新建 |
+| PATCH | `/api/v1/favorites/{id}` | 编辑 |
+| POST | `/api/v1/favorites/{id}/pin` | 切换置顶 |
+| POST | `/api/v1/favorites/{id}/archive` | 归档 / 恢复 |
+| DELETE | `/api/v1/favorites/{id}` | 软删除 |
 
 ```json
 {
@@ -639,7 +639,7 @@ public class DataSourceConfig {
 ]}
 ```
 
-`type` 取值：`inbox` / `task` / `praise` / `memo` / `pomo` / `plan`。按日分组返回。
+`type` 取值：`inbox` / `task` / `praise` / `favorite` / `pomo` / `plan`。按日分组返回。
 
 ### 4.10 每日计划
 
@@ -688,8 +688,8 @@ jdbcTemplate.execute("VACUUM INTO '" + targetPath.replace("'", "''") + "'");
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/v1/trash` | 回收站列表：5 类实体（收集箱 / 任务 / 日程 / 备忘 / 知识）统一成一条按删除时间倒序的流 |
-| POST | `/api/v1/trash/{type}/{id}/restore` | 恢复一条记录；`type` ∈ `inbox` / `task` / `event` / `memo` / `knowledge` |
+| GET | `/api/v1/trash` | 回收站列表：5 类实体（收集箱 / 任务 / 日程 / 收藏 / 知识）统一成一条按删除时间倒序的流 |
+| POST | `/api/v1/trash/{type}/{id}/restore` | 恢复一条记录；`type` ∈ `inbox` / `task` / `event` / `favorite` / `knowledge` |
 
 **列表响应字段**（`TrashItemVO`）：`type`（上面五选一）、`id`、`title`、`detail`（辨认用的中文摘要）、
 `deletedAt`、`daysLeft`（距不可恢复还剩几天，保留期 30 天）。
@@ -873,7 +873,7 @@ Controller  →  Service  →  Repository(JdbcTemplate)  →  SQLite
 
 | 操作 | 事务内容 |
 |---|---|
-| 确认收集条目 | 更新 `inbox_item.status` + 插入 `task`/`event`/`memo`/`knowledge_note` |
+| 确认收集条目 | 更新 `inbox_item.status` + 插入 `task`/`event`/`favorite`/`knowledge_note` |
 | 日结 | 更新 `daily_plan.completion_rate` + `closed` + 写 `activity_log` |
 | 完成任务 | 更新 `task.status` + 写 `activity_log`（praise） |
 
@@ -902,7 +902,7 @@ UPDATE task SET deleted=1, deleted_at=?, updated_at=? WHERE id=? AND deleted=0
 CAST(julianday('now','localtime') - julianday(due_date) AS INTEGER) AS overdue_days
 ```
 
-### 6.5 全文检索（备忘）
+### 6.5 全文检索（收藏）
 
 MVP 用 `LIKE`，多字段 OR：
 
@@ -944,7 +944,7 @@ WHERE deleted = 0
 
 | 位置 | 内容 | 处置 |
 |---|---|---|
-| 411–465 行 | 数据层：`KEY` / `S` / `load()` / `save()` / `seed()` / `seedMemos()` | **整体替换为 API 调用** |
+| 411–465 行 | 数据层：`KEY` / `S` / `load()` / `save()` / `seed()` / `seedFavorites()` | **整体替换为 API 调用** |
 | 467+ | `aiClassify()` 本地规则引擎 | **保留**，作为无 AI 配置时的兜底 |
 | 899+ | `render()` 统一渲染入口 | **保留并强化**，作为唯一刷新入口 |
 | 各 `renderXxx()` | 分模块渲染 | 保留，**不得互相调用** |
@@ -982,15 +982,15 @@ const api = {
   del:    p            => req(p, { method: 'DELETE' }),
 
   bootstrap: async () => {
-    const [dash, inbox, tasks, memos, activity, pomoCfg] = await Promise.all([
+    const [dash, inbox, tasks, favorites, activity, pomoCfg] = await Promise.all([
       api.get('/dashboard/today'),
       api.get('/inbox?status=pending'),
       api.get('/tasks'),
-      api.get('/memos'),
+      api.get('/favorites'),
       api.get('/activity?limit=100'),
       api.get('/pomo-config')
     ]);
-    return { theme: dash.theme, inbox, tasks, events: dash.events, memos,
+    return { theme: dash.theme, inbox, tasks, events: dash.events, favorites,
              pomos: [], pomoCfg, log: activity.items, doneRate: 0 };
   }
 };
@@ -1016,7 +1016,7 @@ async function onTaskDone(id) {
 }
 function refreshAll() {
   renderMetrics(); renderToday(); renderInbox();
-  renderTasks();  renderEvents(); renderMemos();
+  renderTasks();  renderEvents(); renderFavorites();
   renderTimeline();
 }
 
@@ -1100,9 +1100,9 @@ static/app.js         状态与渲染
 - [ ] 确认整理结果生成实体（同一事务）
 - [ ] **验收**：录一条 → 整理 → 确认 → 生成任务，全过程 3 次点击内
 
-### 阶段 5：备忘 / 番茄 / 时间线 / 驾驶舱（2 人日）
+### 阶段 5：收藏 / 番茄 / 时间线 / 驾驶舱（2 人日）
 
-- [ ] 备忘 CRUD + 检索 + 置顶 + 归档
+- [ ] 收藏 CRUD + 检索 + 置顶 + 归档
 - [ ] 番茄记录 + 配置
 - [ ] 时间线按日分组
 - [ ] `/dashboard/today` 聚合 + 规则引擎 Top3（带 reason）
@@ -1146,7 +1146,7 @@ static/app.js         状态与渲染
 | 1 | 干净机启动 | 一台**没有 Java、没有 MySQL、没有 Node** 的 Windows 10/11 能跑起来 |
 | 2 | 启动耗时 | 双击到首次配置页 ≤ 60s |
 | 3 | 核心闭环 | 录入 → 整理 → 确认 → 生成任务，≤ 3 次点击/条 |
-| 4 | 示例数据 | 首次进入有 4 条收集箱、4 条任务（含 1 条逾期）、3 条日程、4 条备忘 |
+| 4 | 示例数据 | 首次进入有 4 条收集箱、4 条任务（含 1 条逾期）、3 条日程、4 条收藏 |
 | 5 | 今天要处理 | 首页置顶逾期项，逾期标红，昨天没做完的自动滚到今天 |
 | 6 | 数据持久化 | 关闭重启后数据仍在 |
 | 7 | 备份恢复 | 备份文件能在另一台机器完整恢复（用 `VACUUM INTO`） |

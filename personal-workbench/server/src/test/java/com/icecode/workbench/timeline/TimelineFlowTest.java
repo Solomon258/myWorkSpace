@@ -48,7 +48,7 @@ class TimelineFlowTest {
 
     @Test
     void deleteRemovesOnlyTheTargetRecord() throws Exception {
-        long first = insertLog("memo", "work", "清理收集箱");
+        long first = insertLog("favorite", "work", "清理收集箱");
         long second = insertLog("task", null, "完成限流方案评审");
 
         mockMvc.perform(delete("/api/v1/activity/{id}", first).session(session))

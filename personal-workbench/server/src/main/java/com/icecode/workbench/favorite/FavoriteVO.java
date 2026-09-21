@@ -1,10 +1,10 @@
-package com.icecode.workbench.memo;
+package com.icecode.workbench.favorite;
 
 import java.util.List;
 
 import com.icecode.workbench.attachment.AttachmentVO;
 
-public class MemoVO {
+public class FavoriteVO {
     private final long id;
     private final String title;
     private final String content;
@@ -18,7 +18,7 @@ public class MemoVO {
     private final String updatedAt;
     private final boolean demo;
     /**
-     * 这条备忘的附件（deleted=0，按 sort_order 排好）。
+     * 这条收藏的附件（deleted=0，按 sort_order 排好）。
      *
      * <p>列表接口**直接带上**而不是让前端逐条再查一次：一屏几十张卡片各发一个请求就是 N+1，
      * 而 Hikari 池只有 4 个连接。列表里只显示前几张，但整份都返回 ——
@@ -26,7 +26,7 @@ public class MemoVO {
      */
     private final List<AttachmentVO> attachments;
 
-    public MemoVO(long id, String title, String content, String url, List<String> tags, String grp,
+    public FavoriteVO(long id, String title, String content, String url, List<String> tags, String grp,
                   boolean pinned, String status, Long sourceInboxId, String createdAt, String updatedAt,
                   boolean demo, List<AttachmentVO> attachments) {
         this.id = id;
@@ -52,7 +52,7 @@ public class MemoVO {
     public String getGrp() { return grp; }
     public boolean isPinned() { return pinned; }
     public String getStatus() { return status; }
-    /** 收录来源 id：备忘可能是从收录条目确认生成的，「移至」时要把这个来源一起带过去。 */
+    /** 收录来源 id：收藏可能是从收录条目确认生成的，「移至」时要把这个来源一起带过去。 */
     public Long getSourceInboxId() { return sourceInboxId; }
     public String getCreatedAt() { return createdAt; }
     public String getUpdatedAt() { return updatedAt; }

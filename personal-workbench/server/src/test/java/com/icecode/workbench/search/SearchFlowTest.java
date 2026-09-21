@@ -24,11 +24,11 @@ import com.icecode.workbench.auth.AuthConstants;
 import com.icecode.workbench.util.TimeUtil;
 
 /**
- * 全局搜索（跨 收录 / 任务 / 日程 / 备忘 / 时间线 + 回收站）。
+ * 全局搜索（跨 收录 / 任务 / 日程 / 收藏 / 时间线 + 回收站）。
  *
  * <p>这一组用例守的是设计文档里那几条「不做就一定出 bug」的约定：</p>
  * <ul>
- *   <li><b>回收站命中只能落到回收站页</b>。任务 / 日程 / 备忘页查的都是 {@code deleted=0}，
+ *   <li><b>回收站命中只能落到回收站页</b>。任务 / 日程 / 收藏页查的都是 {@code deleted=0}，
  *       把已删数据的落点写成原实体页，用户点开就是「点了没反应」——这是正确性问题。</li>
  *   <li><b>待定日程的 {@code target.date} 必须是 null</b>，任何方向都不许补今天（US-4.2）。</li>
  *   <li><b>标点组成的查询串绝不能返回整库</b>。切不出检索词时 WHERE 会退化成无条件，
@@ -56,7 +56,7 @@ class SearchFlowTest {
     @BeforeEach
     void setUp() {
         for (String table : new String[] {"pomodoro", "daily_plan_item", "wechat_msg_log", "activity_log",
-                "task", "schedule_event", "memo", "knowledge_note", "daily_plan", "inbox_item"}) {
+                "task", "schedule_event", "favorite", "knowledge_note", "daily_plan", "inbox_item"}) {
             jdbcTemplate.update("DELETE FROM " + table);
         }
         jdbcTemplate.update("UPDATE app_config SET config_value='true' WHERE config_key='app.initialized'");
@@ -69,13 +69,13 @@ class SearchFlowTest {
      * 五类实体都能搜到，且分组顺序固定。
      *
      * <p>顺序是契约的一部分：跨类型混排会带来「为什么这条排前面」的困惑，
-     * 所以类型之间按 任务 → 日程 → 备忘 → 收录 → 时间线 固定，只有组内才按分数排。</p>
+     * 所以类型之间按 任务 → 日程 → 收藏 → 收录 → 时间线 固定，只有组内才按分数排。</p>
      */
     @Test
     void findsEveryEntityKindAndKeepsGroupsInFixedOrder() throws Exception {
         insertTask("限流配额任务", null);
         insertEvent("限流方案评审", "2026-09-20");
-        insertMemo("限流参数备忘", "正文", "work", "active");
+        insertFavorite("限流参数收藏", "正文", "work", "active");
         insertInbox("限流的一句话", "pending");
         insertActivity("限流操作记录");
 
@@ -85,7 +85,7 @@ class SearchFlowTest {
                 .andExpect(jsonPath("$.data.groups.length()").value(5))
                 .andExpect(jsonPath("$.data.groups[0].type").value("task"))
                 .andExpect(jsonPath("$.data.groups[1].type").value("event"))
-                .andExpect(jsonPath("$.data.groups[2].type").value("memo"))
+                .andExpect(jsonPath("$.data.groups[2].type").value("favorite"))
                 .andExpect(jsonPath("$.data.groups[3].type").value("inbox"))
                 .andExpect(jsonPath("$.data.groups[4].type").value("timeline"))
                 .andExpect(jsonPath("$.data.totalCount").value(5))
@@ -115,7 +115,7 @@ class SearchFlowTest {
     @Test
     void punctuationOnlyQueryIsRejectedInsteadOfReturningEverything() throws Exception {
         insertTask("无关任务一", null);
-        insertMemo("无关备忘一", "正文", "work", "active");
+        insertFavorite("无关收藏一", "正文", "work", "active");
 
         mockMvc.perform(get("/api/v1/search").param("q", "。。。！？").session(session))
                 .andExpect(status().isBadRequest())
@@ -283,14 +283,14 @@ class SearchFlowTest {
                 .andExpect(jsonPath("$.data.groups[0].items[0].meta.date").doesNotExist());
     }
 
-    /** 备忘结果要带上所属空间：空间不对，前端切过去也找不到那一行。 */
+    /** 收藏结果要带上所属空间：空间不对，前端切过去也找不到那一行。 */
     @Test
-    void memoResultCarriesItsSpace() throws Exception {
-        insertMemo("限流参数", "正文", "life", "active");
+    void favoriteResultCarriesItsSpace() throws Exception {
+        insertFavorite("限流参数", "正文", "life", "active");
 
         mockMvc.perform(get("/api/v1/search").param("q", "限流").session(session))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.groups[0].items[0].target.tab").value("memos"))
+                .andExpect(jsonPath("$.data.groups[0].items[0].target.tab").value("favorites"))
                 .andExpect(jsonPath("$.data.groups[0].items[0].target.grp").value("life"));
     }
 
@@ -356,7 +356,7 @@ class SearchFlowTest {
     @Test
     void quotesAndSlashesInContentAreSearchable() throws Exception {
         insertTask("复盘\"双十一\"的限流", null);
-        insertMemo("路径 C:\\notes\\限流.md", "正文", "work", "active");
+        insertFavorite("路径 C:\\notes\\限流.md", "正文", "work", "active");
 
         mockMvc.perform(get("/api/v1/search").param("q", "限流").session(session))
                 .andExpect(status().isOk())
@@ -485,11 +485,11 @@ class SearchFlowTest {
         return jdbcTemplate.queryForObject("SELECT id FROM schedule_event WHERE title=?", Long.class, title);
     }
 
-    private long insertMemo(String title, String content, String grp, String status) {
+    private long insertFavorite(String title, String content, String grp, String status) {
         String now = TimeUtil.now(TZ);
-        jdbcTemplate.update("INSERT INTO memo(title, content, grp, status, pinned, created_at, updated_at, deleted)"
+        jdbcTemplate.update("INSERT INTO favorite(title, content, grp, status, pinned, created_at, updated_at, deleted)"
                 + " VALUES (?,?,?,?,0,?,?,0)", title, content, grp, status, now, now);
-        return jdbcTemplate.queryForObject("SELECT id FROM memo WHERE title=?", Long.class, title);
+        return jdbcTemplate.queryForObject("SELECT id FROM favorite WHERE title=?", Long.class, title);
     }
 
     private void insertInbox(String raw, String status) {

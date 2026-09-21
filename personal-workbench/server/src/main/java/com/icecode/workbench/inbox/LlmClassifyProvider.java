@@ -37,9 +37,9 @@ public class LlmClassifyProvider implements ClassifyProvider {
     private static final Pattern CLOCK = Pattern.compile("([01]\\d|2[0-3]):[0-5]\\d");
     private static final String SYSTEM_PROMPT =
             "你是一个整理助手。把用户的一句话分类为 task（可执行任务）、schedule（有明确时间的日程）、"
-            + "memo（生活/工作提醒与杂项）或 knowledge（值得长期沉淀的知识：笔记、总结、资料、文章、方法论、模板）。"
+            + "favorite（生活/工作提醒与杂项）或 knowledge（值得长期沉淀的知识：笔记、总结、资料、文章、方法论、模板）。"
             + "只输出 JSON，不要输出其他任何文字。格式："
-            + "{\"category\":\"task|schedule|memo|knowledge\",\"confidence\":0到1之间的小数,"
+            + "{\"category\":\"task|schedule|favorite|knowledge\",\"confidence\":0到1之间的小数,"
             + "\"payload\":{\"title\":\"不超过24字的短标题\",\"due\":\"yyyy-MM-dd或null\","
             + "\"priority\":\"P0|P1|P2|P3\",\"start\":\"HH:mm或null\",\"end\":\"HH:mm或null\","
             + "\"eventType\":\"meeting|deep_block|other或null\"}}";
@@ -127,7 +127,7 @@ public class LlmClassifyProvider implements ClassifyProvider {
             throw new IllegalStateException("AI 输出不是合法 JSON");
         }
         String category = result.path("category").asText("");
-        if (!"task".equals(category) && !"schedule".equals(category) && !"memo".equals(category)
+        if (!"task".equals(category) && !"schedule".equals(category) && !"favorite".equals(category)
                 && !"knowledge".equals(category)) {
             throw new IllegalStateException("AI 输出类别不合法");
         }

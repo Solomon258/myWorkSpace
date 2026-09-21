@@ -33,7 +33,7 @@ main        ← 始终可发布，只接受来自 develop 的合并
 
 - **不要**直接向 `main` 推送。
 - 每个 PR 只做一件事，避免混杂无关格式化改动。
-- 分支命名：`feature/全局搜索语义联想`、`fix/备忘标题为空时回落正文`。
+- 分支命名：`feature/全局搜索语义联想`、`fix/收藏标题为空时回落正文`。
 
 ---
 
@@ -60,7 +60,7 @@ main        ← 始终可发布，只接受来自 develop 的合并
 | `chore` | 构建、依赖、工具链 |
 | `style` | 格式调整（不影响语义） |
 
-`scope` 建议使用后端模块名（`task` / `schedule` / `memo` / `inbox` / `search` …）或 `ui` / `docs`。
+`scope` 建议使用后端模块名（`task` / `schedule` / `favorite` / `inbox` / `search` …）或 `ui` / `docs`。
 
 示例：
 

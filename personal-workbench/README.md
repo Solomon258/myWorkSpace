@@ -37,7 +37,7 @@ server/src/main/
 │   ├── demo/       演示数据装载
 │   ├── inbox/      收集箱与 AI 整理（本地规则 + LLM 双通道）
 │   ├── knowledge/  知识库、Obsidian 对接、AI 问答
-│   ├── memo/       备忘
+│   ├── favorite/       收藏
 │   ├── pomodoro/   番茄钟
 │   ├── schedule/   日程（周视图 / 待定时间区 / 重复期次）
 │   ├── search/     全局搜索与语义联想

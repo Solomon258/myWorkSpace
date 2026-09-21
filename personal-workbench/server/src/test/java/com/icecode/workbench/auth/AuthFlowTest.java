@@ -83,7 +83,7 @@ class AuthFlowTest {
                 "SELECT due_date FROM task WHERE is_demo=1 AND title='支付网关 MR 代码评审'", String.class);
         assertThat(overdueDate).isEqualTo(TimeUtil.format(LocalDate.now().minusDays(1)));
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM schedule_event WHERE is_demo=1", Integer.class)).isEqualTo(3);
-        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM memo WHERE is_demo=1", Integer.class)).isEqualTo(4);
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM favorite WHERE is_demo=1", Integer.class)).isEqualTo(4);
     }
 
     @Test

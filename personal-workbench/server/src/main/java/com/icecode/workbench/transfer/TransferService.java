@@ -13,9 +13,9 @@ import com.icecode.workbench.auth.AppConfigRepository;
 import com.icecode.workbench.auth.AuthConstants;
 import com.icecode.workbench.common.BizException;
 import com.icecode.workbench.common.ErrorCode;
-import com.icecode.workbench.memo.MemoRepository;
-import com.icecode.workbench.memo.MemoService;
-import com.icecode.workbench.memo.MemoVO;
+import com.icecode.workbench.favorite.FavoriteRepository;
+import com.icecode.workbench.favorite.FavoriteService;
+import com.icecode.workbench.favorite.FavoriteVO;
 import com.icecode.workbench.schedule.EventRepository;
 import com.icecode.workbench.schedule.EventService;
 import com.icecode.workbench.schedule.EventVO;
@@ -27,7 +27,7 @@ import com.icecode.workbench.util.TextUtil;
 import com.icecode.workbench.util.TimeUtil;
 
 /**
- * 「移至」：把一条记录从任务 / 日程 / 备忘中的一个菜单搬到另一个菜单。
+ * 「移至」：把一条记录从任务 / 日程 / 收藏中的一个菜单搬到另一个菜单。
  *
  * <p>三张表的列不是一一对应的，「移动」的实际语义是：**在目标表里新建一条 + 把源记录软删
  * （进回收站，30 天内可恢复）+ 记一条流水**，整个动作在一个事务里完成 —— 要么三件事都成，
@@ -35,7 +35,7 @@ import com.icecode.workbench.util.TimeUtil;
  *
  * <p>两条不能省的约束（都是本项目反复踩过的坑）：</p>
  * <ol>
- *   <li><b>不能静默丢字段。</b>任务的优先级、日程的时间、备忘的标签/链接在目标表里没有对应列，
+ *   <li><b>不能静默丢字段。</b>任务的优先级、日程的时间、收藏的标签/链接在目标表里没有对应列，
  *       丢掉是必然的，但必须写进 {@code warnings} 让界面告诉用户 ——
  *       用户以为「移过去东西还在」，过几天找不到，才是真正的数据损失。</li>
  *   <li><b>示例数据标记要跟着走</b>（{@code is_demo}）。否则「清空示例数据」之后，
@@ -57,7 +57,7 @@ public class TransferService {
         Map<String, String> labels = new LinkedHashMap<String, String>();
         labels.put("task", "任务");
         labels.put("event", "日程");
-        labels.put("memo", "备忘");
+        labels.put("favorite", "收藏");
         LABELS = Collections.unmodifiableMap(labels);
     }
 
@@ -66,24 +66,24 @@ public class TransferService {
 
     private final TaskService taskService;
     private final EventService eventService;
-    private final MemoService memoService;
+    private final FavoriteService favoriteService;
     private final TaskRepository taskRepository;
     private final EventRepository eventRepository;
-    private final MemoRepository memoRepository;
+    private final FavoriteRepository favoriteRepository;
     private final AppConfigRepository configRepository;
     /** 移动时把附件一起搬过去 —— 附件不该因为换了菜单就消失。 */
     private final com.icecode.workbench.attachment.AttachmentService attachmentService;
 
-    public TransferService(TaskService taskService, EventService eventService, MemoService memoService,
+    public TransferService(TaskService taskService, EventService eventService, FavoriteService favoriteService,
                            TaskRepository taskRepository, EventRepository eventRepository,
-                           MemoRepository memoRepository, AppConfigRepository configRepository,
+                           FavoriteRepository favoriteRepository, AppConfigRepository configRepository,
                            com.icecode.workbench.attachment.AttachmentService attachmentService) {
         this.taskService = taskService;
         this.eventService = eventService;
-        this.memoService = memoService;
+        this.favoriteService = favoriteService;
         this.taskRepository = taskRepository;
         this.eventRepository = eventRepository;
-        this.memoRepository = memoRepository;
+        this.favoriteRepository = favoriteRepository;
         this.configRepository = configRepository;
         this.attachmentService = attachmentService;
     }
@@ -104,17 +104,17 @@ public class TransferService {
             TaskVO task = taskService.get(request.getId());
             title = task.getTitle();
             newId = "event".equals(to) ? createEventFromTask(task, warnings, now)
-                    : createMemoFromTask(task, warnings, now);
+                    : createFavoriteFromTask(task, warnings, now);
         } else if ("event".equals(from)) {
             EventVO event = eventService.get(request.getId());
             title = event.getTitle();
             newId = "task".equals(to) ? createTaskFromEvent(event, warnings, now)
-                    : createMemoFromEvent(event, warnings, now);
+                    : createFavoriteFromEvent(event, warnings, now);
         } else {
-            MemoVO memo = memoService.get(request.getId());
-            title = memo.getTitle();
-            newId = "task".equals(to) ? createTaskFromMemo(memo, warnings, now)
-                    : createEventFromMemo(memo, warnings, now);
+            FavoriteVO favorite = favoriteService.get(request.getId());
+            title = favorite.getTitle();
+            newId = "task".equals(to) ? createTaskFromFavorite(favorite, warnings, now)
+                    : createEventFromFavorite(favorite, warnings, now);
         }
         // 附件跟着走（2026-09-19）。
         // ⚠️ **必须排在源记录的软删之前**：softDeleteByOwner 会把源记录名下的附件一起软删，
@@ -129,7 +129,7 @@ public class TransferService {
         } else if ("event".equals(from)) {
             eventRepository.softDelete(request.getId(), now);
         } else {
-            memoRepository.softDelete(request.getId(), now);
+            favoriteRepository.softDelete(request.getId(), now);
         }
         return new TransferResultVO(from, to, label(from), label(to), newId, title, warnings,
                 movedAttachments);
@@ -140,10 +140,10 @@ public class TransferService {
         if ("task".equals(type)) {
             return "task";
         }
-        return "event".equals(type) ? "schedule_event" : "memo";
+        return "event".equals(type) ? "schedule_event" : "favorite";
     }
 
-    // ---------- 任务 → 日程 / 备忘 ----------
+    // ---------- 任务 → 日程 / 收藏 ----------
 
     private long createEventFromTask(TaskVO task, List<String> warnings, String now) {
         List<String> lost = new ArrayList<String>();
@@ -163,11 +163,11 @@ public class TransferService {
         return id;
     }
 
-    private long createMemoFromTask(TaskVO task, List<String> warnings, String now) {
+    private long createFavoriteFromTask(TaskVO task, List<String> warnings, String now) {
         List<String> parts = new ArrayList<String>();
         if (task.getDescription() != null) parts.add(task.getDescription());
         if (task.getNote() != null) parts.add(task.getNote());
-        // 备忘正文是必填的：任务没写描述也没写备注时，用标题当正文（否则只能凭空造一句）。
+        // 收藏正文是必填的：任务没写描述也没写备注时，用标题当正文（否则只能凭空造一句）。
         String content = parts.isEmpty() ? task.getTitle() : join(parts, "\n\n");
         List<String> lost = new ArrayList<String>();
         if (!"todo".equals(task.getStatus())) lost.add("状态（" + statusName(task.getStatus()) + "）");
@@ -175,20 +175,20 @@ public class TransferService {
         if (task.getDue() != null) lost.add("截止日期 " + task.getDue());
         if (task.isDeep() || task.isBlocking()) lost.add("深度工作 / 阻塞他人的标记");
         if (!lost.isEmpty()) {
-            warnings.add("备忘没有「" + join(lost, "、") + "」这些字段，移动后不再保留。");
+            warnings.add("收藏没有「" + join(lost, "、") + "」这些字段，移动后不再保留。");
         }
-        // 分组、标签、链接沿用备忘自己的规则（MemoService.autoGroup / autoTags / extractUrl），
+        // 分组、标签、链接沿用收藏自己的规则（FavoriteService.autoGroup / autoTags / extractUrl），
         // 不在这里另写一份：同一套规则两处实现，早晚会漂。
-        String grp = memoService.autoGroup(content);
-        List<String> tags = memoService.autoTags(content, grp);
-        String url = memoService.extractUrl(content);
-        long id = memoRepository.insert(task.getTitle(), content, url, writeTags(tags), grp, now,
+        String grp = favoriteService.autoGroup(content);
+        List<String> tags = favoriteService.autoTags(content, grp);
+        String url = favoriteService.extractUrl(content);
+        long id = favoriteRepository.insert(task.getTitle(), content, url, writeTags(tags), grp, now,
                 task.isDemo(), task.getSourceInboxId());
-        memoRepository.insertActivity("memo", grp, "从「任务」移至「备忘」：" + task.getTitle(), now);
+        favoriteRepository.insertActivity("favorite", grp, "从「任务」移至「收藏」：" + task.getTitle(), now);
         return id;
     }
 
-    // ---------- 日程 → 任务 / 备忘 ----------
+    // ---------- 日程 → 任务 / 收藏 ----------
 
     private long createTaskFromEvent(EventVO event, List<String> warnings, String now) {
         List<String> lost = new ArrayList<String>();
@@ -207,66 +207,66 @@ public class TransferService {
         return id;
     }
 
-    private long createMemoFromEvent(EventVO event, List<String> warnings, String now) {
-        // 日程的时间和类型在备忘里没有列，但它们是这条记录的核心信息，直接丢掉不划算：
-        // 拼进正文里，用户翻备忘时还能看到「这条原来定在周四 9:30」。
+    private long createFavoriteFromEvent(EventVO event, List<String> warnings, String now) {
+        // 日程的时间和类型在收藏里没有列，但它们是这条记录的核心信息，直接丢掉不划算：
+        // 拼进正文里，用户翻收藏时还能看到「这条原来定在周四 9:30」。
         String content = event.getTitle() + "\n\n（来自日程：" + describeWhen(event) + "）";
         List<String> lost = new ArrayList<String>();
         if (!"other".equals(event.getType())) lost.add("日程类型（" + eventTypeName(event.getType()) + "）");
-        if (!lost.isEmpty()) warnings.add("备忘没有「" + join(lost, "、") + "」这些字段，移动后不再保留。");
-        String grp = memoService.autoGroup(content);
-        List<String> tags = memoService.autoTags(content, grp);
-        long id = memoRepository.insert(event.getTitle(), content, memoService.extractUrl(content),
+        if (!lost.isEmpty()) warnings.add("收藏没有「" + join(lost, "、") + "」这些字段，移动后不再保留。");
+        String grp = favoriteService.autoGroup(content);
+        List<String> tags = favoriteService.autoTags(content, grp);
+        long id = favoriteRepository.insert(event.getTitle(), content, favoriteService.extractUrl(content),
                 writeTags(tags), grp, now, event.isDemo(), event.getSourceInboxId());
-        memoRepository.insertActivity("memo", grp, "从「日程」移至「备忘」：" + event.getTitle(), now);
+        favoriteRepository.insertActivity("favorite", grp, "从「日程」移至「收藏」：" + event.getTitle(), now);
         return id;
     }
 
-    // ---------- 备忘 → 任务 / 日程 ----------
+    // ---------- 收藏 → 任务 / 日程 ----------
 
-    private long createTaskFromMemo(MemoVO memo, List<String> warnings, String now) {
+    private long createTaskFromFavorite(FavoriteVO favorite, List<String> warnings, String now) {
         TaskCreateRequest request = new TaskCreateRequest();
-        request.setTitle(memo.getTitle());
+        request.setTitle(favorite.getTitle());
         request.setPriority("P2");
-        String content = memo.getContent();
-        // 备忘的正文常常就是标题（MemoService.shortTitle 从正文裁 24 字），那就不必再往描述里塞一遍，
+        String content = favorite.getContent();
+        // 收藏的正文常常就是标题（FavoriteService.shortTitle 从正文裁 24 字），那就不必再往描述里塞一遍，
         // 否则任务卡片里同一句话会显示两行。
-        if (content != null && !content.equals(memo.getTitle())) {
+        if (content != null && !content.equals(favorite.getTitle())) {
             if (content.length() > TASK_DESCRIPTION_MAX) {
                 request.setDescription(TextUtil.clip(content, TASK_DESCRIPTION_MAX));
-                warnings.add("备忘正文有 " + content.length() + " 字，任务的描述上限是 2000 字，超出的部分不会保留。");
+                warnings.add("收藏正文有 " + content.length() + " 字，任务的描述上限是 2000 字，超出的部分不会保留。");
             } else {
                 request.setDescription(content);
             }
         }
-        addMemoOnlyFieldsWarning(memo, warnings, "任务");
-        long id = taskRepository.insert(request, now, memo.isDemo(), memo.getSourceInboxId());
-        taskRepository.insertActivity("task", "从「备忘」移至「任务」：" + memo.getTitle(), now);
+        addFavoriteOnlyFieldsWarning(favorite, warnings, "任务");
+        long id = taskRepository.insert(request, now, favorite.isDemo(), favorite.getSourceInboxId());
+        taskRepository.insertActivity("task", "从「收藏」移至「任务」：" + favorite.getTitle(), now);
         return id;
     }
 
-    private long createEventFromMemo(MemoVO memo, List<String> warnings, String now) {
+    private long createEventFromFavorite(FavoriteVO favorite, List<String> warnings, String now) {
         List<String> lost = new ArrayList<String>();
-        if (memo.getContent() != null && !memo.getContent().equals(memo.getTitle())) {
+        if (favorite.getContent() != null && !favorite.getContent().equals(favorite.getTitle())) {
             // 日程只有标题一个文本字段（上限 200 字），长正文必然被截掉。
             // 这里不能说成「已保留」——只能说清它去哪儿了更合适（任务有描述字段）。
-            warnings.add("备忘正文在日程里没有对应字段，移动后不再保留；若正文重要，建议改移到「任务」（那里有描述字段）。");
+            warnings.add("收藏正文在日程里没有对应字段，移动后不再保留；若正文重要，建议改移到「任务」（那里有描述字段）。");
         }
-        addMemoOnlyFieldsWarning(memo, warnings, "日程");
-        warnings.add("备忘没有日期，移到日程后会先落到「待定时间」区，补上日期即可排进那一天。");
-        long id = eventRepository.insert(memo.getTitle(), "other", null, null, null, now,
-                memo.isDemo(), memo.getSourceInboxId());
-        eventRepository.insertActivity("task", "从「备忘」移至「日程」：" + memo.getTitle(), now);
+        addFavoriteOnlyFieldsWarning(favorite, warnings, "日程");
+        warnings.add("收藏没有日期，移到日程后会先落到「待定时间」区，补上日期即可排进那一天。");
+        long id = eventRepository.insert(favorite.getTitle(), "other", null, null, null, now,
+                favorite.isDemo(), favorite.getSourceInboxId());
+        eventRepository.insertActivity("task", "从「收藏」移至「日程」：" + favorite.getTitle(), now);
         return id;
     }
 
-    /** 备忘特有、其它两个菜单都没有的字段：有值才提示，没填过就不必拿它占用户的眼睛。 */
-    private void addMemoOnlyFieldsWarning(MemoVO memo, List<String> warnings, String target) {
+    /** 收藏特有、其它两个菜单都没有的字段：有值才提示，没填过就不必拿它占用户的眼睛。 */
+    private void addFavoriteOnlyFieldsWarning(FavoriteVO favorite, List<String> warnings, String target) {
         List<String> lost = new ArrayList<String>();
-        if (memo.getTags() != null && !memo.getTags().isEmpty()) lost.add("标签（" + join(memo.getTags(), "、") + "）");
-        if (memo.getUrl() != null) lost.add("链接");
-        if (memo.isPinned()) lost.add("置顶");
-        if ("archived".equals(memo.getStatus())) lost.add("已归档状态");
+        if (favorite.getTags() != null && !favorite.getTags().isEmpty()) lost.add("标签（" + join(favorite.getTags(), "、") + "）");
+        if (favorite.getUrl() != null) lost.add("链接");
+        if (favorite.isPinned()) lost.add("置顶");
+        if ("archived".equals(favorite.getStatus())) lost.add("已归档状态");
         if (!lost.isEmpty()) {
             warnings.add(target + "没有「" + join(lost, "、") + "」这些字段，移动后不再保留。");
         }
@@ -284,15 +284,15 @@ public class TransferService {
         return when.toString();
     }
 
-    /** 标签的 JSON 写法在 MemoService 里只有一处（writeTags），这里直接复用，不再抄一份。 */
-    private String writeTags(List<String> tags) { return memoService.writeTags(tags); }
+    /** 标签的 JSON 写法在 FavoriteService 里只有一处（writeTags），这里直接复用，不再抄一份。 */
+    private String writeTags(List<String> tags) { return favoriteService.writeTags(tags); }
 
     private String label(String type) {
         String value = LABELS.get(type);
         return value == null ? type : value;
     }
 
-    /** 「任务」→「日程 或 备忘」，用于「已经在某个菜单里」的提示，让用户知道下一步该点哪个。 */
+    /** 「任务」→「日程 或 收藏」，用于「已经在某个菜单里」的提示，让用户知道下一步该点哪个。 */
     private String otherLabels(String type) {
         List<String> others = new ArrayList<String>();
         for (Map.Entry<String, String> entry : LABELS.entrySet()) {

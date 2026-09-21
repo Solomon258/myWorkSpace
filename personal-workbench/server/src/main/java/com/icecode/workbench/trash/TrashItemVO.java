@@ -5,7 +5,7 @@ package com.icecode.workbench.trash;
  *
  * <p>回收站要在一屏里混排 5 种实体，所以字段是各表的最小公约数：
  * {@code type} 决定前端去调哪个恢复接口，{@code detail} 是辅助辨认的摘要
- * （光看标题很难认出是哪条，比如备忘常常标题为空、只有正文）。</p>
+ * （光看标题很难认出是哪条，比如收藏常常标题为空、只有正文）。</p>
  */
 public class TrashItemVO {
 

@@ -62,7 +62,7 @@ class TransferFlowTest {
         jdbcTemplate.update("DELETE FROM attachment");
         jdbcTemplate.update("DELETE FROM task");
         jdbcTemplate.update("DELETE FROM schedule_event");
-        jdbcTemplate.update("DELETE FROM memo");
+        jdbcTemplate.update("DELETE FROM favorite");
         jdbcTemplate.update("UPDATE app_config SET config_value='true' WHERE config_key='app.initialized'");
         jdbcTemplate.update("UPDATE app_config SET config_value='Asia/Shanghai' WHERE config_key='app.timezone'");
         session = new MockHttpSession();
@@ -88,8 +88,8 @@ class TransferFlowTest {
                 .andExpect(status().isOk());
     }
 
-    private void createMemo(String title, String content) throws Exception {
-        mockMvc.perform(post("/api/v1/memos").session(session)
+    private void createFavorite(String title, String content) throws Exception {
+        mockMvc.perform(post("/api/v1/favorites").session(session)
                         .contentType("application/json")
                         .content("{\"title\":\"" + title + "\",\"content\":\"" + content + "\"}"))
                 .andExpect(status().isOk());
@@ -169,25 +169,25 @@ class TransferFlowTest {
     }
 
     @Test
-    void movesTaskToMemoKeepingDescriptionAndNoteAsBody() throws Exception {
+    void movesTaskToFavoriteKeepingDescriptionAndNoteAsBody() throws Exception {
         createTask("整理复盘方案", "P2", tomorrow(), "周五前给组长", "复盘方案与 Q3 数据");
         long id = idOf("task", "整理复盘方案");
 
         mockMvc.perform(post("/api/v1/transfers").session(session)
                         .contentType("application/json")
-                        .content("{\"fromType\":\"task\",\"toType\":\"memo\",\"id\":" + id + "}"))
+                        .content("{\"fromType\":\"task\",\"toType\":\"favorite\",\"id\":" + id + "}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.toLabel").value("备忘"))
-                // 截止日期与优先级在备忘里没有列，有值就必须说出来
+                .andExpect(jsonPath("$.data.toLabel").value("收藏"))
+                // 截止日期与优先级在收藏里没有列，有值就必须说出来
                 .andExpect(jsonPath("$.data.warnings.length()").value(1))
                 .andExpect(jsonPath("$.data.warnings", hasItem(containsString("截止日期"))));
 
         String content = jdbcTemplate.queryForObject(
-                "SELECT content FROM memo WHERE title='整理复盘方案' AND deleted=0", String.class);
+                "SELECT content FROM favorite WHERE title='整理复盘方案' AND deleted=0", String.class);
         assertThat(content).contains("复盘方案与 Q3 数据").contains("周五前给组长");
-        // 分组沿用备忘自己的规则（内容里有「方案」→ 工作），不是另写一套
+        // 分组沿用收藏自己的规则（内容里有「方案」→ 工作），不是另写一套
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT grp FROM memo WHERE title='整理复盘方案' AND deleted=0", String.class)).isEqualTo("work");
+                "SELECT grp FROM favorite WHERE title='整理复盘方案' AND deleted=0", String.class)).isEqualTo("work");
         assertThat(flag("SELECT deleted FROM task WHERE id=?", id)).isEqualTo(1);
     }
 
@@ -214,15 +214,15 @@ class TransferFlowTest {
     }
 
     @Test
-    void movesMemoToEventIntoPendingAreaAndWarnsThatTheBodyCannotCome() throws Exception {
-        createMemo("班车时刻表", "7:20 小区门口，18:10 返程");
-        long id = idOf("memo", "班车时刻表");
+    void movesFavoriteToEventIntoPendingAreaAndWarnsThatTheBodyCannotCome() throws Exception {
+        createFavorite("班车时刻表", "7:20 小区门口，18:10 返程");
+        long id = idOf("favorite", "班车时刻表");
 
         mockMvc.perform(post("/api/v1/transfers").session(session)
                         .contentType("application/json")
-                        .content("{\"fromType\":\"memo\",\"toType\":\"event\",\"id\":" + id + "}"))
+                        .content("{\"fromType\":\"favorite\",\"toType\":\"event\",\"id\":" + id + "}"))
                 .andExpect(status().isOk())
-                // 日程只有标题一个文本字段，备忘的正文必然留不下 —— 要明说，并指出更好的去处
+                // 日程只有标题一个文本字段，收藏的正文必然留不下 —— 要明说，并指出更好的去处
                 .andExpect(jsonPath("$.data.warnings", hasItem(containsString("正文"))))
                 .andExpect(jsonPath("$.data.warnings", hasItem(containsString("任务"))))
                 .andExpect(jsonPath("$.data.warnings", hasItem(containsString("待定时间"))));
@@ -231,26 +231,26 @@ class TransferFlowTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(1))
                 .andExpect(jsonPath("$.data[0].title").value("班车时刻表"));
-        assertThat(flag("SELECT deleted FROM memo WHERE id=?", id)).isEqualTo(1);
+        assertThat(flag("SELECT deleted FROM favorite WHERE id=?", id)).isEqualTo(1);
     }
 
     @Test
-    void movesMemoToTaskAndSaysWhenTheBodyIsTruncated() throws Exception {
+    void movesFavoriteToTaskAndSaysWhenTheBodyIsTruncated() throws Exception {
         StringBuilder body = new StringBuilder();
         for (int index = 0; index < 2500; index++) body.append("字");
-        createMemo("长备忘", body.toString());
-        long id = idOf("memo", "长备忘");
+        createFavorite("长收藏", body.toString());
+        long id = idOf("favorite", "长收藏");
 
         mockMvc.perform(post("/api/v1/transfers").session(session)
                         .contentType("application/json")
-                        .content("{\"fromType\":\"memo\",\"toType\":\"task\",\"id\":" + id + "}"))
+                        .content("{\"fromType\":\"favorite\",\"toType\":\"task\",\"id\":" + id + "}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.warnings", hasItem(containsString("2500 字"))))
                 .andExpect(jsonPath("$.data.warnings", hasItem(containsString("2000 字"))));
 
         // 截断而不是报错：任务描述上限 2000，超出部分不保留，但这条记录仍然移过去了
-        assertThat(flag("SELECT LENGTH(description) FROM task WHERE title='长备忘' AND deleted=0")).isEqualTo(2000);
-        assertThat(flag("SELECT deleted FROM memo WHERE id=?", id)).isEqualTo(1);
+        assertThat(flag("SELECT LENGTH(description) FROM task WHERE title='长收藏' AND deleted=0")).isEqualTo(2000);
+        assertThat(flag("SELECT deleted FROM favorite WHERE id=?", id)).isEqualTo(1);
     }
 
     @Test
@@ -270,7 +270,7 @@ class TransferFlowTest {
                         .content("{\"fromType\":\"note\",\"toType\":\"task\",\"id\":" + id + "}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(1002))
-                .andExpect(jsonPath("$.message").value(containsString("任务(task) / 日程(event) / 备忘(memo)")));
+                .andExpect(jsonPath("$.message").value(containsString("任务(task) / 日程(event) / 收藏(favorite)")));
 
         // 被拒绝时不能留下半成品：源记录必须还在原菜单里
         assertThat(flag("SELECT deleted FROM task WHERE id=?", id)).isEqualTo(0);
@@ -280,7 +280,7 @@ class TransferFlowTest {
     void returnsNotFoundWhenTheSourceRecordIsGone() throws Exception {
         mockMvc.perform(post("/api/v1/transfers").session(session)
                         .contentType("application/json")
-                        .content("{\"fromType\":\"task\",\"toType\":\"memo\",\"id\":99999}"))
+                        .content("{\"fromType\":\"task\",\"toType\":\"favorite\",\"id\":99999}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value(1001));
 
@@ -290,7 +290,7 @@ class TransferFlowTest {
         jdbcTemplate.update("UPDATE task SET deleted=1, deleted_at='2026-09-12 10:00:00' WHERE id=?", id);
         mockMvc.perform(post("/api/v1/transfers").session(session)
                         .contentType("application/json")
-                        .content("{\"fromType\":\"task\",\"toType\":\"memo\",\"id\":" + id + "}"))
+                        .content("{\"fromType\":\"task\",\"toType\":\"favorite\",\"id\":" + id + "}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value(1001));
     }
@@ -319,18 +319,18 @@ class TransferFlowTest {
      */
     @Test
     void movesAttachmentsTogetherWithTheRecord() throws Exception {
-        createMemo("带附件的备忘", "正文");
-        long memoId = idOf("memo", "带附件的备忘");
-        long attachmentId = insertAttachment("memo", memoId);
+        createFavorite("带附件的收藏", "正文");
+        long favoriteId = idOf("favorite", "带附件的收藏");
+        long attachmentId = insertAttachment("favorite", favoriteId);
 
         mockMvc.perform(post("/api/v1/transfers").session(session)
                         .contentType("application/json")
-                        .content("{\"fromType\":\"memo\",\"toType\":\"task\",\"id\":" + memoId + "}"))
+                        .content("{\"fromType\":\"favorite\",\"toType\":\"task\",\"id\":" + favoriteId + "}"))
                 .andExpect(status().isOk())
                 // 搬了几条也要如实回报：界面上那句话是用户唯一能确认「附件没丢」的地方
                 .andExpect(jsonPath("$.data.movedAttachments").value(1));
 
-        long newTaskId = idOf("task", "带附件的备忘");
+        long newTaskId = idOf("task", "带附件的收藏");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT owner_type FROM attachment WHERE id=?", String.class, Long.valueOf(attachmentId)))
                 .isEqualTo("task");
@@ -340,8 +340,8 @@ class TransferFlowTest {
 
         // 源记录已经在回收站里，它名下不该再留着这个附件（attachment 的 deleted 也没被连带软删 ——
         // 它是「搬走了」，不是「删掉了」）
-        mockMvc.perform(get("/api/v1/attachments").param("ownerType", "memo")
-                        .param("ownerId", String.valueOf(memoId)).session(session))
+        mockMvc.perform(get("/api/v1/attachments").param("ownerType", "favorite")
+                        .param("ownerId", String.valueOf(favoriteId)).session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(0));
         assertThat(flag("SELECT deleted FROM attachment WHERE id=?", Long.valueOf(attachmentId))).isZero();
@@ -350,12 +350,12 @@ class TransferFlowTest {
     /** 没有附件的记录移动后不该凭空多出附件，movedAttachments 也应当是 0（而不是漏字段）。 */
     @Test
     void movingARecordWithoutAttachmentsReportsZero() throws Exception {
-        createMemo("光杆备忘", "正文");
-        long memoId = idOf("memo", "光杆备忘");
+        createFavorite("光杆收藏", "正文");
+        long favoriteId = idOf("favorite", "光杆收藏");
 
         mockMvc.perform(post("/api/v1/transfers").session(session)
                         .contentType("application/json")
-                        .content("{\"fromType\":\"memo\",\"toType\":\"task\",\"id\":" + memoId + "}"))
+                        .content("{\"fromType\":\"favorite\",\"toType\":\"task\",\"id\":" + favoriteId + "}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.movedAttachments").value(0));
     }

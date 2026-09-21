@@ -277,9 +277,9 @@ public class VisionProvider {
 
     private VisionItem toItem(JsonNode node) {
         String category = node.path("category").asText("").trim();
-        // 分类不合法的条目直接丢：硬塞成 memo 会让用户在整理页看到一条他自己从没确认过的东西。
+        // 分类不合法的条目直接丢：硬塞成 favorite 会让用户在整理页看到一条他自己从没确认过的东西。
         if (!"task".equals(category) && !"schedule".equals(category)
-                && !"memo".equals(category) && !"knowledge".equals(category)) {
+                && !"favorite".equals(category) && !"knowledge".equals(category)) {
             return null;
         }
         VisionItem item = new VisionItem();
@@ -317,7 +317,7 @@ public class VisionProvider {
         return "你是一个把图片整理成待办的助手。读出图里的文字，并整理成若干条待办事项。"
                 + "只输出 JSON，不要输出任何其他文字。格式："
                 + "{\"rawText\":\"图中读出的全部文字（保留原有换行，不要总结）\","
-                + "\"items\":[{\"category\":\"task|schedule|memo|knowledge\","
+                + "\"items\":[{\"category\":\"task|schedule|favorite|knowledge\","
                 + "\"confidence\":0到1之间的小数,"
                 + "\"title\":\"不超过24字的短标题\","
                 + "\"due\":\"yyyy-MM-dd或null\","
@@ -329,7 +329,7 @@ public class VisionProvider {
                 + "① 图中每一件事单独输出一条，不要合并；没有任何待办内容时 items 输出空数组。"
                 + "② due / start / end 只能来自图中写出的日期与时间，读不出来必须输出 null，"
                 + "绝对不要根据「今天」推算或猜测。"
-                + "③ 「是否值得长期沉淀的知识」归到 knowledge，普通提醒归 memo。"
+                + "③ 「是否值得长期沉淀的知识」归到 knowledge，普通提醒归 favorite。"
                 + "④ title 用中文，去掉语气词，不要带书名号与引号。";
     }
 

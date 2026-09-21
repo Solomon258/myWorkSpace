@@ -72,7 +72,7 @@ public final class SearchTerms {
     /**
      * 转义 LIKE 的通配符。
      *
-     * <p>规则与 {@code MemoRepository.escapeLike} 一致（那边是私有的，跨包取不到；
+     * <p>规则与 {@code FavoriteRepository.escapeLike} 一致（那边是私有的，跨包取不到；
      * 两处必须保持同一口径，否则「搜 100% 返回全库」这类问题会只在一处复现）。
      * 反斜杠要先转义，否则会把后面补上的转义符自己再吃一遍。</p>
      */

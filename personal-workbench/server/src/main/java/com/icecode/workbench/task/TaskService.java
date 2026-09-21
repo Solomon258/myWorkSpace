@@ -6,6 +6,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -18,7 +19,7 @@ import com.icecode.workbench.auth.AppConfigRepository;
 import com.icecode.workbench.auth.AuthConstants;
 import com.icecode.workbench.common.BizException;
 import com.icecode.workbench.common.ErrorCode;
-import com.icecode.workbench.memo.MemoService;
+import com.icecode.workbench.favorite.FavoriteService;
 import com.icecode.workbench.util.TimeUtil;
 
 @Service
@@ -35,21 +36,21 @@ public class TaskService {
 
     private final TaskRepository taskRepository;
     private final AppConfigRepository configRepository;
-    private final MemoService memoService;
+    private final FavoriteService favoriteService;
     private final AttachmentService attachmentService;
 
     /**
-     * 工作 / 生活的判定规则复用 {@code MemoService.autoGroup}，**不在这里再写一份关键词表**。
+     * 工作 / 生活的判定规则复用 {@code FavoriteService.autoGroup}，**不在这里再写一份关键词表**。
      *
-     * <p>理由与 {@code TransferService} 复用备忘的标签推导一致：两处各写一份「什么时候算工作」，
-     * 迟早会漂 —— 而漂了不报错，只是同一条内容从任务页进来算工作、从备忘页进来算生活，
-     * 用户永远说不清哪个才是对的。{@code MemoService} 不依赖 task 包，注入不会成环。</p>
+     * <p>理由与 {@code TransferService} 复用收藏的标签推导一致：两处各写一份「什么时候算工作」，
+     * 迟早会漂 —— 而漂了不报错，只是同一条内容从任务页进来算工作、从收藏页进来算生活，
+     * 用户永远说不清哪个才是对的。{@code FavoriteService} 不依赖 task 包，注入不会成环。</p>
      */
     public TaskService(TaskRepository taskRepository, AppConfigRepository configRepository,
-                       MemoService memoService, AttachmentService attachmentService) {
+                       FavoriteService favoriteService, AttachmentService attachmentService) {
         this.taskRepository = taskRepository;
         this.configRepository = configRepository;
-        this.memoService = memoService;
+        this.favoriteService = favoriteService;
         this.attachmentService = attachmentService;
     }
 
@@ -89,7 +90,7 @@ public class TaskService {
         request.setTitle(requireTitle(request.getTitle()));
         request.setPriority(normalizePriority(request.getPriority()));
         request.setDue(normalizeDate(request.getDue()));
-        // 分组：没传 / 传 auto 时按标题 + 描述的关键词判定，与备忘页同一套规则。
+        // 分组：没传 / 传 auto 时按标题 + 描述的关键词判定，与收藏页同一套规则。
         // 判定放在**服务层**而不是数据库默认值：默认值是死板的 'work'，
         // 那样「买奶粉」这类生活任务会被静默塞进工作里，用户永远看不到自己漏了什么。
         request.setGrp(resolveCreateGroup(request.getGrp(), request.getTitle(), request.getDescription()));
@@ -199,6 +200,56 @@ public class TaskService {
 
     public int countAll() { return taskRepository.countAllActive(); }
     public int countDone() { return taskRepository.countDone(); }
+
+    /**
+     * 「已完成」页的按天汇总（2026-09-20）。
+     *
+     * <p>为什么不让前端按已加载的 100 条自己分组：任务页一次只加载 100 条，今天完成的条目
+     * 完全可能排在更后面 —— 前端分组会把「今天完成 5 项」静默算成 3 项。数字一旦少了，
+     * 用户只会觉得「我做完的怎么没算」，而页面上没有任何报错可查。
+     * 这与「排序 / 检索必须落在服务端」是同一条理由。</p>
+     *
+     * <p>口径见 {@link TaskDoneSummaryVO}：只算真正完成的（{@code completed_at} 非空），
+     * 取消数单独给。所有日期比较都用后端时区的 {@code today()}，
+     * 前端不另算一套「今天」，避免跨零点/跨时区时两边差一天。</p>
+     */
+    public TaskDoneSummaryVO doneSummary() {
+        LocalDate today = today();
+        List<TaskRepository.DoneDayRow> rows = taskRepository.findDoneByDay();
+        Map<String, TaskRepository.DoneDayRow> byDay = new LinkedHashMap<String, TaskRepository.DoneDayRow>();
+        for (TaskRepository.DoneDayRow row : rows) byDay.put(row.day, row);
+
+        String todayKey = TimeUtil.format(today);
+        String yesterdayKey = TimeUtil.format(today.minusDays(1));
+        // 取消数只在「今天」那一组露出来（用户要回顾的是今天的成果与放弃）。
+        int canceledToday = taskRepository.countCanceledOn(todayKey);
+
+        List<TaskDoneDayVO> days = new ArrayList<TaskDoneDayVO>();
+        for (TaskRepository.DoneDayRow row : rows) {
+            days.add(new TaskDoneDayVO(row.day, row.count, row.p0, row.p1, row.deep,
+                    row.firstAt, row.lastAt, 0, 0));
+        }
+
+        TaskDoneDayVO todayRow = buildDay(todayKey, byDay.get(todayKey), canceledToday);
+        // 「比昨天多 / 少 N 项」只在今天这一组给：其它日子给差值只是噪音，
+        // 而且会诱导用户把每天的数字都拿来互相比较。
+        int yesterdayCount = countOf(byDay.get(yesterdayKey));
+        int diff = todayRow.getCount() - yesterdayCount;
+        if (diff != 0 || yesterdayCount > 0) {
+            todayRow = new TaskDoneDayVO(todayRow.getDate(), todayRow.getCount(), todayRow.getP0Count(),
+                    todayRow.getP1Count(), todayRow.getDeepCount(), todayRow.getFirstAt(), todayRow.getLastAt(),
+                    todayRow.getCanceledCount(), diff);
+        }
+        return new TaskDoneSummaryVO(todayKey, todayRow, days);
+    }
+
+    private TaskDoneDayVO buildDay(String day, TaskRepository.DoneDayRow row, int canceledCount) {
+        if (row == null) return new TaskDoneDayVO(day, 0, 0, 0, 0, null, null, canceledCount, 0);
+        return new TaskDoneDayVO(day, row.count, row.p0, row.p1, row.deep,
+                row.firstAt, row.lastAt, canceledCount, 0);
+    }
+
+    private int countOf(TaskRepository.DoneDayRow row) { return row == null ? 0 : row.count; }
 
     public List<TaskVO> sortedTopTasks() {
         final LocalDate today = today();
@@ -330,7 +381,7 @@ public class TaskService {
         return group;
     }
     /**
-     * 创建时的分组落定：显式传了就用传的，否则交给 {@code MemoService.autoGroup} 判定。
+     * 创建时的分组落定：显式传了就用传的，否则交给 {@code FavoriteService.autoGroup} 判定。
      *
      * <p>判定用的文本是「标题 + 描述」：任务的标题常常只有两个字（「报销」「买奶粉」），
      * 只拿标题判定会漏掉写在描述里的关键线索。</p>
@@ -346,13 +397,13 @@ public class TaskService {
     /**
      * 给「不是从任务页进来的」任务写入路径判定分组（收录确认是唯一一处）。
      *
-     * <p>{@code public} 的理由与 {@code MemoService.autoGroup} 一样：判断规则只能有一份实现。
+     * <p>{@code public} 的理由与 {@code FavoriteService.autoGroup} 一样：判断规则只能有一份实现。
      * 收录确认那条路用的是裸 SQL INSERT（不走 Repository），如果它在自己那边也拼一套关键词，
      * 同一个「买奶粉」从收录进来算工作、从任务页建就算生活 —— 而这种差异界面上看不出来。</p>
      */
     public String resolveGroupFor(String title, String description) {
         String text = (title == null ? "" : title) + " " + (description == null ? "" : description);
-        return normalizeGroup(memoService.autoGroup(text));
+        return normalizeGroup(favoriteService.autoGroup(text));
     }
     private String normalizeDate(String value) { return value == null || value.trim().isEmpty() ? null : TimeUtil.format(parseDate(value.trim())); }
     private LocalDate parseDate(String value) {

@@ -20,15 +20,31 @@ public class ArticleMeta {
     public final String url;
     /** 还原成 Markdown 的正文；抓不到时为空串（此时笔记只剩标题 + 链接）。 */
     public final String content;
+    /**
+     * 服务端只下发了试读正文（没有阅读权限）。
+     *
+     * <p>得到的分享页对匿名请求只给前约 20% 的正文，判据是服务端下发的
+     * {@code packetInfo.has_authority} 与 {@code red_packet_data.red_packet_authority}
+     * 都为 false（见 {@link DedaoShareParser}）。这个标记<b>只描述内容完整性，
+     * 不决定落盘与否</b> —— 由调用方（{@link ArticleCollectService}）决定：
+     * 目前是拒绝写入并提示，避免往 Vault 里悄悄塞半篇文章。
+     */
+    public final boolean trialOnly;
 
     public ArticleMeta(String platform, String title, String collection, String author,
                        String url, String content) {
+        this(platform, title, collection, author, url, content, false);
+    }
+
+    public ArticleMeta(String platform, String title, String collection, String author,
+                       String url, String content, boolean trialOnly) {
         this.platform = platform;
         this.title = title == null ? "" : title;
         this.collection = collection == null ? "" : collection;
         this.author = author == null ? "" : author;
         this.url = url;
         this.content = content == null ? "" : content;
+        this.trialOnly = trialOnly;
     }
 
     /**

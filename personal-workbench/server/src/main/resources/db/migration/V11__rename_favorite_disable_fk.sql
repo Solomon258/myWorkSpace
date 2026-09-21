@@ -1,0 +1,27 @@
+-- 备忘 → 收藏（第 1/3 步）：为整表重建关掉外键约束。
+--
+-- 为什么单独占一个迁移文件：
+--   Flyway 8.5 会检查单个迁移里的语句类型，只要同时出现「事务性」和「非事务性」语句就直接抛
+--   `FlywayException: Detected both transactional and non-transactional statements within the
+--    same migration (even though mixed is false)`。
+--   而 `PRAGMA` 的归类并不统一 —— **实测 `PRAGMA foreign_keys` 与 `PRAGMA legacy_alter_table`
+--   不能在同一个文件里**（前者被当成事务性、后者不是），所以本文件**只放这一条**。
+--   真正的数据手术留在 V12（纯 DDL/DML，**仍然是原子的、失败可整体回滚**）。
+--
+-- 为什么要关外键：
+--   inbox_item 被 5 张表用外键引用（task / schedule_event / favorite / knowledge_note /
+--   wechat_msg_log）。`DROP TABLE` 在外键开启时会先对它做一次隐式 DELETE，
+--   只要子表还有行引用它，这一句必然 `FOREIGN KEY constraint failed`。
+--   关掉之后，重建期间出现的「子表指向一张暂时不存在的表」不会被检查，
+--   而 V12 结束时 inbox_item 已经重新建好、引用关系完好。
+--
+--   （曾经还额外开过 `legacy_alter_table=ON` 来防 ALTER TABLE ... RENAME 重解析 schema 报
+--    `no such table: main.inbox_item`。2026-09-20 实测**不需要**：只关外键就能完整跑通，
+--    而且还不会撞上上面那条 mixed 限制。别再加回来了。）
+--
+-- ⚠️ foreign_keys 是**连接级**设置，Flyway 的连接由 Spring Boot 的 Hikari 池提供，用完要还回池里。
+--    而 sqlite-jdbc 只在**新建连接时**按 SQLiteConfig 施加 enforceForeignKeys(true)，
+--    还回去的连接不会被自动纠正，会一直带着 foreign_keys=OFF 被后续请求复用。
+--    所以 V13 **必须**把它复位（SchemaMigrationTest 里两条断言守着这件事）。
+
+PRAGMA foreign_keys=OFF;

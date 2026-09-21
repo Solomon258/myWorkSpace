@@ -20,16 +20,16 @@ public class DemoDataInitializer {
         Integer inboxCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM inbox_item WHERE is_demo = 1", Integer.class);
         Integer taskCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM task WHERE is_demo = 1", Integer.class);
         Integer eventCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM schedule_event WHERE is_demo = 1", Integer.class);
-        Integer memoCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM memo WHERE is_demo = 1", Integer.class);
+        Integer favoriteCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM favorite WHERE is_demo = 1", Integer.class);
         Integer logCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM activity_log WHERE is_demo = 1", Integer.class);
         if (Integer.valueOf(4).equals(inboxCount) && Integer.valueOf(4).equals(taskCount)
-                && Integer.valueOf(3).equals(eventCount) && Integer.valueOf(4).equals(memoCount)
+                && Integer.valueOf(3).equals(eventCount) && Integer.valueOf(4).equals(favoriteCount)
                 && Integer.valueOf(3).equals(logCount)) {
             return;
         }
 
         jdbcTemplate.update("DELETE FROM activity_log WHERE is_demo = 1");
-        jdbcTemplate.update("DELETE FROM memo WHERE is_demo = 1");
+        jdbcTemplate.update("DELETE FROM favorite WHERE is_demo = 1");
         jdbcTemplate.update("DELETE FROM schedule_event WHERE is_demo = 1");
         jdbcTemplate.update("DELETE FROM task WHERE is_demo = 1");
         jdbcTemplate.update("DELETE FROM inbox_item WHERE is_demo = 1");
@@ -61,10 +61,10 @@ public class DemoDataInitializer {
         insertEvent("深度块：限流方案设计", "deep_block", today, "10:00", "11:30", now);
         insertEvent("与业务方对齐 Q4 需求", "meeting", today, "14:00", "15:00", now);
 
-        insertMemo("公司班车时间表", "早班 7:50 软件园东门发车；晚班 18:30 / 19:30 两班，B座楼下上车；周五晚班只有 18:30 一班。", null, "[\"通勤\"]", "life", 1, now);
-        insertMemo("家里要买的", "奶粉2段一罐、湿巾两包、垃圾袋。周五前买好。", null, "[\"家庭采购\"]", "life", 0, now);
-        insertMemo("Obsidian 双链文章", "一篇讲双链笔记如何组织技术方案的文章，值得参考。", "https://example.com/obsidian-links", "[\"链接收藏\"]", "work", 0, now);
-        insertMemo("VPN 与运维值班", "公司 VPN 地址 vpn.example.com；运维值班电话按单双周轮换。", null, "[\"运维\"]", "work", 0, now);
+        insertFavorite("公司班车时间表", "早班 7:50 软件园东门发车；晚班 18:30 / 19:30 两班，B座楼下上车；周五晚班只有 18:30 一班。", null, "[\"通勤\"]", "life", 1, now);
+        insertFavorite("家里要买的", "奶粉2段一罐、湿巾两包、垃圾袋。周五前买好。", null, "[\"家庭采购\"]", "life", 0, now);
+        insertFavorite("Obsidian 双链文章", "一篇讲双链笔记如何组织技术方案的文章，值得参考。", "https://example.com/obsidian-links", "[\"链接收藏\"]", "work", 0, now);
+        insertFavorite("VPN 与运维值班", "公司 VPN 地址 vpn.example.com；运维值班电话按单双周轮换。", null, "[\"运维\"]", "work", 0, now);
 
         insertLog("inbox", "收录「明天下午3点约业务方对齐Q4需求评审」", now);
         insertLog("pomo", "完成 1 个番茄，专注「限流方案定稿」25 分钟", now);
@@ -81,8 +81,8 @@ public class DemoDataInitializer {
                 title, type, date, start, end, now, now);
     }
 
-    private void insertMemo(String title, String content, String url, String tags, String group, int pinned, String now) {
-        jdbcTemplate.update("INSERT INTO memo(title, content, url, tags, grp, pinned, status, created_at, updated_at, is_demo) VALUES (?,?,?,?,?,?,'active',?,?,1)",
+    private void insertFavorite(String title, String content, String url, String tags, String group, int pinned, String now) {
+        jdbcTemplate.update("INSERT INTO favorite(title, content, url, tags, grp, pinned, status, created_at, updated_at, is_demo) VALUES (?,?,?,?,?,?,'active',?,?,1)",
                 title, content, url, tags, group, pinned, now, now);
     }
 

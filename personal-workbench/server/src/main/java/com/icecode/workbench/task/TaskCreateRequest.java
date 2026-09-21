@@ -26,7 +26,7 @@ public class TaskCreateRequest {
 
     /**
      * 工作 / 生活分组。留空或填 {@code auto} 时由后端按关键词自动判定
-     * （复用 {@code MemoService.autoGroup} 的规则），与备忘页的「空间」是同一套语义。
+     * （复用 {@code FavoriteService.autoGroup} 的规则），与收藏页的「空间」是同一套语义。
      */
     @Pattern(regexp = "^(auto|work|life)?$", message = "分组只能填 work / life / auto，留空表示自动判定")
     private String grp;

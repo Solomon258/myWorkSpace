@@ -15,10 +15,17 @@ public class SettingsVO {
      * 前端据此在「＋AI」按钮上给出提示 —— 用户点下去才知道为什么没解析。
      */
     private final boolean aiVisionLocalOnly;
+    /**
+     * 是否已配置「得到登录 Cookie」。
+     *
+     * <p>只回传布尔值，不回传明文 —— Cookie 等同于账号凭据，把它送回浏览器等于多一份
+     * 可被截图 / 缓存 / 插件读取的副本，而界面上只需要回答「配没配」这个问题。
+     */
+    private final boolean dedaoCookieSet;
 
     public SettingsVO(String username, boolean aiEnabled, String aiBaseUrl, String aiModel,
                       String aiApiKeyMasked, boolean aiApiKeySet, String obsidianVaultPath,
-                      String aiVisionModel, boolean aiVisionLocalOnly) {
+                      String aiVisionModel, boolean aiVisionLocalOnly, boolean dedaoCookieSet) {
         this.username = username;
         this.aiEnabled = aiEnabled;
         this.aiBaseUrl = aiBaseUrl;
@@ -28,6 +35,7 @@ public class SettingsVO {
         this.obsidianVaultPath = obsidianVaultPath;
         this.aiVisionModel = aiVisionModel;
         this.aiVisionLocalOnly = aiVisionLocalOnly;
+        this.dedaoCookieSet = dedaoCookieSet;
     }
 
     public String getUsername() { return username; }
@@ -39,4 +47,5 @@ public class SettingsVO {
     public String getObsidianVaultPath() { return obsidianVaultPath; }
     public String getAiVisionModel() { return aiVisionModel; }
     public boolean isAiVisionLocalOnly() { return aiVisionLocalOnly; }
+    public boolean isDedaoCookieSet() { return dedaoCookieSet; }
 }

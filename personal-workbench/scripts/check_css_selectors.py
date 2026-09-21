@@ -6,11 +6,11 @@
 ----
 CSS 里注释等价于空白。若注释被夹在两个选择器片段之间：
 
-    .memo-theme-work /* 说明 */.memo-theme-life /* 说明 *//* 说明 */.memo-card{...}
+    .favorite-theme-work /* 说明 */.favorite-theme-life /* 说明 *//* 说明 */.favorite-card{...}
 
 浏览器会把这些片段拼成**一个**选择器：
 
-    .memo-theme-work .memo-theme-life .memo-card
+    .favorite-theme-work .favorite-theme-life .favorite-card
 
 结果紧跟其后的那条规则永远匹配不到任何元素 —— 样式**静默全部失效**。
 控制台不报错、渲染脚本也查不出来，只有肉眼看截图才发现「卡片没间隙 / 文字贴着边框」。

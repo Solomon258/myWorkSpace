@@ -29,7 +29,18 @@ public enum ErrorCode {
     ATTACHMENT_OVER_LIMIT(3014, "附件数量超过了上限"),
     // 视觉解析
     VISION_UNSUPPORTED(3015, "当前配置的模型不支持图片解析，请在设置里填写视觉模型"),
-    VISION_FAILED(3016, "图片识别失败，可稍后重试");
+    VISION_FAILED(3016, "图片识别失败，可稍后重试"),
+    /**
+     * 得到分享页在「匿名 / 未登录」状态下只下发试读正文（2026-09-20 实测：1023 字 / 16 段，
+     * 约为全文的 20%）。用户看到的「本篇内容剩余80%，继续学习」是前端硬编码文案，
+     * 真正的边界在服务端 —— {@code packetInfo.has_authority} 与
+     * {@code red_packet_data.red_packet_authority} 都为 false。
+     *
+     * <p>这不是解析失败：链接、标题、作者、课程名都读出来了，只是正文不完整。
+     * 所以单独给一个码，让用户能分清「链接不对」和「这篇只给了我试读」——
+     * 后者只要在设置里配上得到登录 Cookie 就能取到全文（自己的已购课程）。
+     */
+    ARTICLE_TRIAL_ONLY(3017, "这篇文章只拿到了试读部分，需要在设置里配置得到登录 Cookie 才能取全文");
 
     private final int code;
     private final String message;

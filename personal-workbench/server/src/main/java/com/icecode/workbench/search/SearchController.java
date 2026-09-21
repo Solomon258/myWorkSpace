@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.icecode.workbench.common.ApiResponse;
 
 /**
- * 全局搜索（跨 收录 / 任务 / 日程 / 备忘 / 时间线 + 回收站）。
+ * 全局搜索（跨 收录 / 任务 / 日程 / 收藏 / 时间线 + 回收站）。
  *
  * <p>用 GET：纯读取、无副作用，参数都是标量。搜索<b>不写 {@code activity_log}</b> ——
  * 搜一下不是业务动作，写进去会把时间线淹掉。</p>
@@ -34,7 +34,7 @@ public class SearchController {
 
     /**
      * @param q      关键词（必填，1–100 字）
-     * @param types  逗号分隔的类型过滤，缺省 = 全部。取值：task / event / memo / inbox / timeline / trash
+     * @param types  逗号分隔的类型过滤，缺省 = 全部。取值：task / event / favorite / inbox / timeline / trash
      * @param scope  {@code all}（默认，含回收站）或 {@code active}（仅活数据）
      * @param limit  每组返回条数，默认 5，上限 20
      * @param expand 语义联想词（逗号分隔，来自 {@code /search/expand}）。命中这些词的记录会以

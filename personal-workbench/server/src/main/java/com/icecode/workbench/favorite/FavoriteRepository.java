@@ -1,4 +1,4 @@
-package com.icecode.workbench.memo;
+package com.icecode.workbench.favorite;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -12,13 +12,13 @@ import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public class MemoRepository {
+public class FavoriteRepository {
 
     private final JdbcTemplate jdbcTemplate;
-    private final RowMapper<MemoRecord> rowMapper = new RowMapper<MemoRecord>() {
+    private final RowMapper<FavoriteRecord> rowMapper = new RowMapper<FavoriteRecord>() {
         @Override
-        public MemoRecord mapRow(ResultSet rs, int rowNum) throws SQLException {
-            MemoRecord record = new MemoRecord();
+        public FavoriteRecord mapRow(ResultSet rs, int rowNum) throws SQLException {
+            FavoriteRecord record = new FavoriteRecord();
             record.id = rs.getLong("id");
             record.title = rs.getString("title");
             record.content = rs.getString("content");
@@ -36,12 +36,12 @@ public class MemoRepository {
         }
     };
 
-    public MemoRepository(JdbcTemplate jdbcTemplate) {
+    public FavoriteRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public List<MemoRecord> find(String grp, String keyword, boolean includeArchived) {
-        StringBuilder sql = new StringBuilder("SELECT * FROM memo WHERE deleted=0");
+    public List<FavoriteRecord> find(String grp, String keyword, boolean includeArchived) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM favorite WHERE deleted=0");
         List<Object> args = new ArrayList<Object>();
         if (!includeArchived) sql.append(" AND status='active'");
         if (grp != null && !grp.trim().isEmpty()) {
@@ -60,8 +60,8 @@ public class MemoRepository {
         return jdbcTemplate.query(sql.toString(), rowMapper, args.toArray());
     }
 
-    public MemoRecord findById(long id) {
-        List<MemoRecord> records = jdbcTemplate.query("SELECT * FROM memo WHERE id=? AND deleted=0", rowMapper, id);
+    public FavoriteRecord findById(long id) {
+        List<FavoriteRecord> records = jdbcTemplate.query("SELECT * FROM favorite WHERE id=? AND deleted=0", rowMapper, id);
         return records.isEmpty() ? null : records.get(0);
     }
 
@@ -80,7 +80,7 @@ public class MemoRepository {
         KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbcTemplate.update(connection -> {
             java.sql.PreparedStatement statement = connection.prepareStatement(
-                    "INSERT INTO memo(title, content, url, tags, grp, pinned, status, source_inbox_id, created_at, updated_at, is_demo) VALUES (?,?,?,?,?,0,'active',?,?,?,?)",
+                    "INSERT INTO favorite(title, content, url, tags, grp, pinned, status, source_inbox_id, created_at, updated_at, is_demo) VALUES (?,?,?,?,?,0,'active',?,?,?,?)",
                     java.sql.Statement.RETURN_GENERATED_KEYS);
             statement.setString(1, title);
             statement.setString(2, content);
@@ -97,22 +97,22 @@ public class MemoRepository {
         return keyHolder.getKey().longValue();
     }
 
-    public void update(MemoRecord memo) {
-        jdbcTemplate.update("UPDATE memo SET title=?, content=?, url=?, tags=?, grp=?, updated_at=? WHERE id=? AND deleted=0",
-                memo.title, memo.content, memo.url, memo.tags, memo.grp, memo.updatedAt, memo.id);
+    public void update(FavoriteRecord favorite) {
+        jdbcTemplate.update("UPDATE favorite SET title=?, content=?, url=?, tags=?, grp=?, updated_at=? WHERE id=? AND deleted=0",
+                favorite.title, favorite.content, favorite.url, favorite.tags, favorite.grp, favorite.updatedAt, favorite.id);
     }
 
     public void setPinned(long id, boolean pinned, String updatedAt) {
-        jdbcTemplate.update("UPDATE memo SET pinned=?, updated_at=? WHERE id=? AND deleted=0", pinned ? 1 : 0, updatedAt, id);
+        jdbcTemplate.update("UPDATE favorite SET pinned=?, updated_at=? WHERE id=? AND deleted=0", pinned ? 1 : 0, updatedAt, id);
     }
 
     public void setStatus(long id, String status, String updatedAt) {
-        jdbcTemplate.update("UPDATE memo SET status=?, updated_at=? WHERE id=? AND deleted=0", status, updatedAt, id);
+        jdbcTemplate.update("UPDATE favorite SET status=?, updated_at=? WHERE id=? AND deleted=0", status, updatedAt, id);
     }
 
     /** 软删除必须同时写下 deleted_at：回收站靠它算 30 天窗口（V7）。 */
     public void softDelete(long id, String updatedAt) {
-        jdbcTemplate.update("UPDATE memo SET deleted=1, deleted_at=?, updated_at=? WHERE id=? AND deleted=0", updatedAt, updatedAt, id);
+        jdbcTemplate.update("UPDATE favorite SET deleted=1, deleted_at=?, updated_at=? WHERE id=? AND deleted=0", updatedAt, updatedAt, id);
     }
 
     public void insertActivity(String type, String content, String now) {
@@ -125,7 +125,7 @@ public class MemoRepository {
     }
 
     public int countByGroup(String grp, boolean includeArchived) {
-        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM memo WHERE deleted=0");
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM favorite WHERE deleted=0");
         List<Object> args = new ArrayList<Object>();
         if (!includeArchived) sql.append(" AND status='active'");
         if (grp != null) { sql.append(" AND grp=?"); args.add(grp); }

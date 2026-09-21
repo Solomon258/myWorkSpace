@@ -41,4 +41,16 @@ public class SettingsController {
     public ApiResponse<SettingsVO> saveObsidian(@Valid @RequestBody ObsidianSettingsRequest request) {
         return ApiResponse.success(settingsService.saveObsidian(request));
     }
+
+    /**
+     * 保存 / 清除「得到登录 Cookie」。
+     *
+     * <p>为什么放在设置里而不是环境变量：它是用户个人的账号凭据 —— 会过期、会换号，
+     * 每次都要在界面上改。塞进启动配置的话，改一次就得重启一次服务，
+     * 而这条链路的使用场景恰恰是「收藏失败 → 顺手换一份 Cookie」。
+     */
+    @PutMapping("/dedao-cookie")
+    public ApiResponse<SettingsVO> saveDedaoCookie(@Valid @RequestBody DedaoCookieRequest request) {
+        return ApiResponse.success(settingsService.saveDedaoCookie(request));
+    }
 }

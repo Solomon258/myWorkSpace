@@ -54,9 +54,9 @@ class TrashFlowTest {
 
     @BeforeEach
     void setUp() {
-        // 先删子表再删父表：task / schedule_event / memo / knowledge_note 都外键引用 inbox_item
+        // 先删子表再删父表：task / schedule_event / favorite / knowledge_note 都外键引用 inbox_item
         for (String table : new String[] {"pomodoro", "daily_plan_item", "wechat_msg_log", "activity_log",
-                "task", "schedule_event", "memo", "knowledge_note", "daily_plan", "inbox_item"}) {
+                "task", "schedule_event", "favorite", "knowledge_note", "daily_plan", "inbox_item"}) {
             jdbcTemplate.update("DELETE FROM " + table);
         }
         jdbcTemplate.update("UPDATE app_config SET config_value='true' WHERE config_key='app.initialized'");
@@ -69,7 +69,7 @@ class TrashFlowTest {
     void listsAllFiveEntityKindsDeletedWithinRetentionWindow() throws Exception {
         insertDeletedTask("删掉的任务");
         insertDeletedEvent("删掉的日程");
-        insertDeletedMemo("删掉的备忘");
+        insertDeletedFavorite("删掉的收藏");
         insertDeletedKnowledge("删掉的知识");
         insertDeletedInbox("删掉的收集箱条目");
 
@@ -78,7 +78,7 @@ class TrashFlowTest {
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.length()").value(5))
                 .andExpect(jsonPath("$.data[*].type", containsInAnyOrder(
-                        "inbox", "task", "event", "memo", "knowledge")))
+                        "inbox", "task", "event", "favorite", "knowledge")))
                 // 刚删的还剩满 30 天
                 .andExpect(jsonPath("$.data[*].daysLeft", containsInAnyOrder(30, 30, 30, 30, 30)));
     }
@@ -331,7 +331,7 @@ class TrashFlowTest {
     void clearingTrashWipesEverythingVisibleInOneShot() throws Exception {
         long task = insertDeletedTask("清空的任务");
         insertDeletedEvent("清空的日程");
-        insertDeletedMemo("清空的备忘");
+        insertDeletedFavorite("清空的收藏");
         insertDeletedKnowledge("清空的知识");
         insertDeletedInbox("清空的收录");
         String now = TimeUtil.now(TZ);
@@ -423,9 +423,9 @@ class TrashFlowTest {
                 + " VALUES (?, 'meeting', '2026-09-20', ?, ?, 1, ?)", title, now, now, now);
     }
 
-    private void insertDeletedMemo(String title) {
+    private void insertDeletedFavorite(String title) {
         String now = TimeUtil.now(TZ);
-        jdbcTemplate.update("INSERT INTO memo(title, content, grp, status, created_at, updated_at, deleted, deleted_at)"
+        jdbcTemplate.update("INSERT INTO favorite(title, content, grp, status, created_at, updated_at, deleted, deleted_at)"
                 + " VALUES (?, '正文', 'life', 'active', ?, ?, 1, ?)", title, now, now, now);
     }
 

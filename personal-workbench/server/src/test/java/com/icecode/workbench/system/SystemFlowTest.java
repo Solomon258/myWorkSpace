@@ -52,7 +52,7 @@ class SystemFlowTest {
         jdbcTemplate.update("DELETE FROM pomodoro");
         jdbcTemplate.update("DELETE FROM activity_log");
         jdbcTemplate.update("DELETE FROM inbox_item");
-        jdbcTemplate.update("DELETE FROM memo");
+        jdbcTemplate.update("DELETE FROM favorite");
         jdbcTemplate.update("DELETE FROM schedule_event");
         jdbcTemplate.update("DELETE FROM task");
         jdbcTemplate.update("DELETE FROM ai_job");
@@ -164,7 +164,7 @@ class SystemFlowTest {
         String now = TimeUtil.now("Asia/Shanghai");
         jdbcTemplate.update("INSERT INTO task(title, priority, status, created_at, is_demo) VALUES ('示例任务','P2','todo',?,1)", now);
         jdbcTemplate.update("INSERT INTO task(title, priority, status, created_at, is_demo) VALUES ('真实任务','P2','todo',?,0)", now);
-        jdbcTemplate.update("INSERT INTO memo(title, content, grp, status, created_at, is_demo) VALUES ('示例备忘','内容','life','active',?,1)", now);
+        jdbcTemplate.update("INSERT INTO favorite(title, content, grp, status, created_at, is_demo) VALUES ('示例收藏','内容','life','active',?,1)", now);
 
         mockMvc.perform(post("/api/v1/system/demo/clear").session(session)
                         .contentType("application/json").content("{\"confirm\":false}"))
@@ -177,9 +177,9 @@ class SystemFlowTest {
                 .andExpect(jsonPath("$.data.total").value(2));
 
         Integer tasks = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM task", Integer.class);
-        Integer memos = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM memo", Integer.class);
+        Integer favorites = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM favorite", Integer.class);
         assertThat(tasks.intValue()).isEqualTo(1);
-        assertThat(memos.intValue()).isEqualTo(0);
+        assertThat(favorites.intValue()).isEqualTo(0);
     }
 
     @Test

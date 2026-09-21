@@ -54,7 +54,21 @@ class LiveDedaoCollectIT {
         jdbcTemplate.update("UPDATE app_config SET config_value=? WHERE config_key='obsidian.vault_path'",
                 vaultDir.toAbsolutePath().toString());
 
-        CollectResultVO result = articleCollectService.collect(LIVE_URL);
+        CollectResultVO result;
+        try {
+            result = articleCollectService.collect(LIVE_URL);
+        } catch (com.icecode.workbench.common.BizException exception) {
+            // 未配「得到登录 Cookie」时，真实分享页只下发试读正文（约 20%，实测 1023 字），
+            // 产品会明确拒绝写入 —— 这是 2026-09-20 起的设计，不是回归。
+            // 它同样回答了本 IT 关心的问题：**判定试读恰恰依赖 packetInfo 里的
+            // has_authority / red_packet_data 被正确解析出来**，说明得到改版后结构还认得出。
+            assertThat(exception.getErrorCode())
+                    .isEqualTo(com.icecode.workbench.common.ErrorCode.ARTICLE_TRIAL_ONLY);
+            System.out.println("=== 真实链路探测：只拿到试读，已按设计拒绝写入 ===");
+            System.out.println("原因: " + exception.getMessage());
+            System.out.println("（在「设置 → 得到登录 Cookie」填好之后重跑，即可验证全文链路）");
+            return;
+        }
 
         assertThat(result.syncStatus).isEqualTo("synced");
         assertThat(result.platform).isEqualTo("得到");

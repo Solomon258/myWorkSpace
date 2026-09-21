@@ -35,6 +35,9 @@
     logout:function(){return request("/api/v1/auth/logout",{method:"POST"})},
     dashboard:function(){return request("/api/v1/dashboard/today")},
     tasks:function(params){const q=new URLSearchParams(params||{});return request("/api/v1/tasks"+(q.toString()?"?"+q.toString():""))},
+    // 「已完成」页按天汇总（2026-09-20）。**必须走后端**：任务页一次只加载 100 条，
+    // 今天完成的条目可能排在更后面，前端自己分组会把「今天完成 N 项」静默少算。
+    doneSummary:function(){return request("/api/v1/tasks/done-summary")},
     createTask:function(data){return request("/api/v1/tasks",{method:"POST",body:JSON.stringify(data)})},
     updateTask:function(id,data){return request("/api/v1/tasks/"+id,{method:"PATCH",body:JSON.stringify(data)})},
     changeTaskStatus:function(id,status){return request("/api/v1/tasks/"+id+"/status",{method:"POST",body:JSON.stringify({status:status})})},
@@ -48,7 +51,7 @@
     //    （`if (line.includes("前端不使用"))`），写在上一行的注释里它扫不到，会误报成死接口。
     changeTaskGroup:function(id,grp){return request("/api/v1/tasks/"+id+"/group",{method:"POST",body:JSON.stringify({grp:grp})})}, // 前端不使用
     deleteTask:function(id){return request("/api/v1/tasks/"+id,{method:"DELETE"})},
-    // 把一条记录从任务 / 日程 / 备忘中的一个菜单搬到另一个（后端一个事务里完成：
+    // 把一条记录从任务 / 日程 / 收藏中的一个菜单搬到另一个（后端一个事务里完成：
     // 目标菜单新建 + 源记录进回收站 + 记一条流水）。
     transfer:function(data){return request("/api/v1/transfers",{method:"POST",body:JSON.stringify(data)})},
     inbox:function(status){return request("/api/v1/inbox"+(status?"?status="+encodeURIComponent(status):""))},
@@ -67,7 +70,7 @@
     parseImages:function(attachmentIds,source){return request("/api/v1/inbox/parse-images",{method:"POST",body:JSON.stringify({attachmentIds:attachmentIds,source:source||"web"})})},
     parseStatus:function(){return request("/api/v1/inbox/parse-status")},
     deleteInbox:function(id){return request("/api/v1/inbox/"+id,{method:"DELETE"})},
-    // 日程列表有三个形态，收成一个 params 对象（与 tasks / memos 的写法一致）：
+    // 日程列表有三个形态，收成一个 params 对象（与 tasks / favorites 的写法一致）：
     //   {q}       → 全文检索，命中**全部日期**（含待定区）
     //   {from,to} → 区间查询，日程页周视图一次取回所有可见周（from/to 必须成对）
     //   {date} / {} → 单日；省略 date 或传空串 = 今天
@@ -80,12 +83,12 @@
     createEvent:function(data){return request("/api/v1/events",{method:"POST",body:JSON.stringify(data)})},
     updateEvent:function(id,data){return request("/api/v1/events/"+id,{method:"PATCH",body:JSON.stringify(data)})},
     deleteEvent:function(id){return request("/api/v1/events/"+id,{method:"DELETE"})},
-    memos:function(params){const q=new URLSearchParams(params||{});return request("/api/v1/memos"+(q.toString()?"?"+q.toString():""))},
-    createMemo:function(data){return request("/api/v1/memos",{method:"POST",body:JSON.stringify(data)})},
-    updateMemo:function(id,data){return request("/api/v1/memos/"+id,{method:"PATCH",body:JSON.stringify(data)})},
-    pinMemo:function(id){return request("/api/v1/memos/"+id+"/pin",{method:"POST"})},
-    archiveMemo:function(id){return request("/api/v1/memos/"+id+"/archive",{method:"POST"})},
-    deleteMemo:function(id){return request("/api/v1/memos/"+id,{method:"DELETE"})},
+    favorites:function(params){const q=new URLSearchParams(params||{});return request("/api/v1/favorites"+(q.toString()?"?"+q.toString():""))},
+    createFavorite:function(data){return request("/api/v1/favorites",{method:"POST",body:JSON.stringify(data)})},
+    updateFavorite:function(id,data){return request("/api/v1/favorites/"+id,{method:"PATCH",body:JSON.stringify(data)})},
+    pinFavorite:function(id){return request("/api/v1/favorites/"+id+"/pin",{method:"POST"})},
+    archiveFavorite:function(id){return request("/api/v1/favorites/"+id+"/archive",{method:"POST"})},
+    deleteFavorite:function(id){return request("/api/v1/favorites/"+id,{method:"DELETE"})},
     pomoConfig:function(){return request("/api/v1/pomodoros/config")},
     savePomoConfig:function(data){return request("/api/v1/pomodoros/config",{method:"PUT",body:JSON.stringify(data)})},
     pomoToday:function(){return request("/api/v1/pomodoros/today")},
@@ -96,6 +99,9 @@
     saveProfile:function(data){return request("/api/v1/settings/profile",{method:"PUT",body:JSON.stringify(data)})},
     saveAi:function(data){return request("/api/v1/settings/ai",{method:"PUT",body:JSON.stringify(data)})},
     saveObsidian:function(vaultPath){return request("/api/v1/settings/obsidian",{method:"PUT",body:JSON.stringify({vaultPath:vaultPath})})},
+    // 得到登录 Cookie：收藏文章时后端带着它去抓取，已购文章才拿得到全文。
+    // 后端只回「配没配」，不回传明文。
+    saveDedaoCookie:function(cookie){return request("/api/v1/settings/dedao-cookie",{method:"PUT",body:JSON.stringify({cookie:cookie})})},
     backupNow:function(){return request("/api/v1/system/backup",{method:"POST",body:JSON.stringify({})})},
     backups:function(){return request("/api/v1/system/backups")},
     restoreBackup:function(fileName){return request("/api/v1/system/restore",{method:"POST",body:JSON.stringify({fileName:fileName,confirm:true})})},
@@ -110,14 +116,14 @@
     collectArticle:function(content){return request("/api/v1/collect/article",{method:"POST",body:JSON.stringify({content:content})})},
     // 存量回填：把 Vault 里已有的笔记导入知识库。幂等，重复调用不会产生重复条目。
     importVault:function(dir){return request("/api/v1/knowledge/import",{method:"POST",body:JSON.stringify({dir:dir})})},
-    // 全局搜索（跨 收录 / 任务 / 日程 / 备忘 / 时间线 + 回收站）。
+    // 全局搜索（跨 收录 / 任务 / 日程 / 收藏 / 时间线 + 回收站）。
     // 这是**独立通道**：一次输入只打这一个接口，绝不触发 refreshAll 那 11 个请求。
     // options 用来透传 AbortController 的 signal（取消上一次未完成的搜索）。
     search:function(params,options){const q=new URLSearchParams(params||{});return request("/api/v1/search"+(q.toString()?"?"+q.toString():""),options)},
     // 语义联想（独立接口，供「两段式渲染」用）：关键字结果先渲染，这个词回来再补位。
     // 后端在未配置 AI / 超时 / 模型返回垃圾时都会返回空数组且 code=0，前端不需要为它写错误分支。
     expandSearch:function(q){return request("/api/v1/search/expand",{method:"POST",body:JSON.stringify({q:q})})},
-    // 回收站（US-1.5）。type 是后端约定的实体名：inbox / task / event / memo / knowledge。
+    // 回收站（US-1.5）。type 是后端约定的实体名：inbox / task / event / favorite / knowledge。
     trash:function(){return request("/api/v1/trash")},
     restoreTrash:function(type,id){return request("/api/v1/trash/"+encodeURIComponent(type)+"/"+id+"/restore",{method:"POST"})},
     // 彻底删除：没有 /restore 那样的动词后缀，DELETE 到记录本身。它删的是原始数据，
@@ -137,6 +143,9 @@
       return request("/api/v1/attachments",{method:"POST",body:form,rawBody:true});
     },
     // 移除缩略图时删掉刚上传的附件（软删，30 天内可恢复）。
-    deleteAttachment:function(id){return request("/api/v1/attachments/"+id,{method:"DELETE"})}
+    deleteAttachment:function(id){return request("/api/v1/attachments/"+id,{method:"DELETE"})},
+    // 诗词品读（全屏展示用）：后端拿「诗本身」去调 AI，同一首第二次进会命中服务端缓存。
+    // 只传纯文本，诗库仍在前端 poems.js 里 —— 后端不认识任何一首诗。
+    reflectPoem:function(poem){return request("/api/v1/poems/reflect",{method:"POST",body:JSON.stringify(poem)})}
   };
 })(window);

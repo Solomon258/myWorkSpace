@@ -40,7 +40,7 @@ class SchemaMigrationTest {
 
         assertThat(tables).containsAll(Arrays.asList(
                 "activity_log", "ai_job", "app_config", "attachment", "daily_plan", "daily_plan_item",
-                "flyway_schema_history", "inbox_item", "knowledge_note", "memo", "pomodoro",
+                "flyway_schema_history", "inbox_item", "knowledge_note", "favorite", "pomodoro",
                 "schedule_event", "task", "wechat_msg_log"));
         assertThat(tables).hasSize(14);
     }
@@ -92,8 +92,8 @@ class SchemaMigrationTest {
 
         assertThat(indexes).contains(
                 "idx_inbox_status", "idx_task_status_priority", "idx_task_due", "idx_event_date",
-                "idx_memo_status", "idx_pomo_ended", "idx_log_created", "idx_plan_item",
-                "idx_task_deleted", "idx_memo_deleted", "idx_inbox_deleted", "idx_ai_job_status",
+                "idx_favorite_status", "idx_pomo_ended", "idx_log_created", "idx_plan_item",
+                "idx_task_deleted", "idx_favorite_deleted", "idx_inbox_deleted", "idx_ai_job_status",
                 // V6 整表重建 schedule_event 时只还原了 idx_event_date / idx_event_demo，
                 // 把 deleted 索引漏了；V7 补齐。回收站按 deleted=1 过滤，缺它就得全表扫。
                 "idx_event_deleted");
@@ -113,9 +113,101 @@ class SchemaMigrationTest {
     void recordsAllMigrationsExactlyOnce() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         Integer count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1 AND version IN ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10')",
+                "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1 AND version IN ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13')",
                 Integer.class);
-        assertThat(count).isEqualTo(10);
+        assertThat(count).isEqualTo(13);
+    }
+
+    /**
+     * V11~V13 是一次跨三个文件的改名（「备忘」→「收藏」），它们必须**按序、且都被执行过**。
+     *
+     * <p>为什么拆三个而不是一个：Flyway 8.5 拒绝在同一个迁移里混用事务性与非事务性语句
+     * （`Detected both transactional and non-transactional statements within the same migration`），
+     * 而 `PRAGMA` 的归类并不统一 —— 实测 `PRAGMA foreign_keys` 与 `PRAGMA legacy_alter_table`
+     * 放在同一个文件里也会被判成 mixed。所以 V11 只放「关外键」一条，V12 放纯 DDL/DML
+     * （整表重建，**原子**），V13 再放「开外键」一条。</p>
+     *
+     * <p>这条测试专门守「V13 没被漏掉」：foreign_keys 是**连接级**的，而 sqlite-jdbc 只在新建连接时
+     * 施加 enforceForeignKeys(true)，还回池里的连接不会自动纠正 —— 漏了 V13，
+     * 整个运行时都会在无外键保护下跑，且不报任何错。下面第一条断言就是这件事的正面证据。</p>
+     */
+    @Test
+    void renameMigrationsRanInOrderAndLeftNoPragmaBehind() {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+
+        for (String version : new String[] {"11", "12", "13"}) {
+            Integer ok = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM flyway_schema_history WHERE version=? AND success=1",
+                    Integer.class, version);
+            assertThat(ok).as("迁移 V%s 必须已成功执行", version).isEqualTo(1);
+        }
+
+        // V13 的收尾：连接级开关必须回到安全一侧
+        assertThat(jdbc.queryForObject("PRAGMA foreign_keys", Integer.class))
+                .as("V13 必须把 foreign_keys 复位，否则池里的连接会一直带着外键关闭").isEqualTo(1);
+        // legacy_alter_table 当前没人动它（曾经开过又证明不需要），这条是防它被重新加回来却忘了复位
+        assertThat(jdbc.queryForObject("PRAGMA legacy_alter_table", Integer.class))
+                .as("legacy_alter_table 必须保持默认 OFF").isEqualTo(0);
+
+        // V12 的收尾：临时表与重建中转表一个都不能留
+        Integer leftovers = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND (name LIKE '%\\_v11' ESCAPE '\\'"
+                        + " OR name LIKE '%\\_v12' ESCAPE '\\' OR name LIKE '%\\_v13' ESCAPE '\\'"
+                        + " OR name='_seq_keep')", Integer.class);
+        assertThat(leftovers).as("重建用的临时表必须全部清理掉").isZero();
+    }
+
+    /**
+     * V11 的核心意图：「备忘」整体更名「收藏」，数据库物理名一起改到位。
+     *
+     * <p>为什么这条要被钉住：改名只改了 V11 一个新迁移，V1~V10 保持只读（Flyway
+     * validate-on-migrate 会校验 checksum，回头改老文件会让所有已升级过的机器启动即崩）。
+     * 所以「V1 建的 memo 表最终变成 favorite」这件事**完全依赖 V11 真的跑过**——
+     * 一旦有人在别处删掉 V11、或改坏了它的重建语句，schema 会静默退回 memo，
+     * 而那时后端的 Repository 已经全在查 favorite，接口会集体报「no such table」。</p>
+     */
+    @Test
+    void renamesMemoToFavoriteInSchema() {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+
+        // 表名：memo 必须已经不在了
+        Integer oldTable = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='memo'", Integer.class);
+        assertThat(oldTable).as("V1 建的 memo 表必须已被 V11 改名为 favorite").isZero();
+
+        String ddl = jdbc.queryForObject(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='favorite'", String.class);
+        assertThat(ddl).isNotNull();
+        // 约束名也是 schema 的一部分，表名改了约束名没改等于没改干净
+        assertThat(ddl).contains("chk_favorite_group").contains("chk_favorite_status")
+                .contains("fk_favorite_inbox");
+        assertThat(ddl).doesNotContain("memo");
+
+        // 三处 CHECK 枚举值：'favorite' 收下了、'memo' 必须被拒
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO activity_log(log_type, content, created_at) VALUES ('memo', 'x', '2026-09-20 10:00:00')"))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("chk_activity_type");
+        jdbc.update("INSERT INTO activity_log(log_type, content, created_at) VALUES ('favorite', '改名后的收藏流水', '2026-09-20 10:00:00')");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO inbox_item(raw_content, ai_category, created_at) VALUES ('x', 'memo', '2026-09-20 10:00:00')"))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("chk_inbox_ai_category");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO attachment(owner_type, owner_id, file_name, mime_type, byte_size, sha256, created_at)"
+                        + " VALUES ('memo', 1, 'a.png', 'image/png', 1, 'x', '2026-09-20 10:00:00')"))
+                .isInstanceOf(UncategorizedSQLException.class)
+                .hasMessageContaining("chk_attachment_owner_type");
+
+        // 索引也跟着改了名，一个都不能少（丢了就是静默全表扫描）
+        for (String index : new String[] {"idx_favorite_status", "idx_favorite_grp",
+                "idx_favorite_deleted", "idx_favorite_demo"}) {
+            Integer found = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?", Integer.class, index);
+            assertThat(found).as("索引 %s 必须由 V11 重建", index).isEqualTo(1);
+        }
     }
 
     /**
@@ -194,7 +286,7 @@ class SchemaMigrationTest {
     void keepsDeletedAtNullUnlessTheRowIsDeleted() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
 
-        for (String table : new String[] {"inbox_item", "task", "schedule_event", "memo", "knowledge_note"}) {
+        for (String table : new String[] {"inbox_item", "task", "schedule_event", "favorite", "knowledge_note"}) {
             assertThat(jdbc.queryForList(
                     "SELECT name FROM pragma_table_info('" + table + "') WHERE name='deleted_at'", String.class))
                     .as(table + " 应有 deleted_at 列").containsExactly("deleted_at");

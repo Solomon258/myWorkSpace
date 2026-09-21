@@ -8,7 +8,7 @@ package com.icecode.workbench.search;
  *
  * <p>两个字段的 {@code null} 是<b>有语义的</b>，不是缺省：日程的 {@code date} 为 null
  * 表示这条日程属于「待定时间」（US-4.2），前端要滚到待定区，
- * <b>任何方向都不许隐式补成今天</b>。备忘的 {@code grp} 决定先切到哪个空间，
+ * <b>任何方向都不许隐式补成今天</b>。收藏的 {@code grp} 决定先切到哪个空间，
  * 空间不对的话目标行根本不在 DOM 里，表现为「点了没反应」。</p>
  */
 public class SearchTargetVO {
@@ -33,8 +33,8 @@ public class SearchTargetVO {
         return new SearchTargetVO("schedule", date, null, null);
     }
 
-    public static SearchTargetVO memo(String grp) {
-        return new SearchTargetVO("memos", null, grp, null);
+    public static SearchTargetVO favorite(String grp) {
+        return new SearchTargetVO("favorites", null, grp, null);
     }
 
     public static SearchTargetVO timeline(String day) {

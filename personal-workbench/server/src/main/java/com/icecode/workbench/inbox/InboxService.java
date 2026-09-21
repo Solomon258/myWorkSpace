@@ -28,7 +28,7 @@ public class InboxService {
 
     /**
      * 落库标题的上限，与 {@code InboxConfirmRequest.title} 的 {@code @Size(max=200)}
-     * 以及 task / memo / knowledge 表各自的标题上限一致。
+     * 以及 task / favorite / knowledge 表各自的标题上限一致。
      */
     private static final int MAX_TITLE_LENGTH = 200;
 
@@ -132,7 +132,7 @@ public class InboxService {
                     "该条目已归档，但没有找到对应的「" + categoryName(request.getCategory()) + "」记录；可能是对应数据已被删除");
         }
         validateConfirm(record);
-        // 标题长度必须与落库表的实际上限对齐（task/memo/knowledge 都是 200）。
+        // 标题长度必须与落库表的实际上限对齐（task/favorite/knowledge 都是 200）。
         // 原来直接拿 record.raw 兜底，而 raw_content 的上限是 4000 —— 图片解析把整张图的
         // 文字吐进 raw_content 之后，一条没填标题的确认会写出一个 4000 字的标题，
         // 之后在列表里占满整屏、编辑保存时又被 @Size(max=200) 拒掉，
@@ -159,11 +159,11 @@ public class InboxService {
             // 转过去只会让文件从**任何界面**都找不到；留在收录条目上，至少「重新解析」还读得到原图。
             attachmentOwnerType = null;
         } else {
-            entityId = createMemo(id, title, record.raw, now);
-            attachmentOwnerType = "memo";
+            entityId = createFavorite(id, title, record.raw, now);
+            attachmentOwnerType = "favorite";
         }
         // 附件在确认的**同一个事务里**交到新实体手上。
-        // 少了这一步，收录带附件生成的备忘/任务/日程会一个附件都没有 —— 而用户在界面上
+        // 少了这一步，收录带附件生成的收藏/任务/日程会一个附件都没有 —— 而用户在界面上
         // 完全看不出少了什么（2026-09-19 用户报的就是这个）。转绑失败就整体回滚：
         // 留下「确认成功但附件丢了」的记录，比确认失败难查得多。
         int movedAttachments = 0;
@@ -295,13 +295,13 @@ public class InboxService {
     }
 
     private Long findExistingEntity(long inboxId, String category) {
-        String table = "task".equals(category) ? "task" : "schedule".equals(category) ? "schedule_event" : "memo";
+        String table = "task".equals(category) ? "task" : "schedule".equals(category) ? "schedule_event" : "favorite";
         List<Long> ids = jdbcTemplate.queryForList("SELECT id FROM " + table + " WHERE source_inbox_id=? AND deleted=0 ORDER BY id", Long.class, inboxId);
         return ids.isEmpty() ? null : ids.get(0);
     }
 
     private long createTask(long inboxId, String title, String priority, String due, String now) {
-        // 分组走与手工新建任务**同一套**判定规则（MemoService.autoGroup）。
+        // 分组走与手工新建任务**同一套**判定规则（FavoriteService.autoGroup）。
         // 这里曾经是两条独立的写库路径，一旦各自判定就会漂成「收录进来的算工作、
         // 手工建的算生活」，而界面上完全看不出来 —— 所以判定只留一个入口。
         String grp = taskService.resolveGroupFor(title, null);
@@ -322,13 +322,13 @@ public class InboxService {
         return eventRepository.insertRepeating(title, type, due, start, end, now, false, Long.valueOf(inboxId), weeks);
     }
 
-    private long createMemo(long inboxId, String title, String raw, String now) {
+    private long createFavorite(long inboxId, String title, String raw, String now) {
         String url = extractUrl(raw);
         String tags = extractTags(raw);
         String group = extractGroup(raw);
-        jdbcTemplate.update("INSERT INTO memo(title, content, url, tags, grp, pinned, status, source_inbox_id, created_at, updated_at, is_demo) VALUES (?,?,?,?,?,0,'active',?,?,?,0)",
+        jdbcTemplate.update("INSERT INTO favorite(title, content, url, tags, grp, pinned, status, source_inbox_id, created_at, updated_at, is_demo) VALUES (?,?,?,?,?,0,'active',?,?,?,0)",
                 title, raw, url, tags, group, inboxId, now, now);
-        return jdbcTemplate.queryForObject("SELECT id FROM memo WHERE source_inbox_id=? ORDER BY id DESC LIMIT 1", Long.class, inboxId).longValue();
+        return jdbcTemplate.queryForObject("SELECT id FROM favorite WHERE source_inbox_id=? ORDER BY id DESC LIMIT 1", Long.class, inboxId).longValue();
     }
 
     /** 单条路径：附件按这一条查一次就够（列表路径走 {@code mapByOwner} 批量，见 list）。 */
@@ -364,7 +364,7 @@ public class InboxService {
         Integer value = jdbcTemplate.queryForObject(
                 "SELECT (SELECT COUNT(*) FROM task WHERE source_inbox_id=? AND deleted=0)"
                         + " + (SELECT COUNT(*) FROM schedule_event WHERE source_inbox_id=? AND deleted=0)"
-                        + " + (SELECT COUNT(*) FROM memo WHERE source_inbox_id=? AND deleted=0)"
+                        + " + (SELECT COUNT(*) FROM favorite WHERE source_inbox_id=? AND deleted=0)"
                         + " + (SELECT COUNT(*) FROM knowledge_note WHERE source_inbox_id=? AND deleted=0)",
                 Integer.class, inboxId, inboxId, inboxId, inboxId);
         return value == null ? 0 : value.intValue();
@@ -431,7 +431,7 @@ public class InboxService {
     private String timezone() { String timezone = configRepository.findValue(AuthConstants.CONFIG_TIMEZONE); return timezone == null ? "Asia/Shanghai" : timezone; }
     private String now() { return TimeUtil.now(timezone()); }
     private String shortText(String text) { return text.length() <= 30 ? text : text.substring(0, 30) + "…"; }
-    private String categoryName(String category) { return "task".equals(category) ? "任务" : "schedule".equals(category) ? "日程" : "knowledge".equals(category) ? "知识" : "备忘"; }
+    private String categoryName(String category) { return "task".equals(category) ? "任务" : "schedule".equals(category) ? "日程" : "knowledge".equals(category) ? "知识" : "收藏"; }
     private String statusName(String status) {
         if ("pending".equals(status)) return "待整理";
         if ("processed".equals(status)) return "待确认";

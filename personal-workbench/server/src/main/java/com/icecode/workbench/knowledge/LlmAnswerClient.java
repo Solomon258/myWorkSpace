@@ -38,6 +38,15 @@ public class LlmAnswerClient {
     }
 
     public String chat(String systemPrompt, String userPrompt) throws Exception {
+        return chat(systemPrompt, userPrompt, 0.2);
+    }
+
+    /**
+     * 带温度的重载。默认 {@link #chat(String, String)} 用 0.2（知识问答要的是稳定复现），
+     * 诗词品读这类要「有情味」的场景传更高的值（见 {@code PoemReflectService.TEMPERATURE}）——
+     * 同一句诗每次品出不一样的滋味，本来就是这件事的一部分。
+     */
+    public String chat(String systemPrompt, String userPrompt, double temperature) throws Exception {
         Map<String, String> config = configRepository.findValues(
                 SettingsService.KEY_AI_BASE_URL, SettingsService.KEY_AI_MODEL, SettingsService.KEY_AI_API_KEY);
         String baseUrl = config.get(SettingsService.KEY_AI_BASE_URL).trim();
@@ -50,7 +59,7 @@ public class LlmAnswerClient {
 
         Map<String, Object> body = new HashMap<String, Object>();
         body.put("model", notBlank(model) ? model.trim() : "deepseek-chat");
-        body.put("temperature", Double.valueOf(0.2));
+        body.put("temperature", Double.valueOf(temperature));
         Map<String, String> system = new HashMap<String, String>();
         system.put("role", "system");
         system.put("content", systemPrompt);

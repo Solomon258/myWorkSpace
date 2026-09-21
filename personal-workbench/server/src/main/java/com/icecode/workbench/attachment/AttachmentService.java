@@ -53,7 +53,7 @@ public class AttachmentService {
     static {
         VALID_OWNER_TYPES.add("task");
         VALID_OWNER_TYPES.add("schedule_event");
-        VALID_OWNER_TYPES.add("memo");
+        VALID_OWNER_TYPES.add("favorite");
         VALID_OWNER_TYPES.add("knowledge_note");
         VALID_OWNER_TYPES.add("inbox_item");
     }
@@ -267,7 +267,7 @@ public class AttachmentService {
      * 把 {@code fromType/fromId} 名下的附件整体转绑到 {@code toType/toId}。
      *
      * <p>唯一调用方是「收录条目确认生成实体」：附件在上传时挂在收录条目上，
-     * 确认成备忘 / 任务 / 日程之后要跟着走 —— 否则收录带附件生成的记录**一个附件都没有**，
+     * 确认成收藏 / 任务 / 日程之后要跟着走 —— 否则收录带附件生成的记录**一个附件都没有**，
      * 而用户在界面上完全看不出来（2026-09-19 修的就是这个）。</p>
      *
      * <p><b>为什么不复制一份给目标：</b>附件是「同一份文件只有一条记录、靠引用计数决定何时回收」，
@@ -301,7 +301,7 @@ public class AttachmentService {
     private void requireOwnerType(String ownerType) {
         if (!VALID_OWNER_TYPES.contains(ownerType)) {
             throw new BizException(ErrorCode.INVALID_PARAMETER,
-                    "ownerType 只能填 task / schedule_event / memo / knowledge_note / inbox_item");
+                    "ownerType 只能填 task / schedule_event / favorite / knowledge_note / inbox_item");
         }
     }
 
@@ -466,7 +466,7 @@ public class AttachmentService {
         String value = ownerType.trim();
         if (!VALID_OWNER_TYPES.contains(value)) {
             throw new BizException(ErrorCode.INVALID_PARAMETER,
-                    "ownerType 只能填 task / schedule_event / memo / knowledge_note / inbox_item");
+                    "ownerType 只能填 task / schedule_event / favorite / knowledge_note / inbox_item");
         }
         if (ownerId == null) {
             throw new BizException(ErrorCode.INVALID_PARAMETER,

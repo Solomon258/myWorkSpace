@@ -79,6 +79,45 @@ class DedaoShareParserTest {
     }
 
     @Test
+    void marksAnonymousShareAsTrialOnly() {
+        // 匿名请求（userStatus=0，两个权限位都是 false）只能拿到试读正文：
+        // 2026-09-20 用真实分享链接实测为 1023 字 / 16 段，约为全文的 20%。
+        // 这个标记决定 ArticleCollectService 会不会拒绝写盘，必须守住。
+        ArticleMeta meta = parser.parseHtml(fixture(), "https://www.dedao.cn/share/packet?packetId=abc");
+
+        assertThat(meta.trialOnly).isTrue();
+    }
+
+    @Test
+    void purchasedArticleIsNotTrialOnly() {
+        // 带上登录 Cookie 后服务端会把 has_authority 置为 true 并下发全文。
+        String html = fixture().replace("\"has_authority\":false", "\"has_authority\":true");
+
+        assertThat(parser.parseHtml(html, "u").trialOnly).isFalse();
+    }
+
+    @Test
+    void redPacketAuthorityAlsoCountsAsFullAccess() {
+        // 领取知识红包后服务端给的是 red_packet_authority，而不是 has_authority ——
+        // 只认一个字段会把「已领红包」的文章误判成试读、直接拒收（比写入半篇更烦人）。
+        String html = fixture().replace("\"red_packet_authority\":false", "\"red_packet_authority\":true");
+
+        assertThat(parser.parseHtml(html, "u").trialOnly).isFalse();
+    }
+
+    @Test
+    void missingAuthorityFieldsMeanNoAccess() {
+        // 页面改版 / 精简版里可能根本没有这两个字段。缺字段必须按「没有权限」处理 ——
+        // 反过来的默认值会让我们在没权限时照样写半篇文章，那正是本次要修的问题。
+        String html = fixture()
+                .replace("\"has_authority\":false,", "")
+                .replace(",\"red_packet_authority\":false", "");
+        assertThat(html).doesNotContain("has_authority").doesNotContain("red_packet_authority");
+
+        assertThat(parser.parseHtml(html, "u").trialOnly).isTrue();
+    }
+
+    @Test
     void failsLoudlyWhenPageHasNoArticleData() {
         assertThatThrownBy(() -> parser.parseHtml("<html><body>hello</body></html>", "u"))
                 .isInstanceOf(BizException.class)

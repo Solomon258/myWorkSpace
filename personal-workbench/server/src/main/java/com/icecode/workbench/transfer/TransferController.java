@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.icecode.workbench.common.ApiResponse;
 
 /**
- * 「移至」：把记录在任务 / 日程 / 备忘三个菜单之间搬运。
+ * 「移至」：把记录在任务 / 日程 / 收藏三个菜单之间搬运。
  *
  * <p>刻意不做成「PATCH /api/v1/tasks/{id}」那种形式：移动是**跨实体**的动作，
  * 挂在任何一个实体的路径下都会让另外两个方向的调用看起来像走错了门。
