@@ -97,7 +97,7 @@ Windows 免安装包 + 干净机验收
 | Docker | 已安装；已有 `app-backend-java`（openjdk-8u342） | **用户已确认开发环境放在 Docker**；M0 只需验证镜像是否含 JDK/javac，不能用则新建 dev image |
 | Maven 依赖缓存 | 尚未固定 | 使用命名 volume `workbench-maven-repo` 挂载到容器 `/root/.m2`，避免每次重下依赖 |
 | 源码挂载 | Windows 工作区 | 只挂载 `personal-workbench/`，容器工作目录固定 `/workspace` |
-| 根目录重复文档 | 工作区根目录存在一份较旧的 `开发文档-Java8版.md` | 以后只以 `personal-workbench/docs/` 为准；旧文件暂不删除 |
+| 根目录重复文档 | 已处理（2026-09-21）：根目录那份旧副本已删除 | 只以 `personal-workbench/docs/` 为准 |
 
 ### 1.4 唯一项目根目录
 
@@ -107,7 +107,9 @@ Windows 免安装包 + 干净机验收
 E:\4_code\myWorkspace\personal-workbench\
 ```
 
-工作区根目录那份 `E:\4_code\myWorkspace\开发文档-Java8版.md` 是旧副本，**不作为开发依据，也不在开发过程中继续更新**。待 v1.0 完成后再决定删除还是改成指向说明。
+工作区根目录那份 `E:\4_code\myWorkspace\开发文档-Java8版.md` 是旧副本，**不作为开发依据，也不在开发过程中继续更新**。
+（2026-09-21 已删除：与 `personal-workbench/docs/` 下的同名文档重复，且仓库内无任何文件引用它。）
+仓库的文档结构现在固定为：根 `README.md`（对外门面）+ 根 `开发需知.md`（开发者手册，含硬红线与发布流程）。
 
 ---
 
