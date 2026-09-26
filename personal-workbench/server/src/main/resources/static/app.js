@@ -695,10 +695,14 @@ function taskCard(task){
   // 留在标题后的只有「给标题加注释」的语义标签：逾期 / 阻塞 / 深度 / 顺延。
   const prio=task.priority==="P0"?"red":task.priority==="P1"?"amber":"";
   // 当日截止（未结束）的卡片额外加钩子 + 徽标，并把元信息里的「截止」写成「今天截止」。
-  // 样式分两档（2026-09-20 用户指定）：**P0 → variant-b（左侧朱红条 + 淡红底 + 实心红徽标）；
-  // P1 及以下 → variant-d（白底 + 朱红描边 + 柔光）**。
-  // ⚠️ 分档靠 `data-prio` 这个属性交给 CSS 选择器，**不要在 JS 里拼 class 名**：
+  // 样式分档（2026-09-20 立两档，2026-09-21 补第三格，全部在 style.css 里，本文件不参与分档）：
+  //   今天到期 · P0    → 左侧朱红条 + 淡红底 + 实心红徽标（靠 is-due-today + data-prio 选）
+  //   今天到期 · 非 P0 → 白底 + 朱红描边 + 柔光（同一对钩子）
+  //   非今日   · P0    → **与上面那格同款**（2026-09-21 新增；CSS 只认 data-prio + data-status）
+  //   非今日   · 非 P0 → 普通卡片
+  // ⚠️ 分档靠 `data-prio` / `data-status` 这两个属性交给 CSS 选择器，**不要在 JS 里拼 class 名**：
   //    拼出来的类名一改名，CSS 那边就静默不生效（页面上只是「高亮没了」，不报错）。
+  //    「非今日 · P0」那条因此是**纯 CSS 改动**，app.js 一个字都不用动。
   const dueToday=isDueToday(task)&&!ended;
   const dueFlag=dueToday?'<span class="pill dtd">今天截止</span>':"";
   const dueMeta=dueToday?'<span class="dtd-day">今天截止 '+formatDate(task.due)+'</span>':"截止 "+formatDate(task.due);
@@ -2640,7 +2644,7 @@ async function createFavorite(){
   // title / content 只能传 null（不能传空串）：空串会让后端把「留空」当成「显式写了空标题」，
   // 于是显式标题的回退逻辑（取正文前 24 字）被跳过，收藏会存成没有标题的一条。
   const created=await WorkbenchApi.createFavorite({title:title||null,content:content||null,tags:$("favoriteTags").value.trim()||null,grp:$("favoriteGrp").value,attachmentIds:mediaIds("favorite")});
-  $("favoriteTitle").value="";$("favoriteContent").value="";$("favoriteTags").value="";mediaClear("favorite");await refreshAll();
+  $("favoriteTitle").value="";$("favoriteContent").value="";resetGrowField($("favoriteContent"));$("favoriteTags").value="";mediaClear("favorite");await refreshAll();
   // 刚存下的这条可能被「空间 / 页内检索」挡在当前视图之外（收藏的 grp 是按内容自动判定的，
   // 判定结果与用户此刻看的空间不一致时，它就不会出现在列表里）—— 那正是「存了却看不到、
   // 要 F5 才显示」的成因。这里按 id 反查一次，必要时放宽视图条件并说明放宽了什么。
@@ -2691,6 +2695,112 @@ async function createEvent(){
 // 用户不用再单独点一次「开始整理」，页面直接显示分类建议供核对。
 //
 // 图片走**另一条路**：图片不再随文字写进收录箱，而是交给视觉模型解析，
+// ===== 长文本框：自动增高 + 放大编辑（2026-09-23）=====
+// 收录输入框（#inboxInput）与收藏正文框（#favoriteContent）共用这一套。两件事：
+//   ① 自动增高：内容变多就把框变高，上限由 data-grow 给（两个框都是 12 行），到顶后在框内滚动；
+//   ② 放大编辑：右上角 ⤢ 打开 720×560 的大框，写完 Esc 取消 / Ctrl+Enter 或点「写回」落到原框。
+// 用户明确说了**不要高度记忆**，所以手动拖过的高度只活在本次页面会话里（dataset），
+// 不落 localStorage —— 刷新即回到 3 行。
+//
+// ⚠️ 五条都是这次踩出来的：
+//   ① **高度换算要按 border-box 算**（全局有 `*{box-sizing:border-box}`）：
+//      ceilH = 行高×行数 + 上下内边距 + 上下边框，写进 style.height 才是「正好 N 行」。
+//   ② **3 行起步的 87px 不能硬编码**：产品里 `.composer-body textarea` 给 38px、全局给 72px，
+//      直接在 JS 里再写一遍数字，样式一改就悄悄不一致。这里从 getComputedStyle 读 min-height。
+//   ③ **手动拖过之后要让自动增高让位**：若仍按内容高度重算，用户拖矮一点再打字就被弹回去，
+//      手感是「拖了没用」，而且不报错。判据用「高度有没有真的变过」（比 autoH），
+//      不能拿「高度 vs 内容所需高度」比 —— 内容超出上限时那两个值本来就差得很远。
+//   ④ **创建成功后必须复位高度**：value 清空了但行内 height 还在，收录完一条之后框会一直
+//      停在长高的样子（空框占半屏），看着像坏了。所以 createInbox / createFavorite 里都要复位。
+//   ⑤ **框在隐藏状态下（切页签 / composer 没收起）量出来是 0**：这没关系 —— 写进 style 的
+//      是 min-height 兜底出来的 3 行，等它显示出来正好是对的，不需要再监听一次显隐。
+function growField(el){
+  if(!el||!el.dataset.grow)return;
+  const manual=+(el.dataset.manualH||0);
+  if(manual){                                 // 用户手动调过 → 完全按用户的来，不再跟着内容跳
+    el.style.height=manual+"px";
+    el.style.overflowY="auto";
+    el.dataset.autoH=manual;
+    return;
+  }
+  const lines=+el.dataset.grow||12;
+  const cs=getComputedStyle(el);
+  const lh=parseFloat(cs.lineHeight)||parseFloat(cs.fontSize)*1.75;
+  const pad=(parseFloat(cs.paddingTop)||0)+(parseFloat(cs.paddingBottom)||0);
+  const bd=(parseFloat(cs.borderTopWidth)||0)+(parseFloat(cs.borderBottomWidth)||0);
+  const floor=parseFloat(cs.minHeight)||0;
+  const ceilH=lh*lines+pad+bd;
+  el.style.height="auto";                     // 必须先塌成 auto，scrollHeight 才是真实内容高度
+  const need=el.scrollHeight+bd;              // scrollHeight 含内边距、不含边框
+  const h=Math.round(Math.min(Math.max(need,floor),ceilH));
+  el.style.height=h+"px";
+  el.dataset.autoH=h;
+  // 到上限之后才让浏览器出滚动条；没到就别留一条空滚道。
+  el.style.overflowY=need>ceilH+.5?"auto":"hidden";
+}
+// 记下「用户手动拖过的高度」。只在高度真的变过时才记 —— 点一下框内选个文字也会触发 mouseup。
+function noteManualHeight(el){
+  if(!el||!el.dataset.grow)return;
+  const h=Math.round(el.getBoundingClientRect().height);
+  if(Math.abs(h-(+el.dataset.autoH||0))<3)return;
+  el.dataset.manualH=h;
+}
+// 复位（创建成功后调用）：清掉行内高度与手动值，回到 3 行。
+function resetGrowField(el){
+  if(!el)return;
+  delete el.dataset.manualH;
+  el.style.height="";
+  el.style.overflowY="";
+  growField(el);
+}
+function initGrowFields(){
+  document.querySelectorAll("textarea[data-grow]").forEach(el=>{
+    growField(el);
+    el.addEventListener("input",()=>growField(el));
+    el.addEventListener("mouseup",()=>noteManualHeight(el));
+  });
+}
+// ----- 放大编辑弹层 -----
+// 与收藏 / 任务 / 日程三个编辑弹层同构：出口集中挂在一处，让「点写回」和「按 Ctrl+Enter」
+// 不可能因为各写一份而出现行为差异。
+// ⚠️ 锁背景滚动复用的是 `body.favorite-editing`。这个类名沿自收藏，但从 2026-09-18 起
+//    任务 / 日程的编辑弹层也在用它 —— 它现在就是「弹层开着」这一个意思，不要再加第三个类名。
+let growZoomSource=null,growZoomReturnTo=null;
+function growZoomOpen(){return $("growZoomMask").classList.contains("open")}
+function growZoomSyncCount(){
+  const box=$("growZoomBody"),label=$("growZoomCount");
+  if(box&&label)label.textContent=box.value.length+" / 4000";
+}
+function openGrowZoom(sourceId){
+  const source=$(sourceId);
+  // 找不到就不静默 return：用户点的是自己看得见的按钮，什么都不发生就是「点了没反应」。
+  if(!source){toast("找不到要放大的输入框，请刷新页面后再试");return}
+  growZoomSource=source;
+  growZoomReturnTo=document.activeElement;
+  $("growZoomHeading").textContent=sourceId==="inboxInput"?"放大编辑 · 收录":"放大编辑 · 收藏正文";
+  $("growZoomBody").value=source.value;
+  growZoomSyncCount();
+  $("growZoomMask").classList.add("open");
+  document.body.classList.add("favorite-editing");
+  const body=$("growZoomBody");
+  body.focus();
+  // 光标推到末尾：点放大的人一定是「接着写」，不是「从头改」。
+  if(body.setSelectionRange)body.setSelectionRange(body.value.length,body.value.length);
+}
+function closeGrowZoom(writeBack){
+  if(!growZoomOpen())return;
+  if(writeBack&&growZoomSource){
+    growZoomSource.value=$("growZoomBody").value;
+    // 写回后按新内容重算高度：不然原框停在放大前的高度，看起来像「写回来的那段丢了」。
+    growField(growZoomSource);
+  }
+  $("growZoomMask").classList.remove("open");
+  document.body.classList.remove("favorite-editing");
+  growZoomSource=null;
+  // 焦点还给打开它的那个按钮：否则键盘用户会掉回 body，得重新 Tab 一大圈才回得来。
+  if(growZoomReturnTo&&typeof growZoomReturnTo.focus==="function")growZoomReturnTo.focus();
+  growZoomReturnTo=null;
+}
 // 解析出的每一条都变成一个待确认条目（与文字收录共用同一套待确认 UI）。
 // 这正是用户最初的抱怨：「传张邮件截图，还没看到解析结果，任务就被建好了」——
 // 所以图片必须等解析完、且必须由用户核对，绝不能直接落成任务。
@@ -2710,7 +2820,7 @@ async function createInbox(){
     // 只有图片、且没能触发解析（没配模型 / 仅本地）→ 什么都没发生，输入框保持原样。
     return;
   }
-  $("inboxInput").value="";$("inboxInput").focus();mediaClear("inbox");
+  $("inboxInput").value="";resetGrowField($("inboxInput"));$("inboxInput").focus();mediaClear("inbox");
 
   if(raw){
     await WorkbenchApi.classifyInbox();
@@ -3634,7 +3744,16 @@ $("taskTitle").addEventListener("keydown",event=>{if(event.key==="Enter")createT
 // 防抖 + 只重取任务这一份数据，不再顺手把整个工作台重绘一遍。
 $("taskSearch").addEventListener("input",()=>{state.taskQuery=$("taskSearch").value.trim();debounceInPage("task",function(){reloadTasks().catch(error=>toast(error.message))})});
 $("inboxAddButton").addEventListener("click",()=>createInbox().catch(error=>toast(error.message)));
-$("inboxInput").addEventListener("keydown",event=>{if(event.key==="Enter")createInbox().catch(error=>toast(error.message))});
+// 收录框的回车语义（2026-09-23 用户改定）：**Ctrl / Cmd + Enter 收录，Enter 与 Shift+Enter 都是换行**。
+// 与下面收藏正文框那条完全一致 —— 两个长文本框统一成「想换行就换行，提交走 Ctrl+Enter」。
+// ⚠️ 这里**绝不能**对裸回车 preventDefault：那会把「换行」这个默认行为挡掉，框里再也敲不出第二行。
+//    改成多行之后两个方向都能踩到这个坑：拦了裸回车 → 敲不了多行；不拦却忘了挡 Ctrl+Enter →
+//    提交时多一个空行。判据是「只有 Ctrl/Cmd 组合键才 preventDefault」。
+$("inboxInput").addEventListener("keydown",event=>{
+  if(event.key!=="Enter"||!(event.ctrlKey||event.metaKey))return;
+  event.preventDefault();
+  createInbox().catch(error=>toast(error.message));
+});
 $("confirmHighConfidenceButton").addEventListener("click",()=>confirmHighConfidence().catch(error=>toast(error.message)));
 // 委托在容器上：renderClassify 会整体替换 innerHTML，逐条绑定会随重渲染失效
 $("classifyList").addEventListener("change",event=>{
@@ -3932,4 +4051,25 @@ document.addEventListener("keydown",function(event){
   const active=document.activeElement;
   if(active&&active.blur&&active.classList&&active.classList.contains("q"))active.blur();
 });
+// ===== 长文本框的事件绑定（2026-09-23）=====
+// 自动增高与「手动拖过的高度」两个监听在 initGrowFields 里挂；这里是两个放大入口与弹层的出口。
+// 出口全部收在 closeGrowZoom 一处：点「取消」/ 点 × / 点遮罩 / 按 Esc 四条路行为因此完全一样，
+// 「点写回」与 Ctrl+Enter 也一样 —— 不会有哪一条悄悄把刚写的内容丢掉。
+initGrowFields();
+$("inboxZoomButton").addEventListener("click",()=>openGrowZoom("inboxInput"));
+$("favoriteZoomButton").addEventListener("click",()=>openGrowZoom("favoriteContent"));
+$("growZoomCancel").addEventListener("click",()=>closeGrowZoom(false));
+$("growZoomClose").addEventListener("click",()=>closeGrowZoom(false));
+$("growZoomSave").addEventListener("click",()=>closeGrowZoom(true));
+// 点遮罩关闭一律比 event.target 与遮罩本身，不能用 closest 判断「在不在弹层内」——
+// 理由见收藏编辑弹层那一条（浮层里的按钮常在点击过程中重绘自己所在的容器）。
+$("growZoomMask").addEventListener("click",event=>{if(event.target===$("growZoomMask"))closeGrowZoom(false)});
+$("growZoomBody").addEventListener("input",growZoomSyncCount);
+// Esc / Ctrl+Enter 只在放大弹层开着时接管，用**捕获阶段**挂：
+// 既有那几条 Esc 监听（收页内搜索框、关问号气泡）都在冒泡阶段，弹层开着时按 Esc 只应该关弹层。
+document.addEventListener("keydown",event=>{
+  if(!growZoomOpen())return;
+  if(event.key==="Escape"){event.stopPropagation();event.preventDefault();closeGrowZoom(false);return}
+  if(event.key==="Enter"&&(event.ctrlKey||event.metaKey)){event.preventDefault();closeGrowZoom(true)}
+},true);
 initialize();

@@ -1118,19 +1118,32 @@ body.has-page-bg .top{
 #view-tasks .strike{color:#8e998c}
 #view-tasks .list-item{border-bottom-color:#e8ece5}
 
-/* ===== 当日截止的高亮（2026-09-20，用户指定两档）=====
+/* ===== 任务卡高亮：P0 × 是否当日到期（2026-09-20 立两档，2026-09-21 补第三格）=====
    数据侧由 app.js 负责：renderTasks 把「今天截止**且未结束**」的卡片在**各自泳道内**排到最前；
-   这里只管样式。分档靠 data-prio 属性交给 CSS 选，不要在 JS 里拼 class 名。
-     P0        → 「左标朱红」：左侧 4px 朱红条 + 淡红底 + 实心红徽标（最强）
-     P1 及以下 → 「克制描边」：白底不变 + 朱红描边 + 极淡柔光 + 白底红字徽标（最不打扰）
-   为什么 P0 更强：P0 是「今天必须动」的那一条，扫一眼就该被抓住；P1 及以下如果也上最强样式，
-   同一天到期的一多，看板会变成一堵红墙，反而看不出哪条最急。
+   这里只管样式。分档靠 data-prio / data-status 两个**已经渲染出来的**属性交给 CSS 选，
+   **不要在 JS 里拼 class 名**：拼出来的类名一改名，CSS 那边就静默不生效（页面上只是「高亮没了」，不报错）。
+
+   2×2 的口径（用户 2026-09-21 拍板，第三格是本次唯一改动）：
+     今天到期 · P0      → 「左标朱红」：左侧 4px 朱红条 + 淡红底 + 实心红徽标（最强，保持不变）
+     今天到期 · 非 P0   → 「克制描边」：白底 + 朱红描边 + 极淡柔光 + 白底红字徽标
+     非今日   · P0      → **「克制描边」同一套**（← 2026-09-21 新增，与上一格逐字节同款）
+     非今日   · 非 P0   → 普通卡片，不套任何高亮
+   为什么当日到期的 P0 仍然最强：那是「今天必须动」的那一条，扫一眼就该被抓住。
+   而「非今日的 P0」日常散在泳道中段，加一圈描边只是让它**在所属泳道里能被认出来**，
+   不该抢走当日那一条的注意力 —— 所以刻意用最克制的那一档。
+
    ⚠️ 左侧那 3px 原本是**泳道色**（托盘底色三条一样，它是唯一还能看出「这张卡属于哪条泳道」的线索）。
      P0 这一档把它换成朱红，是**看着对照图做过的取舍**，别再顺手「优化」回去。
    ⚠️ 3px → 4px 时 padding-left 必须同步 13 → 12，否则文字整体右移 1px，
      同一条泳道里的卡片左边缘会参差不齐（一眼看得出）。
-   ⚠️ 选择器要写足特异性：下面是 (1,3,0)/(1,4,0)，能压过
-     `#view-tasks .task-card{border-color:…;border-left-color:…}`（1,1,0）。 */
+   ⚠️ **已结束（done / canceled）的 P0 不参与**：已完成泳道里挂一圈红边，与
+     「已结束不抢注意力」相冲。当日到期那两档本来就靠 `is-due-today`（只在未结束时才加）天然不含，
+     而新加的这条判据里没有「未结束」这一层，所以必须自己写 `:not([data-status=…])` 挡掉。
+   ⚠️ 选择器要写足特异性：下面是 (1,3,0)/(1,4,0)/(1,5,0)，能压过
+     `#view-tasks .task-card{border-color:…;border-left-color:…}`（1,1,0）。
+   ⚠️ **每一条写 box-shadow 的规则都要自己补一条 `:hover`**：基类 `#view-tasks .task-card:hover`
+     只有 (1,2,0)，压不过这些规则 —— 不补的话这些卡片**悬停时不会抬起**
+     （卡片的其余部分照常，很容易当成「本来就这样」）。 */
 #view-tasks .task-card.is-due-today[data-prio="P0"]{background:#fdf6f6;border-left:4px solid #c0392b;padding-left:12px}
 #view-tasks .task-card.is-due-today:not([data-prio="P0"]){border-color:#e0a9a9;
   box-shadow:0 0 0 3px rgba(192,57,43,.07),0 4px 12px rgba(31,42,33,.06)}
@@ -1138,6 +1151,14 @@ body.has-page-bg .top{
    压不过上面那条 (1,3,0) 的 box-shadow —— 不补的话这两种卡片**悬停时不会抬起**
    （卡片的其余部分照常，很容易当成「本来就这样」）。 */
 #view-tasks .task-card.is-due-today:not([data-prio="P0"]):hover{
+  box-shadow:0 0 0 3px rgba(192,57,43,.10),0 8px 20px rgba(31,42,33,.11)}
+/* 「非今日 · P0」这一档（2026-09-21）。与上面第二档**同款**（描边 + 柔光，白底不变、不加徽标）：
+   徽标只表达「今天截止」这一件事，这张卡今天并不到期，挂上去就是撒谎。
+   判据全部来自已渲染的属性，**app.js 一个字都不用改**。 */
+#view-tasks .task-card[data-prio="P0"]:not(.is-due-today):not([data-status="done"]):not([data-status="canceled"]){
+  border-color:#e0a9a9;
+  box-shadow:0 0 0 3px rgba(192,57,43,.07),0 4px 12px rgba(31,42,33,.06)}
+#view-tasks .task-card[data-prio="P0"]:not(.is-due-today):not([data-status="done"]):not([data-status="canceled"]):hover{
   box-shadow:0 0 0 3px rgba(192,57,43,.10),0 8px 20px rgba(31,42,33,.11)}
 
 /* 徽标与元信息里的「今天截止」字样。徽标沿用 .pill 的几何（3px 8px / 99px / 11px），
@@ -1975,4 +1996,70 @@ body.favorite-editing{overflow:hidden}
   .sf-grid{grid-template-columns:minmax(0,1fr)}
   .sf-grid>.sf-cell:nth-child(n){grid-column:auto}
 }
+
+/* ===== 长文本框：收录输入框与收藏正文框（2026-09-23）=====
+
+   用户原话：「收录的文本框，收藏的正文文本框，我希望可以支持下拉框变大。因为我经常需要输入
+   很多行的较长内容。」以及第二轮的「收藏正文框和收录输入框样式保持一致」。
+
+   落地形态 = **自动增高（3→12 行）+ 手动拖 + 一键放大编辑**（不做手动高度记忆：
+   用户明确说了「不需要高度记忆」，所以手动拖过的高度只在本页会话内生效，刷新回 3 行）。
+
+   ⚠️ 这一段顺带修掉一个**既有不一致**（不是审美偏好，是漏了选择器）：
+     第 428 行的收窄规则（13.5px / min-height 38px / padding 7px 10px）**只写了 `.composer-body`**，
+     而收录页的容器是 `.inbox-compose` → 收录输入框一直走文件开头那条全局
+     `input,select,textarea{min-height:44px;font-size:16px}`，比任务 / 日程 / 收藏三页的字段**大一档**。
+     第 1980 行的注释里早就立过「两种容器类都要挂上」的规矩（2026-09-20 对齐 media-row 那排按钮时
+     写的），**输入框这一条漏了**；445 行的边框色、451 行的聚焦环是同样的漏法。
+     → 所以下面每条都**同时挂 `.composer-body` 与 `.inbox-compose`**。
+       以后再加录入区、或再动字段尺寸，两种容器都要挂上，漏一个是「同一处字段两种长相」这类
+       不报错、只有肉眼看得见的失效。
+
+   参数（两个框**逐项相同** —— 改一处两个框一起变，别再各写一套）：
+     字号 13.5px（与其它三个录入区一致）· 行高 1.75（显式值：自动增高按它换算行数）
+     内边距 7px 10px · 圆角 9px · 3 行起步（min-height 87px = 3×13.5×1.75 + 上下 14 + 边框 2） */
+.composer-body textarea,
+.inbox-compose textarea { font-size:13.5px; line-height:1.75; padding:7px 10px; min-height:87px;
+  color:var(--text); background-color:#fff; }
+
+/* 边框色与聚焦环必须**单独再写一遍**：产品原有的那两条（445 / 451 行）只有
+   `.inbox-compose input:not(...)`，**没有 textarea** —— 收录框改成 textarea 之后
+   会连边框色和聚焦环一起丢掉，症状是「点进去没有任何反应」，又是本项目的静默失效。 */
+.composer-body textarea,
+.inbox-compose textarea { border:1px solid var(--ai-blue-line); border-radius:9px; }
+.composer-body textarea:focus,
+.inbox-compose textarea:focus { outline:none; border-color:var(--ai-blue); box-shadow:0 0 0 3px rgba(15,155,255,.14); }
+
+/* 手动拖 + 右下角把原生手柄的斜纹**再画一遍**。
+   全局那条 `textarea{…;resize:vertical}` 本来就给了拖拽能力，这里再写一次是为了让
+   「两个框能力完全一致」在代码里是显式的 —— 只依赖全局规则的话，将来谁动全局那条，
+   收录框会跟着静默失去拖拽。斜纹同理：原生那 16×16 在浅底 + 圆角框上几乎看不见，
+   而「看不出能拖」就等于「不能拖」（用户最初提这个需求时就是这种情况）。 */
+.composer-body .grow-field,
+.inbox-compose .grow-field { resize:vertical;
+  background-image:linear-gradient(135deg,transparent 0 46%,#b9c6d6 46% 54%,transparent 54% 100%),
+    linear-gradient(135deg,transparent 0 62%,#b9c6d6 62% 70%,transparent 70% 100%),
+    linear-gradient(135deg,transparent 0 78%,#b9c6d6 78% 86%,transparent 86% 100%);
+  background-repeat:no-repeat; background-position:right 3px bottom 3px; background-size:12px 12px; }
+
+/* ---- 放大编辑入口 ----
+   ⚠️ 常显低对比（opacity .55）、悬停/聚焦时变实，**不做成 opacity:0 + hover 才出现**：
+      一个看不见的按钮就等于没这个入口，静态截图上更是完全发现不了。
+   ⚠️ right 必须让开文本框自己的滚动条（Windows 经典滚动条约 15px）：
+      贴到 6px 时，内容一超出、滚动条一出现，按钮就压在滚动条上 —— 截图上很难发现。
+      配套是下面那条 46px 右内边距，保证长文本不会顶到按钮下面。 */
+.grow-wrap { position:relative; min-width:0; }
+.grow-wrap .grow-field { padding-right:46px; }
+.grow-zoom { position:absolute; top:6px; right:18px; width:26px; height:26px; min-height:26px;
+  display:grid; place-items:center; padding:0; border:1px solid var(--border); border-radius:7px;
+  background:#fff; color:#7b8ca3; cursor:pointer; opacity:.55;
+  transition:opacity .16s,border-color .16s,color .16s; }
+.grow-wrap:hover .grow-zoom,
+.grow-wrap:focus-within .grow-zoom,
+.grow-zoom:hover,
+.grow-zoom:focus { opacity:1; }
+.grow-zoom:hover { border-color:var(--blue); color:var(--blue-dark); }
+/* 触屏 / 没有 hover 的设备常显，否则等于没有这个入口。 */
+@media(hover:none){ .grow-zoom { opacity:1; } }
+
 

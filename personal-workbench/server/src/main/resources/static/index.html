@@ -187,7 +187,16 @@
            整个容器是拖拽落点 —— 拖图片进来走解析，拖其它文件进附件。 -->
       <div class="inbox-compose" data-media-scope="inbox">
         <div class="media-strip" data-media-strip></div>
-        <input id="inboxInput" maxlength="4000" placeholder="一句话记录，回车收录">
+        <!-- 2026-09-23：单行 input 改成多行 textarea。
+            原来它是 `<input maxlength="4000">` 却只有 44px 高一行 —— 用户「经常要输入很多行」，
+            单行里只能横向滚，而且**粘贴含换行的文本时浏览器会把换行直接吃掉**（实测 3 行变 1 行）。
+            现在：3 行起步 + 自动增高（上限 12 行，超出框内滚动）+ 可手动拖 + 右上角放大编辑。
+            ⚠️ id 保持不变（getElementById 不区分标签），app.js 里所有 $("inboxInput") 照旧可用。
+            ⚠️ 回车语义随之调整：回车就是换行，Ctrl + Enter 才收录（见 app.js 的 keydown 绑定）。 -->
+        <div class="grow-wrap">
+          <textarea id="inboxInput" class="grow-field" data-grow="12" rows="3" maxlength="4000" placeholder="一句话记录，Ctrl + Enter 收录"></textarea>
+          <button class="grow-zoom" type="button" id="inboxZoomButton" title="放大编辑" aria-label="放大编辑"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg></button>
+        </div>
         <div class="media-row">
           <button class="media-add" type="button" data-media-parse>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
@@ -200,7 +209,7 @@
           <!-- 问号跟着「附件」走（2026-09-20）：这一行没有「识别填表」（单行输入，没有表单可填），
                所以问号之后接空隙、「收录」贴右。对齐口径与其余三页一致。
                ⚠️ .qt 不加 r 类，理由见任务页同处的注释（问号在行首时右对齐气泡会出屏）。 -->
-          <button class="q" type="button" aria-label="说明：图片、附件与回车行为"><span class="qi">?</span><span class="qt"><span class="qt-title">这一行是干什么的</span><i>回车即收录并自动整理</i><i>「＋AI」让 AI 读出图中内容</i><i>图片可直接拖进来或粘贴</i></span></button>
+          <button class="q" type="button" aria-label="说明：长文本、图片与附件的行为"><span class="qi">?</span><span class="qt"><span class="qt-title">长文本与附件</span><i>框会随内容自动变高，最多 12 行，再多就在框内滚动</i><i>回车就是换行，Ctrl + Enter 才收录</i><i>右上角 ⤢ 可以放大到整块大框里写</i><i>「＋AI」让 AI 读出图中内容，图片可直接拖进来或粘贴</i></span></button>
           <span class="media-gap"></span>
           <button class="btn primary" id="inboxAddButton">收录</button>
         </div>
@@ -342,7 +351,14 @@
           </button>
           <div class="composer-body" id="composerBodyFavorite" data-media-scope="favorite">
             <input id="favoriteTitle" class="c-title" maxlength="200" placeholder="标题（可留空）">
-            <textarea id="favoriteContent" maxlength="4000" rows="3" placeholder="正文（可留空）"></textarea>
+            <!-- 2026-09-23：正文框与收录框改成**同一套参数**（字号 / 行高 / 内边距 / 圆角 / 高度 /
+                 拖拽 / 放大入口），不再各写一套。参数集中在 style.css 末尾那一段给出。
+                 历史原因：428 行的收窄规则只写了 `.composer-body`，而收录页的容器是 `.inbox-compose`
+                 → 收录框一直走全局的 16px / 44px，比这里大一档（用户 2026-09-22 提出后才发现的）。 -->
+            <div class="grow-wrap">
+              <textarea id="favoriteContent" class="grow-field" data-grow="12" rows="3" maxlength="4000" placeholder="正文（可留空）"></textarea>
+              <button class="grow-zoom" type="button" id="favoriteZoomButton" title="放大编辑" aria-label="放大编辑"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg></button>
+            </div>
             <div class="c-row">
               <input id="favoriteTags" class="grow" maxlength="500" placeholder="标签，逗号分隔">
               <select id="favoriteGrp"><option value="auto">分组：自动</option><option value="work">工作</option><option value="life">生活</option></select>
@@ -511,6 +527,30 @@
      ③ 这套类名（.editor-mask / .editor-modal / .mm-*）**类名沿自收藏，但现在是通用弹层骨架** ——
         2026-09-18 起任务与日程的编辑也搬了进来（见下面两个容器），三处共用同一份 CSS，
         各弹层的差异只走变体类（.em-auto / .em-even / .em-checks），不要再复制第二套。 -->
+<!-- 放大编辑弹层（2026-09-23）：收录框与收藏正文框右上角那个 ⤢ 打开的就是它。
+     复用收藏编辑那套骨架（.editor-mask / .editor-modal / .em-*），**不另起一套样式** ——
+     与任务 / 日程的编辑弹层同一个理由：全局唯一一份，各弹层的差异只走变体类。
+     高度用 720×560 的固定值（**不挂 .em-auto**）：这一档存在的意义就是「给长文一块大地方」，
+     内容少时底部留白可以接受，「边写边跳高度」反而难受。
+     ⚠️ 与其它三个弹层一样只能放在 <main> 之外 —— 弹层是 position:fixed，
+        放进 .view 里会被祖先的 transform / overflow 造出包含块并裁切。 -->
+<div class="editor-mask" id="growZoomMask" role="dialog" aria-modal="true" aria-labelledby="growZoomHeading">
+  <div class="editor-modal">
+    <div class="em-head">
+      <span class="em-title" id="growZoomHeading">放大编辑</span>
+      <button class="em-x" type="button" id="growZoomClose" aria-label="关闭放大编辑">×</button>
+    </div>
+    <textarea class="em-field em-body-input" id="growZoomBody" maxlength="4000" placeholder="在这里接着写……" aria-label="内容"></textarea>
+    <div class="em-foot">
+      <span class="em-count" id="growZoomCount">0 / 4000</span>
+      <span class="em-kbd">Esc 取消 · Ctrl + Enter 写回</span>
+      <span class="em-btns">
+        <button class="btn sm" type="button" id="growZoomCancel">取消</button>
+        <button class="btn sm primary" type="button" id="growZoomSave">写回</button>
+      </span>
+    </div>
+  </div>
+</div>
 <div class="editor-mask" id="favoriteEditorMask" role="dialog" aria-modal="true" aria-labelledby="favoriteEditorHeading">
   <div class="editor-modal">
     <div class="em-head">
